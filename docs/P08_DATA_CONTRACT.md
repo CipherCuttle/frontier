@@ -40,7 +40,7 @@ Normalization rules:
 2. Output is UTF-8 with no BOM.
 3. No insignificant whitespace is emitted; separators are exactly `,` and `:`.
 4. Object keys are sorted lexicographically by Unicode code-point sequence after NFC normalization.
-5. JSON strings emit Unicode characters directly except characters that JSON requires escaping (`"`, `\\`, and U+0000-U+001F); required escapes use standard JSON escapes.
+5. JSON string escaping is exact: `"` becomes `\"`; `\\` becomes `\\\\`; U+0008 uses `\b`; U+0009 uses `\t`; U+000A uses `\n`; U+000C uses `\f`; U+000D uses `\r`; every other U+0000-U+001F code point uses lowercase `\u00xx`; `/` is never escaped; all other Unicode characters are emitted directly after NFC normalization.
 6. Integers use base-10 with no leading `+`, no leading zero except `0`, and no `-0`.
 7. Domain decimal values must be converted before canonical JSON to a canonical decimal string: no exponent, no leading `+`, no unnecessary leading zero, no trailing fractional zero, and zero serializes as `"0"`. If measurement scale/precision is semantically meaningful it must be represented separately, not inferred from trailing zeros.
 8. Datetimes must be converted before canonical JSON to UTC strings exactly `YYYY-MM-DDTHH:MM:SS.ffffffZ` with six fractional digits. Naive datetimes and leap-second text are rejected at the canonical boundary.
