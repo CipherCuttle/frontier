@@ -41,9 +41,11 @@ def test_operational_metadata_does_not_change_observation_identity() -> None:
 def test_semantic_change_changes_observation_identity() -> None:
     first = candidate()
     changed_payload = replace(first, payload=replace(first.payload, title="changed"))
+    source_published_at = first.source_published_at
+    assert source_published_at is not None
     changed_time = replace(
         first,
-        source_published_at=first.source_published_at + timedelta(seconds=1),
+        source_published_at=source_published_at + timedelta(seconds=1),
     )
     assert changed_payload.observation_id != first.observation_id
     assert changed_time.observation_id != first.observation_id
