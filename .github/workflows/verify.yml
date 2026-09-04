@@ -1,0 +1,53 @@
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: frontier
+          POSTGRES_PASSWORD: frontier
+          POSTGRES_DB: frontier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frontier -d frontier"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      FRONTIER_TEST_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+      FRONTIER_DATABASE_URL: postgresql+psycopg://frontier:frontier@localhost:5432/frontier
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+      - name: Resolve bootstrap lock
+        run: uv lock
+      - name: Sync
+        run: uv sync --all-extras
+      - name: Migrate
+        run: uv run alembic upgrade head
+      - name: Verify
+        run: uv run python scripts/verify.py
+      - name: Upload resolved lock for bootstrap commit
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-lock
+          path: uv.lock
+          if-no-files-found: error

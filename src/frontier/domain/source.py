@@ -70,6 +70,6 @@ class SourceContract:
 
 def source_registry_version(contracts: tuple[SourceContract, ...]) -> Digest:
     ordered = sorted(
-        (contract.to_canonical() for contract in contracts), key=lambda item: item["source_id"]
+        (contract.to_canonical() for contract in contracts), key=lambda item: str(item["source_id"])
     )
     return sha256_digest(canonical_json_bytes(ordered))

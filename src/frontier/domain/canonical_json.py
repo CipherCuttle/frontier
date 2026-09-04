@@ -5,7 +5,7 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 CanonicalScalar: TypeAlias = None | bool | int | str
 CanonicalValue: TypeAlias = CanonicalScalar | list["CanonicalValue"] | dict[str, "CanonicalValue"]
@@ -50,8 +50,9 @@ def _normalize(value: object) -> CanonicalValue:
     if isinstance(value, (Decimal, datetime)):
         raise CanonicalizationError("Decimal/datetime must be normalized before canonical JSON")
     if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
         normalized: dict[str, CanonicalValue] = {}
-        for raw_key, raw_value in value.items():
+        for raw_key, raw_value in mapping.items():
             if not isinstance(raw_key, str):
                 raise CanonicalizationError("canonical object keys must be strings")
             key = unicodedata.normalize("NFC", raw_key)
@@ -60,7 +61,8 @@ def _normalize(value: object) -> CanonicalValue:
             normalized[key] = _normalize(raw_value)
         return {key: normalized[key] for key in sorted(normalized)}
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        return [_normalize(item) for item in value]
+        sequence = cast(Sequence[object], value)
+        return [_normalize(item) for item in sequence]
     raise CanonicalizationError(f"unsupported canonical type: {type(value).__name__}")
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import cast
 from uuid import UUID
 
 import psycopg
@@ -110,7 +111,7 @@ class PostgresEvidenceStore:
                     )
                     row = cur.fetchone()
                 assert row is not None
-                observed_at = row[0]
+                observed_at = cast(datetime, row[0])
                 status = OccurrenceStatus.INSERTED if inserted else OccurrenceStatus.DUPLICATE
                 cur.execute(
                     """
@@ -129,7 +130,7 @@ class PostgresEvidenceStore:
                 "SELECT observation_id FROM observations WHERE observed_at <= %s ORDER BY observation_id",
                 (as_of,),
             )
-            return [row[0] for row in cur.fetchall()]
+            return [cast(str, row[0]) for row in cur.fetchall()]
 
     def add_relation(self, relation: ObservationRelation) -> None:
         with self._connection.cursor() as cur:
