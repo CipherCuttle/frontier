@@ -1,0 +1,16 @@
+{
+  "body_file": "body.txt",
+  "canonical_url": "https://example.invalid/research?id=42",
+  "effective_at": null,
+  "expected_observed_at": "2026-09-05T00:00:00.000000Z",
+  "language": "en",
+  "retrieved_at": "2026-09-04T23:59:58.000000Z",
+  "source_id": "fixture.hostile_document",
+  "source_item_key": "hostile-document-42",
+  "source_metadata": {
+    "html_like": true,
+    "order_probe": ["z", "a"]
+  },
+  "source_published_at": "2026-01-01T08:00:00.000000Z",
+  "title": "Hostile <b>document</b> fixture"
+}
