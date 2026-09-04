@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -30,13 +30,13 @@ def test_float_and_runtime_specific_values_are_rejected() -> None:
     with pytest.raises(CanonicalizationError):
         canonical_json_text({"x": Decimal("1.0")})
     with pytest.raises(CanonicalizationError):
-        canonical_json_text({"x": datetime.now(timezone.utc)})
+        canonical_json_text({"x": datetime.now(UTC)})
 
 
 def test_decimal_and_timestamp_normalizers() -> None:
     assert canonical_decimal(Decimal("1.2300")) == "1.23"
     assert canonical_decimal(Decimal("-0.000")) == "0"
     assert (
-        canonical_timestamp(datetime(2026, 9, 5, tzinfo=timezone.utc))
+        canonical_timestamp(datetime(2026, 9, 5, tzinfo=UTC))
         == "2026-09-05T00:00:00.000000Z"
     )

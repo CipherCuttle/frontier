@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 import unicodedata
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from typing import TypeAlias, cast
+from typing import cast
 
-CanonicalScalar: TypeAlias = None | bool | int | str
-CanonicalValue: TypeAlias = CanonicalScalar | list["CanonicalValue"] | dict[str, "CanonicalValue"]
+type CanonicalScalar = bool | int | str | None
+type CanonicalValue = CanonicalScalar | list[CanonicalValue] | dict[str, CanonicalValue]
 
 
 class CanonicalizationError(ValueError):
@@ -18,7 +18,7 @@ class CanonicalizationError(ValueError):
 def canonical_timestamp(value: datetime) -> str:
     if value.tzinfo is None or value.utcoffset() is None:
         raise CanonicalizationError("naive datetime is not canonical")
-    utc = value.astimezone(timezone.utc)
+    utc = value.astimezone(UTC)
     return utc.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 

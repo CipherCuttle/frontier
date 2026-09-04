@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -7,8 +7,6 @@ from frontier.domain.collection import CollectionReason, CollectionRun
 from frontier.domain.health import HealthValue, SourceHealthObservation
 from frontier.domain.relation import ObservationRelation, RelationAuthority, RelationType
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
-
-UTC = timezone.utc
 
 
 def test_active_enrichment_requires_trigger() -> None:

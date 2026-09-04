@@ -120,7 +120,7 @@ class MetricPayload:
         measurement_at: datetime,
         dimensions: dict[str, CanonicalValue] | None = None,
         source_metadata: dict[str, CanonicalValue] | None = None,
-    ) -> "MetricPayload":
+    ) -> MetricPayload:
         return cls(
             metric_name=metric_name,
             value=canonical_decimal(value),

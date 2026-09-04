@@ -72,62 +72,62 @@ class PostgresEvidenceStore:
     def append_observation(
         self, candidate: ObservationCandidate, run_id: UUID
     ) -> tuple[Observation, bool]:
-        with self._connection.transaction():
-            with self._connection.cursor() as cur:
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO observations (
+                    observation_id, schema_version, canonicalization_version,
+                    source_id, source_item_key, kind, payload_json,
+                    source_published_at, effective_at, observed_at, retrieved_at,
+                    content_digest, fetch_digest
+                ) VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,clock_timestamp(),%s,%s,%s
+                )
+                ON CONFLICT (observation_id) DO NOTHING
+                RETURNING observed_at
+                """,
+                (
+                    candidate.observation_id,
+                    candidate.schema_version,
+                    candidate.canonicalization_version,
+                    candidate.source_id,
+                    candidate.source_item_key,
+                    candidate.kind.value,
+                    Jsonb(candidate.payload.to_canonical()),
+                    candidate.source_published_at,
+                    candidate.effective_at,
+                    candidate.retrieved_at,
+                    str(candidate.content_digest),
+                    str(candidate.fetch_digest),
+                ),
+            )
+            row = cur.fetchone()
+            inserted = row is not None
+            if row is None:
                 cur.execute(
-                    """
-                    INSERT INTO observations (
-                        observation_id, schema_version, canonicalization_version,
-                        source_id, source_item_key, kind, payload_json,
-                        source_published_at, effective_at, observed_at, retrieved_at,
-                        content_digest, fetch_digest
-                    ) VALUES (
-                        %s,%s,%s,%s,%s,%s,%s,%s,%s,clock_timestamp(),%s,%s,%s
-                    )
-                    ON CONFLICT (observation_id) DO NOTHING
-                    RETURNING observed_at
-                    """,
-                    (
-                        candidate.observation_id,
-                        candidate.schema_version,
-                        candidate.canonicalization_version,
-                        candidate.source_id,
-                        candidate.source_item_key,
-                        candidate.kind.value,
-                        Jsonb(candidate.payload.to_canonical()),
-                        candidate.source_published_at,
-                        candidate.effective_at,
-                        candidate.retrieved_at,
-                        str(candidate.content_digest),
-                        str(candidate.fetch_digest),
-                    ),
+                    "SELECT observed_at FROM observations WHERE observation_id = %s",
+                    (candidate.observation_id,),
                 )
                 row = cur.fetchone()
-                inserted = row is not None
-                if row is None:
-                    cur.execute(
-                        "SELECT observed_at FROM observations WHERE observation_id = %s",
-                        (candidate.observation_id,),
-                    )
-                    row = cur.fetchone()
-                assert row is not None
-                observed_at = cast(datetime, row[0])
-                status = OccurrenceStatus.INSERTED if inserted else OccurrenceStatus.DUPLICATE
-                cur.execute(
-                    """
-                    INSERT INTO collection_run_observations (
-                        run_id, observation_id, occurrence_status
-                    ) VALUES (%s,%s,%s)
-                    ON CONFLICT (run_id, observation_id) DO NOTHING
-                    """,
-                    (run_id, candidate.observation_id, status.value),
-                )
+            assert row is not None
+            observed_at = cast(datetime, row[0])
+            status = OccurrenceStatus.INSERTED if inserted else OccurrenceStatus.DUPLICATE
+            cur.execute(
+                """
+                INSERT INTO collection_run_observations (
+                    run_id, observation_id, occurrence_status
+                ) VALUES (%s,%s,%s)
+                ON CONFLICT (run_id, observation_id) DO NOTHING
+                """,
+                (run_id, candidate.observation_id, status.value),
+            )
         return Observation(candidate=candidate, observed_at=observed_at), inserted
 
     def list_observation_ids_as_of(self, as_of: datetime) -> list[str]:
         with self._connection.cursor() as cur:
             cur.execute(
-                "SELECT observation_id FROM observations WHERE observed_at <= %s ORDER BY observation_id",
+                "SELECT observation_id FROM observations "
+                "WHERE observed_at <= %s ORDER BY observation_id",
                 (as_of,),
             )
             return [cast(str, row[0]) for row in cur.fetchall()]

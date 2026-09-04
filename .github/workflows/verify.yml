@@ -29,8 +29,8 @@ jobs:
       FRONTIER_TEST_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
       FRONTIER_DATABASE_URL: postgresql+psycopg://frontier:frontier@localhost:5432/frontier
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.14"
       - name: Install uv
@@ -46,7 +46,8 @@ jobs:
       - name: Verify
         run: uv run python scripts/verify.py
       - name: Upload resolved lock for bootstrap commit
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: uv-lock
           path: uv.lock

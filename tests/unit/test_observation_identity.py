@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from frontier.domain.digests import sha256_digest
@@ -9,8 +9,6 @@ from frontier.domain.observation import (
     ObservationCandidate,
     ObservationKind,
 )
-
-UTC = timezone.utc
 
 
 def candidate() -> ObservationCandidate:
