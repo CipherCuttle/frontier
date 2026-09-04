@@ -2,11 +2,21 @@
 
 Status: CANDIDATE_FOR_CANONICAL_FREEZE
 
+Promotion rule: merge of PR-00 promotes this Constitution to `FROZEN_V0` and all ADRs marked `ACCEPTED_CANDIDATE` to `ACCEPTED_V0`. No additional status-edit commit is required after merge. Until merge, this branch remains candidate authority only.
+
+## Authority and conflict handling
+- `CONSTITUTION.md` is the highest internal product/architecture authority.
+- Explicit ADRs govern specific architectural decisions beneath the Constitution.
+- Phase documents provide planning evidence and bounded implementation authority; `P08_DATA_CONTRACT.md` is the exact PR-01 contract.
+- Source policy and ledgers govern their narrower concerns but may not override the Constitution or an accepted ADR.
+- Later file dates or numbering do not silently supersede earlier authority. Supersession must be explicit.
+- If two authorities appear inconsistent and no explicit supersession exists, implementation must fail closed and resolve governance rather than choosing whichever interpretation is convenient.
+
 ## Mission
 FRONTIER is a public, non-personalized, point-in-time frontier-intelligence system for emerging technology, software, research, crypto, markets, security, and compatible future domains. It should surface important emerging changes earlier than ordinary aggregation while preserving enough provenance, uncertainty, history, and coverage state to challenge every conclusion.
 
 ## Product invariants
-- One shared canonical public world state. Filters/watchlists may project it; they do not change canonical ranking truth.
+- One shared canonical public evidence state. Filters/watchlists may project it; they do not mutate canonical evidence or canonical ranking inputs. Ranking outputs are versioned model outputs, not objective truth.
 - Observation is evidence/assertion, not truth.
 - No mandatory paid data APIs or paid model APIs.
 - No LLM in canonical ranking/truth path.
@@ -33,7 +43,7 @@ Explicit provenance and inferred provenance must be distinguishable. FRONTIER ma
 Missing data != observed absence. Source coverage must participate in interpretation. Source health is multidimensional: transport, freshness, completeness, schema validity.
 
 ## Collection causality
-Every observation records why FRONTIER collected it. Initial reasons: SCHEDULED, DISCOVERY, ACTIVE_ENRICHMENT, BACKFILL. Active enrichment must carry a causal trigger when available so FRONTIER's own collection behavior cannot manufacture organic momentum.
+Every collection occurrence records why FRONTIER collected the evidence. Initial reasons: SCHEDULED, DISCOVERY, ACTIVE_ENRICHMENT, BACKFILL. Active enrichment must carry a causal trigger when available so FRONTIER's own collection behavior cannot manufacture organic momentum. Collection causality is not part of canonical evidence identity.
 
 ## Assertion and trend state
 Assertion lifecycle: OBSERVED, CORRECTED, RETRACTED.
