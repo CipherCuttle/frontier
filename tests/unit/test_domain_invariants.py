@@ -26,7 +26,11 @@ def test_source_roles_are_set_like_and_sorted() -> None:
         source_id="fixture.hostile_document",
         display_name="fixture",
         acquisition_class=AcquisitionClass.C_PERMITTED_EXTRACTION,
-        signal_roles=(SignalRole.PRIMARY_EMISSION, SignalRole.ATTENTION, SignalRole.PRIMARY_EMISSION),
+        signal_roles=(
+            SignalRole.PRIMARY_EMISSION,
+            SignalRole.ATTENTION,
+            SignalRole.PRIMARY_EMISSION,
+        ),
         transport=SourceTransport.FIXTURE,
     )
     assert source.to_canonical()["signal_roles"] == ["ATTENTION", "PRIMARY_EMISSION"]

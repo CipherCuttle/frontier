@@ -6,7 +6,12 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
 
-from .canonical_json import CanonicalValue, canonical_decimal, canonical_json_bytes, canonical_timestamp
+from .canonical_json import (
+    CanonicalValue,
+    canonical_decimal,
+    canonical_json_bytes,
+    canonical_timestamp,
+)
 from .digests import Digest, sha256_digest, sha256_hex
 
 OBSERVATION_SCHEMA_VERSION = "observation-v1"

@@ -76,8 +76,15 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
             assert cur.fetchone()[0] == 100
 
         assert first_observation is not None
-        assert store.list_observation_ids_as_of(first_observation.observed_at - timedelta(microseconds=1)) == []
-        assert store.list_observation_ids_as_of(first_observation.observed_at) == [candidate.observation_id]
+        assert (
+            store.list_observation_ids_as_of(
+                first_observation.observed_at - timedelta(microseconds=1)
+            )
+            == []
+        )
+        assert store.list_observation_ids_as_of(first_observation.observed_at) == [
+            candidate.observation_id
+        ]
 
         document_payload = cast(DocumentPayload, candidate.payload)
         changed = replace(

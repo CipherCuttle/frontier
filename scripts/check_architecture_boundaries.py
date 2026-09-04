@@ -13,7 +13,9 @@ def imported_root(node: ast.AST) -> set[str]:
         roots.update(alias.name.split(".")[0] for alias in node.names)
     elif isinstance(node, ast.ImportFrom) and node.module:
         roots.add(node.module.split(".")[0])
-        if node.module.startswith("frontier.adapters") or node.module.startswith("frontier.contracts"):
+        if node.module.startswith("frontier.adapters") or node.module.startswith(
+            "frontier.contracts"
+        ):
             roots.add("frontier.adapters/contracts")
     return roots
 
