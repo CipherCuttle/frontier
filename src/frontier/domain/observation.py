@@ -28,6 +28,10 @@ class Payload(Protocol):
     def to_canonical(self) -> dict[str, CanonicalValue]: ...
 
 
+def _empty_canonical_map() -> dict[str, CanonicalValue]:
+    return {}
+
+
 def _bounded_text(value: str | None, *, name: str, maximum: int) -> None:
     if value is not None and len(value.encode("utf-8")) > maximum:
         raise ValueError(f"{name} exceeds {maximum} bytes")
@@ -44,7 +48,7 @@ class DocumentPayload:
     title: str | None
     excerpt: str | None
     language: str | None = None
-    source_metadata: dict[str, CanonicalValue] = field(default_factory=dict)
+    source_metadata: dict[str, CanonicalValue] = field(default_factory=_empty_canonical_map)
 
     def __post_init__(self) -> None:
         _bounded_text(self.canonical_url, name="canonical_url", maximum=4096)
@@ -70,7 +74,7 @@ class ArtifactPayload:
     version: str | None = None
     canonical_url: str | None = None
     artifact_digest: str | None = None
-    source_metadata: dict[str, CanonicalValue] = field(default_factory=dict)
+    source_metadata: dict[str, CanonicalValue] = field(default_factory=_empty_canonical_map)
 
     def __post_init__(self) -> None:
         for name, value, maximum in (
@@ -100,8 +104,8 @@ class MetricPayload:
     value: str
     unit: str | None
     measurement_at: datetime
-    dimensions: dict[str, CanonicalValue] = field(default_factory=dict)
-    source_metadata: dict[str, CanonicalValue] = field(default_factory=dict)
+    dimensions: dict[str, CanonicalValue] = field(default_factory=_empty_canonical_map)
+    source_metadata: dict[str, CanonicalValue] = field(default_factory=_empty_canonical_map)
 
     def __post_init__(self) -> None:
         _bounded_text(self.metric_name, name="metric_name", maximum=256)
