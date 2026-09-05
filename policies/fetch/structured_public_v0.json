@@ -1,0 +1,15 @@
+{
+  "schema_version": "fetch-policy-v0",
+  "policy_profile": "structured-public-v0",
+  "allowed_schemes": ["https"],
+  "max_redirects": 3,
+  "deadline_ms": 15000,
+  "connect_timeout_ms": 5000,
+  "read_idle_timeout_ms": 5000,
+  "max_response_bytes": 8388608,
+  "max_expanded_bytes": 16777216,
+  "max_header_bytes": 65536,
+  "blocked_address_classes": ["CLOUD_METADATA","IPV4_MAPPED_PRIVATE","LINK_LOCAL","LOOPBACK","MULTICAST","PRIVATE","UNSPECIFIED"],
+  "forward_authorization_cross_origin": false,
+  "retry": {"max_attempts": 3, "base_delay_ms": 1000, "max_delay_ms": 30000, "max_retry_after_seconds": 3600, "jitter": true}
+}

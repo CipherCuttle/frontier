@@ -1,0 +1,38 @@
+{
+  "schema_version": "source-contract-v0",
+  "source_id": "cisa.kev",
+  "display_name": "CISA Known Exploited Vulnerabilities",
+  "enabled": true,
+  "acquisition_class": "A_AUTHORITATIVE_STRUCTURED",
+  "signal_roles": ["BEHAVIORAL","PRIMARY_EMISSION"],
+  "transport": "JSON_HTTP",
+  "endpoint": {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "method": "GET",
+    "accepted_content_types": ["application/json","text/json"],
+    "policy_profile": "structured-public-v0",
+    "authentication": "NONE",
+    "credential_ref": null,
+    "fallback_urls": ["https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json"],
+    "fallback_semantics": "SAME_AUTHORITY_MIRROR"
+  },
+  "expected_cadence": {"freshness_class": "F2", "poll_interval_seconds": 900},
+  "policy": {
+    "access_state": "ALLOWED",
+    "browser_authorized": false,
+    "raw_artifact_retention": "NONE",
+    "extracted_text_retention": "BOUNDED_CANONICAL",
+    "public_excerpt_mode": "METADATA_ONLY",
+    "attribution_required": true,
+    "policy_reviewed_at": "2026-09-05",
+    "policy_references": ["https://www.cisa.gov/known-exploited-vulnerabilities-catalog","https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities_schema.json","https://github.com/cisagov/kev-data"],
+    "notes": "Treat the official JSON feed as primary emission. CISA's GitHub mirror/history is not an independent corroborating root."
+  },
+  "capability": {
+    "primary_evidence_eligible": true,
+    "etag_support": "UNKNOWN",
+    "last_modified_support": "UNKNOWN",
+    "finite_window": false,
+    "schema_reference": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities_schema.json"
+  }
+}

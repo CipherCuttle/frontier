@@ -1,0 +1,17 @@
+{
+  "schema_version": "bounded-fetch-result-v0",
+  "request_id": "req_fixture_pypi_001",
+  "outcome": "SUCCESS",
+  "retrieved_at": "2026-09-05T00:00:00Z",
+  "original_url": "https://pypi.org/rss/updates.xml",
+  "final_url": "https://pypi.org/rss/updates.xml",
+  "redirect_chain": [],
+  "http_status": 200,
+  "content_type": "application/rss+xml",
+  "response_headers": {"ETag": "\"fixture-etag\""},
+  "compressed_bytes": null,
+  "expanded_bytes": 6,
+  "body_digest": "sha256:b8a3805e669decf7180d8c7f4af5d4706d615d0678c424bd1c6b853def3bf3d2",
+  "body_base64": "PHJzcy8+",
+  "failure": null
+}

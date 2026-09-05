@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontier.local/contracts/acquisition/fetch_request_v0.schema.json",
+  "title": "FRONTIER FetchRequest V0 JSON Interchange Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "source_id",
+    "url",
+    "method",
+    "policy_profile",
+    "credential_ref",
+    "accepted_content_types",
+    "deadline_ms",
+    "max_response_bytes",
+    "max_redirects",
+    "request_headers"
+  ],
+  "properties": {
+    "schema_version": {"const": "fetch-request-v0"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Operational only; MUST NOT influence canonical evidence identity."},
+    "source_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"},
+    "url": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+    "method": {"const": "GET"},
+    "policy_profile": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"},
+    "credential_ref": {"type": ["string", "null"], "maxLength": 256, "description": "Logical secret reference only; never secret material."},
+    "accepted_content_types": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+    "deadline_ms": {"type": "integer", "minimum": 1000, "maximum": 60000},
+    "max_response_bytes": {"type": "integer", "minimum": 1024, "maximum": 16777216},
+    "max_redirects": {"type": "integer", "minimum": 0, "maximum": 5},
+    "request_headers": {"type": "object", "maxProperties": 16, "propertyNames": {"enum": ["Accept", "If-Modified-Since", "If-None-Match", "User-Agent"]}, "additionalProperties": {"type": "string", "maxLength": 2048}, "description": "V0 non-secret header allowlist only."}
+  }
+}

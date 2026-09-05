@@ -1,0 +1,36 @@
+{
+  "schema_version": "source-contract-v0",
+  "source_id": "pypi.updates",
+  "display_name": "PyPI Latest Updates",
+  "enabled": true,
+  "acquisition_class": "A_AUTHORITATIVE_STRUCTURED",
+  "signal_roles": ["PRIMARY_EMISSION"],
+  "transport": "RSS",
+  "endpoint": {
+    "url": "https://pypi.org/rss/updates.xml",
+    "method": "GET",
+    "accepted_content_types": ["application/rss+xml","application/xml","text/xml"],
+    "policy_profile": "structured-public-v0",
+    "authentication": "NONE",
+    "credential_ref": null
+  },
+  "expected_cadence": {"freshness_class": "F1", "poll_interval_seconds": 300},
+  "policy": {
+    "access_state": "ALLOWED",
+    "browser_authorized": false,
+    "raw_artifact_retention": "NONE",
+    "extracted_text_retention": "BOUNDED_CANONICAL",
+    "public_excerpt_mode": "METADATA_ONLY",
+    "attribution_required": true,
+    "policy_reviewed_at": "2026-09-05",
+    "policy_references": ["https://docs.pypi.org/api/feeds/","https://docs.pypi.org/api/"],
+    "notes": "Use official RSS for periodic update discovery. Respect ETag and identify FRONTIER with a stable User-Agent."
+  },
+  "capability": {
+    "primary_evidence_eligible": true,
+    "etag_support": "SUPPORTED",
+    "last_modified_support": "UNKNOWN",
+    "finite_window": true,
+    "schema_reference": null
+  }
+}
