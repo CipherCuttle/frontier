@@ -51,7 +51,9 @@ def _ts_type(schema: JsonObject) -> str:
     if "enum" in schema:
         return " | ".join(json.dumps(value) for value in cast(list[Any], schema["enum"]))
     if "anyOf" in schema:
-        return " | ".join(_ts_type(cast(JsonObject, item)) for item in cast(list[Any], schema["anyOf"]))
+        return " | ".join(
+            _ts_type(cast(JsonObject, item)) for item in cast(list[Any], schema["anyOf"])
+        )
     schema_type = schema.get("type")
     if schema_type == "string":
         return "string"
