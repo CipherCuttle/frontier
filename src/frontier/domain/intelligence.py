@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Iterable
 
@@ -23,31 +23,34 @@ TWELVE_HOURS = timedelta(hours=12)
 EIGHTEEN_HOURS = timedelta(hours=18)
 TWENTY_FOUR_HOURS = timedelta(hours=24)
 
+_activity_eligibility: dict[str, CanonicalValue] = {
+    "eligible_reasons": ["ACTIVE_ENRICHMENT", "DISCOVERY", "SCHEDULED"],
+    "exclude_backfill": True,
+    "exclude_recovered_after_gap": True,
+}
+_ranking_order: list[CanonicalValue] = [
+    "mentions_1h_desc",
+    "mentions_6h_desc",
+    "velocity_6h_delta_desc",
+    "acceleration_6h_desc",
+    "mentions_24h_desc",
+    "source_role_diversity_desc",
+    "last_observed_at_desc",
+    "evidence_count_total_desc",
+    "episode_id_asc",
+]
+_windows: dict[str, CanonicalValue] = {
+    "mentions_1h": 3600,
+    "mentions_6h": 21600,
+    "mentions_24h": 86400,
+    "preprevious_6h_start": 64800,
+    "previous_6h_start": 43200,
+}
 BASELINE_CONFIGURATION: dict[str, CanonicalValue] = {
-    "activity_eligibility": {
-        "eligible_reasons": ["ACTIVE_ENRICHMENT", "DISCOVERY", "SCHEDULED"],
-        "exclude_backfill": True,
-        "exclude_recovered_after_gap": True,
-    },
+    "activity_eligibility": _activity_eligibility,
     "grouping_algorithm_version": GROUPING_ALGORITHM_VERSION,
-    "ranking_order": [
-        "mentions_1h_desc",
-        "mentions_6h_desc",
-        "velocity_6h_delta_desc",
-        "acceleration_6h_desc",
-        "mentions_24h_desc",
-        "source_role_diversity_desc",
-        "last_observed_at_desc",
-        "evidence_count_total_desc",
-        "episode_id_asc",
-    ],
-    "windows_seconds": {
-        "mentions_1h": 3600,
-        "mentions_6h": 21600,
-        "mentions_24h": 86400,
-        "preprevious_6h_start": 64800,
-        "previous_6h_start": 43200,
-    },
+    "ranking_order": _ranking_order,
+    "windows_seconds": _windows,
 }
 BASELINE_CONFIGURATION_DIGEST = sha256_digest(canonical_json_bytes(BASELINE_CONFIGURATION))
 
@@ -144,6 +147,9 @@ class BaselineEpisode:
     confirmation: str = "UNAVAILABLE"
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
+        observation_ids: list[CanonicalValue] = list(self.observation_ids)
+        source_ids: list[CanonicalValue] = list(self.source_ids)
+        signal_roles: list[CanonicalValue] = list(self.signal_roles)
         return {
             "acceleration_6h": self.acceleration_6h,
             "age_seconds": self.age_seconds,
@@ -157,15 +163,15 @@ class BaselineEpisode:
             "mentions_1h": self.mentions_1h,
             "mentions_24h": self.mentions_24h,
             "mentions_6h": self.mentions_6h,
-            "observation_ids": list(self.observation_ids),
+            "observation_ids": observation_ids,
             "preprevious_6h": self.preprevious_6h,
             "previous_6h": self.previous_6h,
             "prospective_evidence_count": self.prospective_evidence_count,
             "rank": self.rank,
             "recovered_backlog_evidence_count": self.recovered_backlog_evidence_count,
-            "signal_roles": list(self.signal_roles),
+            "signal_roles": signal_roles,
             "source_count": self.source_count,
-            "source_ids": list(self.source_ids),
+            "source_ids": source_ids,
             "source_role_diversity": self.source_role_diversity,
             "velocity_6h_delta": self.velocity_6h_delta,
         }
@@ -189,11 +195,12 @@ class BaselineSnapshot:
         return "snapshot_" + sha256_hex(canonical_json_bytes(self.to_canonical()))
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
+        episode_values: list[CanonicalValue] = [episode.to_canonical() for episode in self.episodes]
         return {
             "algorithm_version": self.algorithm_version,
             "as_of": canonical_timestamp(self.as_of),
             "coverage_state": self.coverage_state.value,
-            "episodes": [episode.to_canonical() for episode in self.episodes],
+            "episodes": episode_values,
             "freshness_state": self.freshness_state.value,
             "projection_version": self.projection_version,
             "ranking_policy_version": self.ranking_policy_version,
@@ -214,9 +221,10 @@ def _in_window(observed_at: datetime, *, start: datetime, end: datetime) -> bool
 
 
 def _episode_id(observation_ids: tuple[str, ...]) -> str:
-    material = {
+    observation_values: list[CanonicalValue] = list(observation_ids)
+    material: dict[str, CanonicalValue] = {
         "grouping_algorithm_version": GROUPING_ALGORITHM_VERSION,
-        "observation_ids": list(observation_ids),
+        "observation_ids": observation_values,
     }
     return "episode_" + sha256_hex(canonical_json_bytes(material))
 
@@ -242,27 +250,50 @@ def _health_states(
             raise ValueError("duplicate latest health input for source")
         health_by_source[item.source_id] = item
 
-    def dimension(name: str) -> HealthValue:
-        values: list[HealthValue] = []
-        for source_id in enabled:
-            item = health_by_source.get(source_id)
-            if item is None:
-                values.append(HealthValue.UNKNOWN)
-            else:
-                values.append(getattr(item, name))
-        return _aggregate_health(values) if values else HealthValue.UNKNOWN
-
+    transport_values = [
+        health_by_source[source_id].transport
+        if source_id in health_by_source
+        else HealthValue.UNKNOWN
+        for source_id in enabled
+    ]
+    freshness_values = [
+        health_by_source[source_id].freshness
+        if source_id in health_by_source
+        else HealthValue.UNKNOWN
+        for source_id in enabled
+    ]
+    completeness_values = [
+        health_by_source[source_id].completeness
+        if source_id in health_by_source
+        else HealthValue.UNKNOWN
+        for source_id in enabled
+    ]
+    schema_values = [
+        health_by_source[source_id].schema
+        if source_id in health_by_source
+        else HealthValue.UNKNOWN
+        for source_id in enabled
+    ]
+    if not enabled:
+        return (
+            HealthValue.UNKNOWN,
+            HealthValue.UNKNOWN,
+            HealthValue.UNKNOWN,
+            HealthValue.UNKNOWN,
+        )
     return (
-        dimension("transport"),
-        dimension("freshness"),
-        dimension("completeness"),
-        dimension("schema"),
+        _aggregate_health(transport_values),
+        _aggregate_health(freshness_values),
+        _aggregate_health(completeness_values),
+        _aggregate_health(schema_values),
     )
 
 
 def _episode_without_rank(
     members: tuple[BaselineObservationInput, ...], *, as_of: datetime
 ) -> BaselineEpisode:
+    if not members:
+        raise ValueError("baseline episode cannot be empty")
     ordered = tuple(sorted(members, key=lambda item: item.observation_id))
     observed_times = tuple(item.observed_at for item in ordered)
     first_observed_at = min(observed_times)
@@ -270,26 +301,37 @@ def _episode_without_rank(
     prospective = tuple(item for item in ordered if item.is_prospective)
 
     mentions_1h = sum(
-        _in_window(item.observed_at, start=as_of - ONE_HOUR, end=as_of) for item in prospective
+        1
+        for item in prospective
+        if _in_window(item.observed_at, start=as_of - ONE_HOUR, end=as_of)
     )
     mentions_6h = sum(
-        _in_window(item.observed_at, start=as_of - SIX_HOURS, end=as_of) for item in prospective
+        1
+        for item in prospective
+        if _in_window(item.observed_at, start=as_of - SIX_HOURS, end=as_of)
     )
     mentions_24h = sum(
-        _in_window(item.observed_at, start=as_of - TWENTY_FOUR_HOURS, end=as_of)
+        1
         for item in prospective
+        if _in_window(item.observed_at, start=as_of - TWENTY_FOUR_HOURS, end=as_of)
     )
     previous_6h = sum(
-        _in_window(item.observed_at, start=as_of - TWELVE_HOURS, end=as_of - SIX_HOURS)
+        1
         for item in prospective
+        if _in_window(
+            item.observed_at,
+            start=as_of - TWELVE_HOURS,
+            end=as_of - SIX_HOURS,
+        )
     )
     preprevious_6h = sum(
-        _in_window(
+        1
+        for item in prospective
+        if _in_window(
             item.observed_at,
             start=as_of - EIGHTEEN_HOURS,
             end=as_of - TWELVE_HOURS,
         )
-        for item in prospective
     )
     source_ids = tuple(sorted({item.grouping.source_id for item in ordered}))
     signal_roles = tuple(
@@ -305,8 +347,10 @@ def _episode_without_rank(
         age_seconds=_age_seconds(as_of - last_observed_at),
         evidence_count_total=len(ordered),
         prospective_evidence_count=len(prospective),
-        backfill_evidence_count=sum(item.is_backfill for item in ordered),
-        recovered_backlog_evidence_count=sum(item.is_recovered_backlog for item in ordered),
+        backfill_evidence_count=sum(1 for item in ordered if item.is_backfill),
+        recovered_backlog_evidence_count=sum(
+            1 for item in ordered if item.is_recovered_backlog
+        ),
         mentions_1h=mentions_1h,
         mentions_6h=mentions_6h,
         mentions_24h=mentions_24h,
@@ -332,8 +376,7 @@ def _rank(episodes: list[BaselineEpisode]) -> tuple[BaselineEpisode, ...]:
     ordered.sort(key=lambda episode: episode.mentions_6h, reverse=True)
     ordered.sort(key=lambda episode: episode.mentions_1h, reverse=True)
     return tuple(
-        BaselineEpisode(**{**episode.__dict__, "rank": index})
-        for index, episode in enumerate(ordered, start=1)
+        replace(episode, rank=index) for index, episode in enumerate(ordered, start=1)
     )
 
 
@@ -350,10 +393,19 @@ def build_baseline_snapshot(
     if grouping_projection.as_of != as_of:
         raise ValueError("grouping projection as_of must match baseline as_of")
 
-    eligible = tuple(sorted((item for item in observations if item.observed_at <= as_of), key=lambda item: item.observation_id))
+    eligible = tuple(
+        sorted(
+            (item for item in observations if item.observed_at <= as_of),
+            key=lambda item: item.observation_id,
+        )
+    )
     by_id = {item.observation_id: item for item in eligible}
     if len(by_id) != len(eligible):
         raise ValueError("duplicate observation_id in baseline inputs")
+
+    health_tuple = tuple(health)
+    if any(item.as_of > as_of for item in health_tuple):
+        raise ValueError("baseline health input exceeds as_of")
 
     grouping_ids: list[str] = []
     episode_member_ids: list[tuple[str, ...]] = []
@@ -369,10 +421,15 @@ def build_baseline_snapshot(
         raise ValueError("grouping projection and baseline inputs disagree")
 
     episodes = [
-        _episode_without_rank(tuple(by_id[observation_id] for observation_id in ids), as_of=as_of)
-        for ids in episode_member_ids
+        _episode_without_rank(
+            tuple(by_id[observation_id] for observation_id in member_ids),
+            as_of=as_of,
+        )
+        for member_ids in episode_member_ids
     ]
-    transport, freshness, coverage, schema = _health_states(enabled_source_ids, health)
+    transport, freshness, coverage, schema = _health_states(
+        enabled_source_ids, health_tuple
+    )
     return BaselineSnapshot(
         as_of=as_of,
         transport_state=transport,
@@ -390,16 +447,20 @@ def baseline_input_digest(
     enabled_source_ids: Iterable[str],
     health: Iterable[BaselineHealthInput],
 ) -> Digest:
+    enabled_values: list[CanonicalValue] = sorted(set(enabled_source_ids))
+    health_values: list[CanonicalValue] = [
+        item.to_canonical()
+        for item in sorted(health, key=lambda item: (item.source_id, item.as_of))
+    ]
+    observation_values: list[CanonicalValue] = [
+        item.to_canonical()
+        for item in sorted(observations, key=lambda item: item.observation_id)
+    ]
     material: dict[str, CanonicalValue] = {
-        "enabled_source_ids": sorted(set(enabled_source_ids)),
+        "enabled_source_ids": enabled_values,
         "grouping_projection": grouping_projection.to_canonical(),
-        "health": [
-            item.to_canonical()
-            for item in sorted(health, key=lambda item: (item.source_id, item.as_of))
-        ],
-        "observations": [
-            item.to_canonical() for item in sorted(observations, key=lambda item: item.observation_id)
-        ],
+        "health": health_values,
+        "observations": observation_values,
     }
     return sha256_digest(canonical_json_bytes(material))
 
