@@ -435,7 +435,9 @@ def baseline_input_digest(
     enabled_source_ids: Iterable[str],
     health: Iterable[BaselineHealthInput],
 ) -> Digest:
-    enabled_values: list[CanonicalValue] = sorted(set(enabled_source_ids))
+    enabled_values: list[CanonicalValue] = []
+    for source_id in sorted(set(enabled_source_ids)):
+        enabled_values.append(source_id)
     health_values: list[CanonicalValue] = [
         item.to_canonical()
         for item in sorted(health, key=lambda item: (item.source_id, item.as_of))
