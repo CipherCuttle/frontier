@@ -50,7 +50,7 @@ Shadow output:
 - must not replace the naive baseline in RADAR/NOW/TRENDING;
 - must not mutate canonical observations, grouping, baseline snapshots, or public-read semantics;
 - may be retained as versioned experiment artifacts for replay and evaluation;
-- must carry candidate identity, configuration digest, input snapshot identity, `as_of`, generated time, and output digest.
+- must carry candidate identity, candidate-freeze identity, configuration digest, input snapshot identity, `as_of`, generated time, and output digest.
 
 No experiment may silently acquire authority merely because its code merged.
 
@@ -81,6 +81,27 @@ Changing any frozen item creates a new candidate/preregistration and restarts co
 
 Historical retained snapshots MAY be used for development, debugging, falsification, feature ablation, and power estimation. They MUST NOT be counted as confirmatory promotion evidence for a candidate designed or tuned after those outcomes were observable.
 
+## Candidate freeze before confirmatory launch
+
+Preregistration occurs before implementation, so preregistration alone cannot prove which executable candidate produced future shadow evidence.
+
+After implementation and test, but before the first confirmatory snapshot is counted, an immutable `candidate-freeze` receipt MUST exist in canonical repository history. It binds the reviewed preregistration to the exact candidate implementation used for the confirmatory window.
+
+The candidate-freeze receipt must make recoverable at least:
+
+- experiment ID and candidate ID;
+- preregistration artifact identity and reviewed commit SHA;
+- candidate algorithm/model version and configuration digest;
+- exact implementation commit SHA and repository tree SHA, or an equivalent immutable source digest if implementation is externalized later under separate authority;
+- dependency/lockfile digest covering the candidate runtime dependency set;
+- executable/build artifact digest when an artifact exists;
+- freeze receipt schema version and deterministic receipt ID;
+- freeze creation time.
+
+The confirmatory window MUST start strictly after the candidate-freeze receipt is durable. Any change to candidate implementation source, dependency/lock identity, build artifact, algorithm/model version, or configuration after freeze creates a new candidate-freeze identity and restarts confirmatory evidence. Evidence from different freeze identities cannot be pooled as one candidate.
+
+The candidate-freeze receipt does not itself authorize public ranking or change the preregistered evaluation rules.
+
 ## Knowledge-horizon and leakage contract
 
 For a candidate output at `as_of = T`, every feature and relation that can influence rank or score must be reconstructible from FRONTIER knowledge with `observed_at <= T` plus configuration already frozen before T.
@@ -97,6 +118,14 @@ Forbidden leakage includes, but is not limited to:
 - human adjudication performed after outcomes are known and then injected into the ranking inputs.
 
 Outcome labels MAY be assigned after T for evaluation, but they are evaluator-only data and must never enter the candidate/control ranking path for that confirmatory window.
+
+## Model-independent outcome labels
+
+The positive-outcome definition, `resolution_at` rule, and adjudication procedure MUST be independent of both experiment arms.
+
+They MUST NOT use candidate/control rank, score, detection time, top-K membership, model identity, or any derivative of those outputs as label-defining evidence. Later canonical or external evidence may be used to resolve an outcome only when that evidence source and resolution rule were preregistered independently of model output.
+
+Where human adjudication is used, adjudicators MUST be blinded to candidate/control arm identity, ranks, scores, and detection times while deciding the label. If blinding cannot be established for an opportunity, that opportunity is not eligible for confirmatory promotion evidence; the exclusion and reason remain recorded rather than being silently dropped.
 
 ## V0 evaluation-domain taxonomy
 
@@ -187,6 +216,10 @@ Every retained confirmatory candidate artifact must make recoverable at least:
 - experiment schema version;
 - experiment ID;
 - candidate ID;
+- candidate-freeze receipt ID;
+- exact implementation commit/tree or equivalent immutable source digest;
+- dependency/lockfile digest;
+- executable/build artifact digest when applicable;
 - candidate algorithm/model version;
 - configuration digest;
 - source registry version;
@@ -208,17 +241,18 @@ A candidate receives no ranking authority unless one immutable evaluation receip
 
 1. no point-in-time/leakage violation;
 2. same eligible universe/horizon as the naive comparator;
-3. COMPLETE candidate/control artifacts only;
-4. the same preregistered global `K`, label rules, exclusions and tie behavior remained frozen;
-5. V0 point precision is at least the control precision in at least two qualifying V0 domains;
-6. candidate-specific statistical precision/sample-adequacy rules PASS in each qualifying domain;
-7. median lead-time advantage is strictly positive in each qualifying domain and pooled across them;
-8. no hidden post-hoc domain, label, exclusion, threshold, rank-budget, or candidate selection;
-9. health/coverage degradation remains explicit and cannot be converted to evidence of absence;
-10. no unauthorized confirmation/provenance/entity/lifecycle/truth semantics;
-11. deterministic/replay requirements for the candidate class PASS;
-12. preregistration hostile review was completed before the confirmatory window;
-13. one hostile review of the final evaluation evidence reports no unresolved Critical/High defect.
+3. one candidate-freeze identity bound every counted candidate artifact and existed before the confirmatory window;
+4. COMPLETE candidate/control artifacts only;
+5. the same preregistered global `K`, model-independent label rules, exclusions and tie behavior remained frozen;
+6. V0 point precision is at least the control precision in at least two qualifying V0 domains;
+7. candidate-specific statistical precision/sample-adequacy rules PASS in each qualifying domain;
+8. median lead-time advantage is strictly positive in each qualifying domain and pooled across them;
+9. no hidden post-hoc domain, label, exclusion, threshold, rank-budget, candidate implementation, or candidate selection;
+10. health/coverage degradation remains explicit and cannot be converted to evidence of absence;
+11. no unauthorized confirmation/provenance/entity/lifecycle/truth semantics;
+12. deterministic/replay requirements for the candidate class PASS;
+13. preregistration hostile review was completed before the confirmatory window;
+14. one hostile review of the final evaluation evidence reports no unresolved Critical/High defect.
 
 Passing this gate does not itself change public ranking. Promotion requires a separate bounded authority change naming the winning candidate/version and its public semantics.
 
@@ -226,7 +260,7 @@ Failure leaves `naive-episode-activity-v0` authoritative and the advanced candid
 
 ## Frozen hostile cases
 
-`fixtures/advanced_intelligence/corpus_v0.json` freezes the attack surface before candidate implementation. It covers future leakage, retrospective tuning, universe mismatch, backfill/recovered contamination, health/coverage coercion, source-count confirmation inflation, domain cherry-picking, denominator gaming, emit-nothing precision, unequal global rank budgets, label leakage, config drift, failed-artifact interpretation, stochastic replay drift, post-hoc threshold changes, multiple-comparison winner's curse, non-independent domains, and unauthorized semantic escalation.
+`fixtures/advanced_intelligence/corpus_v0.json` freezes the attack surface before candidate implementation. It covers future leakage, retrospective tuning, implementation drift, model-dependent labels, universe mismatch, backfill/recovered contamination, health/coverage coercion, source-count confirmation inflation, domain cherry-picking, denominator gaming, emit-nothing precision, unequal global rank budgets, label leakage, config drift, failed-artifact interpretation, stochastic replay drift, post-hoc threshold changes, multiple-comparison winner's curse, non-independent domains, and unauthorized semantic escalation.
 
 ## Explicit exclusions from this authority PR
 
@@ -240,4 +274,4 @@ This authority freeze follows:
 
 After it merges, each concrete advanced ranking candidate follows:
 
-`PREREGISTER -> ONE hostile preregistration review -> IMPLEMENT -> TEST -> SHADOW PROSPECTIVE EVALUATION -> ONE hostile evaluation review -> fix Critical/High -> ONE targeted re-review only if required -> PROMOTION DECISION`
+`PREREGISTER -> ONE hostile preregistration review -> IMPLEMENT -> TEST -> CANDIDATE_FREEZE -> SHADOW PROSPECTIVE EVALUATION -> ONE hostile evaluation review -> fix Critical/High -> ONE targeted re-review only if required -> PROMOTION DECISION`
