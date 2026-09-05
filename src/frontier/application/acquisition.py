@@ -167,7 +167,7 @@ class AcquisitionService:
                 source_id,
                 run.run_id,
                 transport=HealthValue.OK,
-                freshness=HealthValue.OK,
+                freshness=HealthValue.UNKNOWN,
                 completeness=completeness,
                 schema=HealthValue.OK,
                 details={
