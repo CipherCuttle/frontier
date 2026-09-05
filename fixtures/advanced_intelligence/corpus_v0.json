@@ -22,6 +22,9 @@
     "lead_time_floor": "median_positive_each_qualifying_domain_and_pooled",
     "requires_preregistration_before_confirmatory_window": true,
     "requires_hostile_preregistration_review": true,
+    "requires_candidate_freeze_before_confirmatory_window": true,
+    "candidate_freeze_identity_required_in_artifacts": true,
+    "outcome_labels_model_independent": true,
     "historical_development_counts_as_confirmatory": false,
     "public_promotion_requires_separate_authority_change": true
   },
@@ -41,8 +44,8 @@
     {
       "id": "A003",
       "category": "retrospective-tuning",
-      "requirement": "Confirmatory evidence starts only after immutable candidate preregistration and its bounded hostile review.",
-      "forbidden": "historical outcomes used to tune a candidate are then counted as confirmatory evidence"
+      "requirement": "Confirmatory evidence starts only after immutable candidate preregistration, hostile preregistration review, and a post-test candidate-freeze receipt.",
+      "forbidden": "historical development outcomes or pre-freeze shadow outputs are counted as confirmatory evidence"
     },
     {
       "id": "A004",
@@ -95,20 +98,20 @@
     {
       "id": "A012",
       "category": "label-leakage",
-      "requirement": "Outcome labels may be assigned later for evaluation but never enter ranking inputs for the same confirmatory window.",
-      "forbidden": "future evaluator labels or adjudication features feed candidate rank"
+      "requirement": "Outcome labels and resolution rules are model-independent; human adjudication used for promotion is blind to arm ranks, scores and detection times.",
+      "forbidden": "candidate or control outputs define the positive label or influence adjudication, or future labels feed ranking inputs"
     },
     {
       "id": "A013",
       "category": "configuration-drift",
-      "requirement": "Any change to frozen candidate configuration creates a new candidate and confirmatory window.",
-      "forbidden": "weights thresholds features exclusions or global K change in place after outcomes are visible"
+      "requirement": "One immutable candidate-freeze identity binds preregistration, exact implementation source, dependency lock, build artifact when present, model version and configuration before confirmatory evidence.",
+      "forbidden": "source dependencies build artifact model version configuration exclusions or global K change under one confirmatory candidate identity"
     },
     {
       "id": "A014",
       "category": "failed-artifact-as-signal",
-      "requirement": "Only COMPLETE candidate and control artifacts participate in evaluation.",
-      "forbidden": "FAILED or partial output is interpreted as an empty ranking or successful no-signal decision"
+      "requirement": "Only COMPLETE candidate and control artifacts carrying the correct candidate-freeze identity participate in evaluation.",
+      "forbidden": "FAILED partial or wrong-freeze output is interpreted as an empty ranking or valid confirmatory candidate output"
     },
     {
       "id": "A015",
