@@ -36,4 +36,6 @@ Future lanes preflighted here but not authorized for PR-02 V0 runtime:
 - RETRY_LATER — transient provider/transport condition with retry budget.
 - FAIL_CLOSED — canonical write/startup path must stop.
 
-`fixtures/acquisition/manifest_v0.json` is the machine-readable case authority.
+`fixtures/acquisition/corpus_v0.json` is the machine-readable acquisition/source case authority.
+`fixtures/acquisition/transport_security_v0.json` is the machine-readable transport/security case authority.
+`fixtures/acquisition/normalization_provenance_v0.json` is the machine-readable normalization/provenance case authority.
