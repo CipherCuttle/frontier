@@ -28,6 +28,13 @@ from frontier.domain.candidate_freeze import (
 )
 from frontier.domain.canonical_json import canonical_json_bytes
 from frontier.domain.digests import sha256_digest
+from frontier.domain.evaluation import (
+    EVALUATION_ALGORITHM_VERSION,
+    EVALUATION_AUTHORITY_STATE,
+    EVALUATION_CONFIGURATION_DIGEST,
+    EVALUATION_SCHEMA_VERSION,
+    EvaluationReceipt,
+)
 from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 
 
@@ -415,6 +422,108 @@ class PostgresCandidateFreezeRepository:
             cur.execute(
                 "SELECT receipt_json FROM candidate_freeze_receipts WHERE receipt_id = %s",
                 (receipt_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return cast(dict[str, object], row[0])
+
+
+class PostgresEvaluationRepository:
+    """Append-only persistence for preregistered evaluation receipts (R8)."""
+
+    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
+        self._connection = connection
+
+    def record_receipt(self, receipt: EvaluationReceipt) -> None:
+        if receipt.experiment_id != PEF_EXPERIMENT_ID:
+            raise ValueError("evaluation receipt experiment id mismatch")
+        if receipt.candidate_id != PEF_CANDIDATE_ID:
+            raise ValueError("evaluation receipt candidate id mismatch")
+        if receipt.schema_version != EVALUATION_SCHEMA_VERSION:
+            raise ValueError("evaluation receipt schema version mismatch")
+        if receipt.evaluation_algorithm_version != EVALUATION_ALGORITHM_VERSION:
+            raise ValueError("evaluation receipt algorithm version mismatch")
+        if receipt.candidate_configuration_digest != PEF_CONFIGURATION_DIGEST:
+            raise ValueError("evaluation receipt candidate configuration digest mismatch")
+        if receipt.evaluation_configuration_digest != EVALUATION_CONFIGURATION_DIGEST:
+            raise ValueError("evaluation receipt evaluation configuration digest mismatch")
+        if receipt.authority_state != EVALUATION_AUTHORITY_STATE:
+            raise ValueError("evaluation receipt authority state mismatch")
+        if receipt.receipt_digest != sha256_digest(canonical_json_bytes(receipt.to_canonical())):
+            raise ValueError("evaluation receipt digest does not bind its canonical payload")
+        if receipt.confirmatory_evidence and receipt.freeze_status is not FreezeStatus.FROZEN:
+            raise ValueError("confirmatory evaluation evidence requires a FROZEN freeze receipt")
+
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO evaluation_receipts (
+                    evaluation_id, schema_version, experiment_id, candidate_id,
+                    evaluation_algorithm_version, candidate_configuration_digest,
+                    evaluation_configuration_digest, authority_state, status,
+                    as_of, generated_at, candidate_freeze_receipt_id,
+                    freeze_receipt_digest, freeze_status, preregistration_digest,
+                    receipt_digest, shadow_run_ids, receipt_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (evaluation_id) DO NOTHING
+                RETURNING evaluation_id
+                """,
+                (
+                    receipt.evaluation_id,
+                    receipt.schema_version,
+                    receipt.experiment_id,
+                    receipt.candidate_id,
+                    receipt.evaluation_algorithm_version,
+                    str(receipt.candidate_configuration_digest),
+                    str(receipt.evaluation_configuration_digest),
+                    receipt.authority_state,
+                    receipt.status.value,
+                    receipt.as_of,
+                    receipt.generated_at,
+                    receipt.candidate_freeze_receipt_id,
+                    str(receipt.freeze_receipt_digest),
+                    receipt.freeze_status.value,
+                    str(receipt.preregistration_digest),
+                    str(receipt.receipt_digest),
+                    Jsonb([binding.run_id for binding in receipt.shadow_runs]),
+                    Jsonb(receipt.to_canonical()),
+                ),
+            )
+            inserted = cur.fetchone()
+            if inserted is None:
+                cur.execute(
+                    "SELECT receipt_digest, status FROM evaluation_receipts "
+                    "WHERE evaluation_id = %s",
+                    (receipt.evaluation_id,),
+                )
+                existing = cur.fetchone()
+                if existing is None:
+                    raise RuntimeError("evaluation receipt conflict without existing row")
+                if (
+                    cast(str, existing[0]) != str(receipt.receipt_digest)
+                    or cast(str, existing[1]) != receipt.status.value
+                ):
+                    raise RuntimeError("evaluation receipt conflict with different digest")
+
+    def latest_evaluation_id(self) -> str | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT evaluation_id
+                FROM evaluation_receipts
+                ORDER BY as_of DESC, evaluation_id DESC
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+        return None if row is None else cast(str, row[0])
+
+    def get_receipt_json(self, evaluation_id: str) -> dict[str, object] | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                "SELECT receipt_json FROM evaluation_receipts WHERE evaluation_id = %s",
+                (evaluation_id,),
             )
             row = cur.fetchone()
         if row is None:
