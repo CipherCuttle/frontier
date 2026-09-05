@@ -133,9 +133,7 @@ class CisaFallbackFetcher:
         return success(request, self._body, "application/json", '"cisa-fixture"')
 
 
-def reset_fetch_state(
-    conn: psycopg.Connection[tuple[object, ...]], source_id: str
-) -> None:
+def reset_fetch_state(conn: psycopg.Connection[tuple[object, ...]], source_id: str) -> None:
     with conn.cursor() as cur:
         cur.execute("DELETE FROM source_fetch_state WHERE source_id = %s", (source_id,))
     conn.commit()
