@@ -29,6 +29,10 @@ _ALLOWED_RESPONSE_HEADERS = frozenset(
 )
 
 
+def _empty_headers() -> dict[str, str]:
+    return {}
+
+
 class FetchOutcome(StrEnum):
     SUCCESS = "SUCCESS"
     REJECTED = "REJECTED"
@@ -74,7 +78,7 @@ class FetchRequest:
     deadline_ms: int
     max_response_bytes: int
     max_redirects: int
-    request_headers: dict[str, str] = field(default_factory=dict)
+    request_headers: dict[str, str] = field(default_factory=_empty_headers)
     method: str = "GET"
     schema_version: str = FETCH_REQUEST_SCHEMA_VERSION
 
@@ -111,6 +115,8 @@ class FetchRequest:
         headers = dict(self.request_headers)
         if len(headers) > 16 or not set(headers) <= _ALLOWED_REQUEST_HEADERS:
             raise ValueError("request header outside V0 allowlist")
+        if any("\r" in value or "\n" in value for value in headers.values()):
+            raise ValueError("request header value contains a line break")
         if any(len(value) > 2048 for value in headers.values()):
             raise ValueError("request header value exceeds 2048 characters")
         object.__setattr__(self, "request_headers", headers)
@@ -154,6 +160,8 @@ class BoundedFetchResult:
         headers = dict(self.response_headers)
         if len(headers) > 32 or not set(headers) <= _ALLOWED_RESPONSE_HEADERS:
             raise ValueError("response header outside V0 allowlist")
+        if any("\r" in value or "\n" in value for value in headers.values()):
+            raise ValueError("response header value contains a line break")
         if any(len(value) > 4096 for value in headers.values()):
             raise ValueError("response header value exceeds 4096 characters")
         object.__setattr__(self, "response_headers", headers)
