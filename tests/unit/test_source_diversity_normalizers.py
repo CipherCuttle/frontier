@@ -31,7 +31,7 @@ def test_hn_frontpage_preserves_attention_item_identity_and_external_target() ->
     assert candidate.kind is ObservationKind.DOCUMENT
     assert isinstance(candidate.payload, DocumentPayload)
     assert candidate.payload.canonical_url == "https://example.com/release"
-    assert candidate.payload.source_metadata["frontpage_rank"] == 1
+    assert "frontpage_rank" not in candidate.payload.source_metadata
     assert candidate.source_published_at == datetime(2026, 9, 5, 2, 28, tzinfo=UTC)
 
 
@@ -50,6 +50,32 @@ def test_hn_same_external_url_remains_two_attention_observations() -> None:
         and candidate.payload.canonical_url == "https://example.com/release"
         for candidate in batch.candidates
     )
+
+
+def test_hn_frontpage_reordering_does_not_manufacture_new_attention_evidence() -> None:
+    target = """<item><title>Stable submission</title><link>https://example.com/stable</link>
+      <comments>https://news.ycombinator.com/item?id=777</comments>
+      <pubDate>Sat, 05 Sep 2026 02:20:00 GMT</pubDate></item>"""
+    other = """<item><title>Other submission</title><link>https://example.com/other</link>
+      <comments>https://news.ycombinator.com/item?id=778</comments>
+      <pubDate>Sat, 05 Sep 2026 02:21:00 GMT</pubDate></item>"""
+    first_body = f'<rss version="2.0"><channel>{target}{other}</channel></rss>'.encode()
+    second_body = f'<rss version="2.0"><channel>{other}{target}</channel></rss>'.encode()
+
+    first = normalize_hn_frontpage(
+        first_body,
+        retrieved_at=NOW,
+        fetch_digest=sha256_digest(first_body),
+    )
+    second = normalize_hn_frontpage(
+        second_body,
+        retrieved_at=NOW,
+        fetch_digest=sha256_digest(second_body),
+    )
+
+    first_target = next(item for item in first.candidates if item.source_item_key == "hn:777")
+    second_target = next(item for item in second.candidates if item.source_item_key == "hn:777")
+    assert first_target.observation_id == second_target.observation_id
 
 
 def gdelt_article(index: int, *, seen: str = "20260905T022800Z") -> dict[str, str]:
@@ -153,6 +179,27 @@ def test_hf_volatile_counters_and_tag_order_do_not_manufacture_observation_ident
     assert "downloads" not in first.payload.source_metadata
     assert "likes" not in first.payload.source_metadata
     assert "trendingScore" not in first.payload.source_metadata
+
+
+def test_hf_tag_canonicalization_is_order_invariant_before_retention_cap() -> None:
+    tags = [f"tag-{index:02d}" for index in range(40)]
+    first_body = json.dumps([hf_model(tags=tags)]).encode()
+    second_body = json.dumps([hf_model(tags=list(reversed(tags))) ]).encode()
+
+    first = normalize_hf_models(
+        first_body,
+        retrieved_at=NOW,
+        fetch_digest=sha256_digest(first_body),
+    ).candidates[0]
+    second = normalize_hf_models(
+        second_body,
+        retrieved_at=NOW,
+        fetch_digest=sha256_digest(second_body),
+    ).candidates[0]
+
+    assert first.observation_id == second.observation_id
+    assert isinstance(first.payload, ArtifactPayload)
+    assert first.payload.source_metadata["tags"] == sorted(tags)[:32]
 
 
 def test_hf_hard_result_cap_degrades_completeness() -> None:
