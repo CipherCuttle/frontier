@@ -10,7 +10,7 @@ from frontier.domain.digests import sha256_digest
 ROOT = Path(__file__).resolve().parents[2]
 PREREG = ROOT / "experiments" / "advanced_intelligence" / "pef_v0" / "preregistration.json"
 AUTHORITY_COMMIT = "1d38caf9a74ef278a6c4418bf6298aec6bb50c66"
-CONFIG_DIGEST = "sha256:4b1f7987e83933cd0586e33aebf514e8adffa7f03e576bce308152ed2eaf90e2"
+CONFIG_DIGEST = "sha256:e2627f62deac24e5f1b09960687761ebbcc61b3fd0c8fec07fec0006dcff7dc1"
 RANKING_ORDER = [
     "has_prospective_primary_emission_desc",
     "has_any_prospective_evidence_desc",
@@ -111,7 +111,7 @@ def main() -> int:
         expected_schedule = {
             "cadence_seconds": 300,
             "alignment": "UTC_UNIX_EPOCH_MULTIPLE_OF_300_SECONDS",
-            "start": "first aligned boundary strictly after durable candidate-freeze receipt on main",
+            "start": "first UTC epoch-multiple-of-300 boundary strictly after the GitHub main merge commit committer timestamp of the durable candidate-freeze receipt",
             "ranking_window_seconds": 2419200,
             "ranking_window_interval": "[start,start+2419200)",
             "label_maturation_seconds_after_window": 86400,
@@ -191,6 +191,8 @@ def main() -> int:
             "min_resolved_label_fraction_bps_per_domain": 9000,
             "underpowered_domain": "NOT_QUALIFYING; retained and reported; cannot be selected as a promotion domain",
             "fewer_than_two_adequately_sampled_domains": "INCONCLUSIVE_NO_PROMOTION",
+            "resolved_label_fraction_denominator": "all retained non-duplicate non-UNQUALIFIED_MIXED opportunities in the domain",
+            "resolved_label_fraction_numerator": "retained opportunities resolved POSITIVE or NEGATIVE; UNRESOLVED_COVERAGE is not resolved",
         }:
             return fail("sample adequacy contract drifted")
 
