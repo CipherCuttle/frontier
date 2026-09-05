@@ -198,8 +198,17 @@ def _string_list(value: CanonicalValue | None, maximum_items: int = 64) -> list[
 def _sorted_string_list(
     value: CanonicalValue | None, maximum_items: int = 64
 ) -> list[CanonicalValue]:
-    strings = [item for item in _string_list(value, maximum_items) if isinstance(item, str)]
-    return list(sorted(set(strings)))
+    if not isinstance(value, list):
+        return []
+    strings: set[str] = set()
+    for item in value:
+        text = _string(item)
+        if text is None:
+            continue
+        truncated = _truncate_utf8(text, 512)
+        if truncated is not None:
+            strings.add(truncated)
+    return list(sorted(strings))[:maximum_items]
 
 
 def normalize_cisa_kev(
@@ -300,7 +309,7 @@ def normalize_hn_frontpage(
     candidates: list[ObservationCandidate] = []
     rejected = 0
     malformed_time = 0
-    for rank, item in enumerate(items, start=1):
+    for item in items:
         title = _text(item, "title")
         link = _text(item, "link")
         comments = _text(item, "comments")
@@ -319,7 +328,6 @@ def normalize_hn_frontpage(
             language="en",
             source_metadata={
                 "comments_url": _truncate_utf8(comments, 4096),
-                "frontpage_rank": rank,
                 "source_pub_date": _truncate_utf8(pub_date_text, 256),
             },
         )
