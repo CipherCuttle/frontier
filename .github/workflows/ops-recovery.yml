@@ -1,0 +1,47 @@
+name: ops-recovery
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backup-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: frontier
+          POSTGRES_PASSWORD: frontier
+          POSTGRES_DB: frontier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frontier -d frontier"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      FRONTIER_RECOVERY_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+      FRONTIER_RECOVERY_DRILL_ALLOW: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+      - name: Verify frozen lock
+        run: uv lock --check
+      - name: Sync frozen environment
+        run: uv sync --all-extras --frozen
+      - name: Verify backup and restore recovery
+        run: uv run python scripts/ops/verify_backup_restore.py
