@@ -76,7 +76,7 @@ def _seed_complete_baseline() -> tuple[str, str, str]:
         evidence.start_collection_run(first_run)
         first_observation, inserted = evidence.append_observation(candidates[0], first_run.run_id)
         assert inserted
-        as_of = first_observation.observed_at + timedelta(milliseconds=100)
+        as_of = first_observation.observed_at
         evidence.add_source_health(
             SourceHealthObservation(
                 source_id=source_id,
@@ -216,6 +216,7 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
         assert body["snapshot"]["receipt_id"].startswith("receipt_")
         assert body["snapshot"]["ranking_policy_version"] == "naive-episode-activity-v0"
         assert body["semantic_scope"] == "BASELINE_SUBSTRATE"
+        assert body["coverage_state"] == "DEGRADED"
         assert body["items"] == sorted(body["items"], key=lambda item: item["rank"])
 
         drilldown = client.get(
@@ -235,9 +236,7 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
 
         health = client.get("/v0/health", params={"snapshot_id": snapshot_id})
         assert health.status_code == 200
-        assert health.json()["coverage_state"] == body["snapshot"].get(
-            "coverage_state", health.json()["coverage_state"]
-        )
+        assert health.json()["coverage_state"] == body["coverage_state"]
 
         samples_ms: list[float] = []
         for _ in range(60):
