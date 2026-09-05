@@ -64,7 +64,11 @@ def _projection(
         ),
         ambiguous_pairs=(),
         ungrouped_observation_ids=tuple(
-            sorted(item.observation_id for item in observations if item.observation_id not in grouped_ids)
+            sorted(
+                item.observation_id
+                for item in observations
+                if item.observation_id not in grouped_ids
+            )
         ),
     )
 
@@ -209,8 +213,18 @@ def test_health_degradation_and_missing_health_are_explicit() -> None:
 
 def test_source_diversity_never_becomes_confirmation() -> None:
     observations = [
-        _observation("attention", AS_OF - timedelta(minutes=10), source_id="hn.frontpage", roles=("ATTENTION",)),
-        _observation("discovery", AS_OF - timedelta(minutes=5), source_id="gdelt.frontier", roles=("DISCOVERY",)),
+        _observation(
+            "attention",
+            AS_OF - timedelta(minutes=10),
+            source_id="hn.frontpage",
+            roles=("ATTENTION",),
+        ),
+        _observation(
+            "discovery",
+            AS_OF - timedelta(minutes=5),
+            source_id="gdelt.frontier",
+            roles=("DISCOVERY",),
+        ),
     ]
     projection = _projection(
         observations, grouped=(tuple(item.observation_id for item in observations),)
