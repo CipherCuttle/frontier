@@ -553,7 +553,7 @@ def normalize_arxiv_cs_ai(
             malformed_time += 1
         if updated_text is not None and updated is None:
             malformed_time += 1
-        authors = []
+        authors: list[str] = []
         for author in entry.findall(f"{{{_ATOM_NS}}}author"):
             name = _atom_text(author, "name")
             if name is not None:
