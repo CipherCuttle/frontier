@@ -10,12 +10,14 @@
   },
   "promotion_contract": {
     "shadow_authority_state": "EXPERIMENTAL_SHADOW",
+    "experiment_class": "RANKING_EMERGENCE_EXISTING_EPISODE_UNIVERSE",
     "qualifying_domain_ids": [
       "AI_MODELS",
       "SECURITY_VULNERABILITIES",
       "SOFTWARE_PACKAGES"
     ],
     "minimum_qualifying_domains": 2,
+    "operating_point_contract": "same_preregistered_positive_rank_cutoff_k_per_domain_both_arms",
     "point_precision_floor": "candidate_gte_control_each_qualifying_domain",
     "lead_time_floor": "median_positive_each_qualifying_domain_and_pooled",
     "requires_preregistration_before_confirmatory_window": true,
@@ -81,14 +83,14 @@
     {
       "id": "A010",
       "category": "emit-nothing-precision",
-      "requirement": "A candidate must emit according to its preregistered operating point and cannot pass by abstaining from all opportunities.",
-      "forbidden": "undefined or vacuous precision is reported as superior precision"
+      "requirement": "Each arm surfaces min(K_domain, eligible population) episodes at every eligible snapshot.",
+      "forbidden": "candidate abstains or thresholds away hard opportunities to inflate precision"
     },
     {
       "id": "A011",
       "category": "operating-point-mismatch",
-      "requirement": "At matched preregistered operating points candidate point precision is at least control precision in every qualifying promotion domain.",
-      "forbidden": "candidate gains lead time by using a noisier surface or a weaker post-hoc precision definition"
+      "requirement": "Candidate and control use the same preregistered positive integer K_domain at every eligible snapshot in a domain.",
+      "forbidden": "candidate gains lead time with a larger rank budget or precision with a smaller rank budget than the control"
     },
     {
       "id": "A012",
@@ -100,7 +102,7 @@
       "id": "A013",
       "category": "configuration-drift",
       "requirement": "Any change to frozen candidate configuration creates a new candidate and confirmatory window.",
-      "forbidden": "weights thresholds features or exclusions change in place after outcomes are visible"
+      "forbidden": "weights thresholds features exclusions or K_domain change in place after outcomes are visible"
     },
     {
       "id": "A014",
@@ -117,8 +119,8 @@
     {
       "id": "A016",
       "category": "posthoc-threshold-selection",
-      "requirement": "The candidate must satisfy the global precision and positive-median lead-time floors in addition to stricter preregistered rules.",
-      "forbidden": "threshold or comparison rule is weakened after inspecting confirmatory outcomes"
+      "requirement": "The candidate must satisfy the global equal-rank-budget precision and positive-median lead-time floors in addition to stricter preregistered rules.",
+      "forbidden": "rank budget threshold or comparison rule is weakened after inspecting confirmatory outcomes"
     },
     {
       "id": "A017",
