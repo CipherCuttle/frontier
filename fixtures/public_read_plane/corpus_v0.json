@@ -1,0 +1,160 @@
+{
+  "schema_version": "frontier-public-read-corpus-v0",
+  "runtime_implementation_authorized": false,
+  "api_version": "public-read-api-v0",
+  "response_schema_family": "public-read-response-v0",
+  "view_policy_version": "baseline-read-views-v0",
+  "baseline_projection": {
+    "name": "baseline-intelligence",
+    "version": "baseline-intelligence-v0",
+    "schema_version": "baseline-intelligence-snapshot-v0",
+    "algorithm_version": "windowed-episode-metrics-v0",
+    "ranking_policy_version": "naive-episode-activity-v0"
+  },
+  "required_http_methods": ["GET"],
+  "forbidden_http_methods": ["POST", "PUT", "PATCH", "DELETE"],
+  "pagination": {"default_limit": 50, "max_limit": 100, "default_offset": 0},
+  "view_rules": {
+    "RADAR": "all_episodes_preserve_baseline_rank",
+    "NOW": "mentions_1h_gt_0_preserve_baseline_rank",
+    "TRENDING": "velocity_6h_delta_gt_0_preserve_baseline_rank"
+  },
+  "required_snapshot_binding_fields": [
+    "snapshot_id",
+    "receipt_id",
+    "receipt_schema_version",
+    "projection_name",
+    "projection_version",
+    "schema_version",
+    "algorithm_version",
+    "ranking_policy_version",
+    "configuration_digest",
+    "source_registry_version",
+    "as_of",
+    "input_digest",
+    "output_digest"
+  ],
+  "scenarios": [
+    {
+      "id": "failed_receipt_not_publishable",
+      "category": "publication_status",
+      "given": {"receipt_status": "FAILED", "snapshot_row_present": true},
+      "expect": {"servable": false, "error": "SNAPSHOT_NOT_FOUND"}
+    },
+    {
+      "id": "implicit_no_complete_snapshot",
+      "category": "availability",
+      "given": {"complete_snapshots": []},
+      "expect": {"http_status": 503, "error": "NO_COMPLETE_SNAPSHOT"}
+    },
+    {
+      "id": "latest_complete_deterministic",
+      "category": "snapshot_selection",
+      "given": {
+        "complete_snapshots": [
+          {"snapshot_id": "snapshot_b", "as_of": "2026-09-05T12:00:00.000000Z"},
+          {"snapshot_id": "snapshot_a", "as_of": "2026-09-05T12:00:00.000000Z"},
+          {"snapshot_id": "snapshot_old", "as_of": "2026-09-05T11:00:00.000000Z"}
+        ]
+      },
+      "expect": {"selected_snapshot_id": "snapshot_b"}
+    },
+    {
+      "id": "snapshot_binding_mismatch_fail_closed",
+      "category": "integrity",
+      "given": {"snapshot_receipt_id_matches": false},
+      "expect": {"http_status": 503, "error": "SNAPSHOT_INTEGRITY_FAILURE"}
+    },
+    {
+      "id": "snapshot_output_digest_mismatch_fail_closed",
+      "category": "integrity",
+      "given": {"canonical_payload_digest_matches": false},
+      "expect": {"http_status": 503, "error": "SNAPSHOT_INTEGRITY_FAILURE"}
+    },
+    {
+      "id": "radar_preserves_baseline_rank",
+      "category": "view_semantics",
+      "given": {
+        "episodes": [
+          {"episode_id": "episode_c", "rank": 3, "mentions_1h": 5, "velocity_6h_delta": 9},
+          {"episode_id": "episode_a", "rank": 1, "mentions_1h": 0, "velocity_6h_delta": -1},
+          {"episode_id": "episode_b", "rank": 2, "mentions_1h": 1, "velocity_6h_delta": 2}
+        ]
+      },
+      "expect": {"episode_ids": ["episode_a", "episode_b", "episode_c"], "ranks": [1, 2, 3]}
+    },
+    {
+      "id": "now_filters_without_rerank",
+      "category": "view_semantics",
+      "given": {
+        "episodes": [
+          {"episode_id": "episode_a", "rank": 1, "mentions_1h": 0},
+          {"episode_id": "episode_b", "rank": 2, "mentions_1h": 1},
+          {"episode_id": "episode_c", "rank": 3, "mentions_1h": 4}
+        ]
+      },
+      "expect": {"episode_ids": ["episode_b", "episode_c"], "ranks": [2, 3]}
+    },
+    {
+      "id": "trending_filters_without_rerank",
+      "category": "view_semantics",
+      "given": {
+        "episodes": [
+          {"episode_id": "episode_a", "rank": 1, "velocity_6h_delta": 0},
+          {"episode_id": "episode_b", "rank": 2, "velocity_6h_delta": 3},
+          {"episode_id": "episode_c", "rank": 3, "velocity_6h_delta": -1},
+          {"episode_id": "episode_d", "rank": 4, "velocity_6h_delta": 1}
+        ]
+      },
+      "expect": {"episode_ids": ["episode_b", "episode_d"], "ranks": [2, 4]}
+    },
+    {
+      "id": "coverage_degradation_visible",
+      "category": "health",
+      "given": {"snapshot_coverage_state": "DEGRADED", "missing_source_health": true},
+      "expect": {"coverage_state": "DEGRADED", "missing_health_not_coerced_to_ok": true}
+    },
+    {
+      "id": "source_diversity_not_confirmation",
+      "category": "epistemic_integrity",
+      "given": {"source_count": 5, "source_role_diversity": 3, "confirmation": "UNAVAILABLE"},
+      "expect": {"confirmation": "UNAVAILABLE", "evidence_root_diversity": null}
+    },
+    {
+      "id": "episode_drilldown_membership_bounded",
+      "category": "evidence_drilldown",
+      "given": {
+        "episode_observation_ids": ["obs_a", "obs_b"],
+        "database_observation_ids": ["obs_a", "obs_b", "obs_other"]
+      },
+      "expect": {"returned_observation_ids": ["obs_a", "obs_b"]}
+    },
+    {
+      "id": "future_observation_excluded_from_direct_read",
+      "category": "point_in_time",
+      "given": {
+        "snapshot_as_of": "2026-09-05T12:00:00.000000Z",
+        "observation_observed_at": "2026-09-05T12:00:01.000000Z"
+      },
+      "expect": {"http_status": 404, "error": "OBSERVATION_NOT_FOUND"}
+    },
+    {
+      "id": "openapi_has_no_mutation_operations",
+      "category": "transport_authority",
+      "given": {"generated_openapi": true},
+      "expect": {"methods": ["GET"], "forbidden_methods_present": false}
+    },
+    {
+      "id": "database_session_read_only",
+      "category": "mutation_boundary",
+      "given": {"public_read_repository_session": true, "attempt": "INSERT_CANONICAL_OBSERVATION"},
+      "expect": {"write_succeeds": false}
+    },
+    {
+      "id": "generated_contracts_deterministic",
+      "category": "contract_generation",
+      "given": {"same_source_tree": true},
+      "expect": {"openapi_byte_identical": true, "typescript_byte_identical": true}
+    }
+  ]
+}
