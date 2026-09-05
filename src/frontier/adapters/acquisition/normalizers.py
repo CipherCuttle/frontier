@@ -75,7 +75,7 @@ def _rss_time(value: str | None) -> datetime | None:
         return None
     try:
         parsed = parsedate_to_datetime(value)
-    except (TypeError, ValueError, OverflowError):
+    except TypeError, ValueError, OverflowError:
         return None
     if parsed.tzinfo is None:
         return None
@@ -460,7 +460,9 @@ def normalize_hf_models(
             artifact_type="huggingface-model-repo",
             name=_truncate_utf8(model_id, 2048) or model_id,
             version=_truncate_utf8(sha, 512),
-            canonical_url=_truncate_utf8(f"https://huggingface.co/{quote(model_id, safe='/')}", 4096),
+            canonical_url=_truncate_utf8(
+                f"https://huggingface.co/{quote(model_id, safe='/')}", 4096
+            ),
             artifact_digest=None,
             source_metadata={
                 "author": _truncate_utf8(_string(entry.get("author")), 512),
