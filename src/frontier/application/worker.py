@@ -14,7 +14,6 @@ from frontier.domain.source import SourceContract
 
 Clock = Callable[[], datetime]
 Sleep = Callable[[float], Awaitable[None]]
-CycleObserver = Callable[[PollCycleResult], None]
 
 
 class AcquisitionRunner(Protocol):
@@ -56,6 +55,9 @@ class PollCycleResult:
     @property
     def duration_seconds(self) -> float:
         return max(0.0, (self.completed_at - self.started_at).total_seconds())
+
+
+CycleObserver = Callable[[PollCycleResult], None]
 
 
 class AcquisitionWorker:
