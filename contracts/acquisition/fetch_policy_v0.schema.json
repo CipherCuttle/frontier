@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontier.local/contracts/acquisition/fetch_policy_v0.schema.json",
+  "title": "FRONTIER Fetch Policy V0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","policy_profile","allowed_schemes","max_redirects","deadline_ms","connect_timeout_ms","read_idle_timeout_ms","max_response_bytes","max_expanded_bytes","max_header_bytes","blocked_address_classes","forward_authorization_cross_origin","retry"],
+  "properties": {
+    "schema_version": {"const": "fetch-policy-v0"},
+    "policy_profile": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"},
+    "allowed_schemes": {"type": "array", "const": ["https"]},
+    "max_redirects": {"type": "integer", "minimum": 0, "maximum": 5},
+    "deadline_ms": {"type": "integer", "minimum": 1000, "maximum": 60000},
+    "connect_timeout_ms": {"type": "integer", "minimum": 500, "maximum": 15000},
+    "read_idle_timeout_ms": {"type": "integer", "minimum": 500, "maximum": 15000},
+    "max_response_bytes": {"type": "integer", "minimum": 1024, "maximum": 16777216},
+    "max_expanded_bytes": {"type": "integer", "minimum": 1024, "maximum": 33554432},
+    "max_header_bytes": {"type": "integer", "minimum": 1024, "maximum": 262144},
+    "blocked_address_classes": {"type": "array", "minItems": 6, "uniqueItems": true, "items": {"enum": ["LOOPBACK","PRIVATE","LINK_LOCAL","MULTICAST","UNSPECIFIED","CLOUD_METADATA","IPV4_MAPPED_PRIVATE"]}},
+    "forward_authorization_cross_origin": {"const": false},
+    "retry": {"type": "object", "additionalProperties": false, "required": ["max_attempts","base_delay_ms","max_delay_ms","max_retry_after_seconds","jitter"], "properties": {"max_attempts": {"type": "integer", "minimum": 1, "maximum": 5}, "base_delay_ms": {"type": "integer", "minimum": 100, "maximum": 5000}, "max_delay_ms": {"type": "integer", "minimum": 1000, "maximum": 60000}, "max_retry_after_seconds": {"type": "integer", "minimum": 1, "maximum": 3600}, "jitter": {"const": true}}}
+  }
+}

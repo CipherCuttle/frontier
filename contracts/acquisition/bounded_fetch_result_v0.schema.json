@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontier.local/contracts/acquisition/bounded_fetch_result_v0.schema.json",
+  "title": "FRONTIER BoundedFetchResult V0 JSON Interchange Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","request_id","outcome","retrieved_at","original_url","final_url","redirect_chain","http_status","content_type","response_headers","compressed_bytes","expanded_bytes","body_digest","body_base64","failure"],
+  "properties": {
+    "schema_version": {"const": "bounded-fetch-result-v0"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "outcome": {"enum": ["SUCCESS","REJECTED","FAILED"]},
+    "retrieved_at": {"type": "string", "format": "date-time", "description": "Fetcher telemetry only; trusted ingestion assigns canonical retrieved_at after boundary crossing."},
+    "original_url": {"type": "string", "format": "uri", "maxLength": 2048},
+    "final_url": {"type": ["string","null"], "maxLength": 2048},
+    "redirect_chain": {"type": "array", "maxItems": 5, "items": {"type": "object", "additionalProperties": false, "required": ["status","url"], "properties": {"status": {"type": "integer", "minimum": 300, "maximum": 399}, "url": {"type": "string", "format": "uri", "maxLength": 2048}}}},
+    "http_status": {"type": ["integer","null"], "minimum": 100, "maximum": 599},
+    "content_type": {"type": ["string","null"], "maxLength": 256},
+    "response_headers": {"type": "object", "maxProperties": 32, "propertyNames": {"pattern": "^[A-Za-z0-9-]{1,64}$"}, "additionalProperties": {"type": "string", "maxLength": 4096}},
+    "compressed_bytes": {"type": ["integer","null"], "minimum": 0, "maximum": 16777216},
+    "expanded_bytes": {"type": ["integer","null"], "minimum": 0, "maximum": 16777216},
+    "body_digest": {"anyOf": [{"type": "null"},{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}], "description": "Advisory until trusted side recomputes SHA-256 over decoded body bytes."},
+    "body_base64": {"type": ["string","null"], "contentEncoding": "base64", "maxLength": 22369624, "description": "JSON interchange representation of bounded opaque bytes; semantic contract remains bytes."},
+    "failure": {"anyOf": [{"type": "null"},{"type": "object", "additionalProperties": false, "required": ["code","safe_message","retryable","retry_after_seconds"], "properties": {"code": {"type": "string", "pattern": "^[A-Z0-9_]{1,64}$"}, "safe_message": {"type": "string", "maxLength": 512}, "retryable": {"type": "boolean"}, "retry_after_seconds": {"type": ["integer","null"], "minimum": 0, "maximum": 3600}}}]}
+  },
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "SUCCESS"}}}, "then": {"properties": {"body_base64": {"type": "string"}, "failure": {"type": "null"}}}},
+    {"if": {"properties": {"outcome": {"enum": ["REJECTED","FAILED"]}}}, "then": {"properties": {"failure": {"type": "object"}}}}
+  ]
+}
