@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from frontier.application.public_read import PublicReadService
 from frontier.domain.public_read import (
@@ -22,6 +22,10 @@ from frontier.domain.public_read import (
     SnapshotIntegrityError,
     SnapshotNotFoundError,
 )
+
+SnapshotQuery = Annotated[str | None, Query()]
+LimitQuery = Annotated[int, Query(ge=1, le=PUBLIC_READ_MAX_LIMIT)]
+OffsetQuery = Annotated[int, Query(ge=0)]
 
 
 class SnapshotBindingResponse(BaseModel):
@@ -162,7 +166,7 @@ class SourceHealthResponse(BaseModel):
     transport: str
     freshness: str
     completeness: str
-    schema: str
+    schema_health: str = Field(alias="schema")
     details: dict[str, Any]
 
 
@@ -279,10 +283,6 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
             offset=offset,
         )
         return _view_response(page)
-
-    SnapshotQuery = Annotated[str | None, Query()]
-    LimitQuery = Annotated[int, Query(ge=1, le=PUBLIC_READ_MAX_LIMIT)]
-    OffsetQuery = Annotated[int, Query(ge=0)]
 
     @app.get("/v0/radar", response_model=ViewResponse, operation_id="getRadar")
     def radar(
