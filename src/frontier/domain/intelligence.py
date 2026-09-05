@@ -269,9 +269,7 @@ def _health_states(
         for source_id in enabled
     ]
     schema_values = [
-        health_by_source[source_id].schema
-        if source_id in health_by_source
-        else HealthValue.UNKNOWN
+        health_by_source[source_id].schema if source_id in health_by_source else HealthValue.UNKNOWN
         for source_id in enabled
     ]
     if not enabled:
@@ -301,9 +299,7 @@ def _episode_without_rank(
     prospective = tuple(item for item in ordered if item.is_prospective)
 
     mentions_1h = sum(
-        1
-        for item in prospective
-        if _in_window(item.observed_at, start=as_of - ONE_HOUR, end=as_of)
+        1 for item in prospective if _in_window(item.observed_at, start=as_of - ONE_HOUR, end=as_of)
     )
     mentions_6h = sum(
         1
@@ -334,9 +330,7 @@ def _episode_without_rank(
         )
     )
     source_ids = tuple(sorted({item.grouping.source_id for item in ordered}))
-    signal_roles = tuple(
-        sorted({role for item in ordered for role in item.grouping.signal_roles})
-    )
+    signal_roles = tuple(sorted({role for item in ordered for role in item.grouping.signal_roles}))
     observation_ids = tuple(item.observation_id for item in ordered)
     return BaselineEpisode(
         rank=0,
@@ -348,9 +342,7 @@ def _episode_without_rank(
         evidence_count_total=len(ordered),
         prospective_evidence_count=len(prospective),
         backfill_evidence_count=sum(1 for item in ordered if item.is_backfill),
-        recovered_backlog_evidence_count=sum(
-            1 for item in ordered if item.is_recovered_backlog
-        ),
+        recovered_backlog_evidence_count=sum(1 for item in ordered if item.is_recovered_backlog),
         mentions_1h=mentions_1h,
         mentions_6h=mentions_6h,
         mentions_24h=mentions_24h,
@@ -375,9 +367,7 @@ def _rank(episodes: list[BaselineEpisode]) -> tuple[BaselineEpisode, ...]:
     ordered.sort(key=lambda episode: episode.velocity_6h_delta, reverse=True)
     ordered.sort(key=lambda episode: episode.mentions_6h, reverse=True)
     ordered.sort(key=lambda episode: episode.mentions_1h, reverse=True)
-    return tuple(
-        replace(episode, rank=index) for index, episode in enumerate(ordered, start=1)
-    )
+    return tuple(replace(episode, rank=index) for index, episode in enumerate(ordered, start=1))
 
 
 def build_baseline_snapshot(
@@ -427,9 +417,7 @@ def build_baseline_snapshot(
         )
         for member_ids in episode_member_ids
     ]
-    transport, freshness, coverage, schema = _health_states(
-        enabled_source_ids, health_tuple
-    )
+    transport, freshness, coverage, schema = _health_states(enabled_source_ids, health_tuple)
     return BaselineSnapshot(
         as_of=as_of,
         transport_state=transport,
@@ -453,8 +441,7 @@ def baseline_input_digest(
         for item in sorted(health, key=lambda item: (item.source_id, item.as_of))
     ]
     observation_values: list[CanonicalValue] = [
-        item.to_canonical()
-        for item in sorted(observations, key=lambda item: item.observation_id)
+        item.to_canonical() for item in sorted(observations, key=lambda item: item.observation_id)
     ]
     material: dict[str, CanonicalValue] = {
         "enabled_source_ids": enabled_values,
