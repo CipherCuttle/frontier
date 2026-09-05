@@ -105,9 +105,7 @@ def test_projection_is_deterministic_and_filters_future_observations() -> None:
         signal_roles=("ATTENTION",),
     )
     forward = build_grouping_projection((first, second, future), as_of=NOW + timedelta(minutes=10))
-    reverse = build_grouping_projection(
-        (future, second, first), as_of=NOW + timedelta(minutes=10)
-    )
+    reverse = build_grouping_projection((future, second, first), as_of=NOW + timedelta(minutes=10))
     assert forward.to_canonical() == reverse.to_canonical()
     assert len(forward.groups) == 1
     assert forward.groups[0].observation_ids == tuple(
