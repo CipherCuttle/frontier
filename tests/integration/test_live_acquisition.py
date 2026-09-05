@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 from __future__ import annotations
 
 import asyncio
@@ -7,13 +6,13 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+import psycopg
 import pytest
-
-psycopg = pytest.importorskip("psycopg")
 
 from frontier.adapters.acquisition.config import load_fetch_policy, load_source_registry
 from frontier.adapters.postgres import PostgresEvidenceStore
 from frontier.application.acquisition import AcquisitionService
+from frontier.application.ports.fetcher import FetcherPort
 from frontier.contracts.fetch import (
     BoundedFetchResult,
     FetchFailure,
@@ -134,21 +133,23 @@ class CisaFallbackFetcher:
         return success(request, self._body, "application/json", '"cisa-fixture"')
 
 
-def reset_fetch_state(conn: object, source_id: str) -> None:
-    with conn.cursor() as cur:  # type: ignore[attr-defined]
+def reset_fetch_state(
+    conn: psycopg.Connection[tuple[object, ...]], source_id: str
+) -> None:
+    with conn.cursor() as cur:
         cur.execute("DELETE FROM source_fetch_state WHERE source_id = %s", (source_id,))
-    conn.commit()  # type: ignore[attr-defined]
+    conn.commit()
 
 
 def service_for(
-    store: PostgresEvidenceStore, fetcher: object, clock: datetime
+    store: PostgresEvidenceStore, fetcher: FetcherPort, clock: datetime
 ) -> AcquisitionService:
     policy = load_fetch_policy(ROOT)
     registry = load_source_registry(ROOT)
     return AcquisitionService(
         registry=registry,
         policy=policy,
-        fetcher=fetcher,  # type: ignore[arg-type]
+        fetcher=fetcher,
         repository=store,
         clock=lambda: clock,
         sleep=lambda _seconds: asyncio.sleep(0),
