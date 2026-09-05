@@ -5,8 +5,10 @@ on:
     paths:
       - "fixtures/acquisition/**"
       - "fixtures/terminal/**"
+      - "fixtures/advanced_intelligence/**"
       - "docs/preflight/PR02_*"
       - "docs/TERMINAL_V0.md"
+      - "docs/ADVANCED_INTELLIGENCE_EXPERIMENTS.md"
       - "scripts/preflight/validate_*corpus.py"
       - ".github/workflows/preflight-fixtures.yml"
   push:
@@ -14,8 +16,10 @@ on:
     paths:
       - "fixtures/acquisition/**"
       - "fixtures/terminal/**"
+      - "fixtures/advanced_intelligence/**"
       - "docs/preflight/PR02_*"
       - "docs/TERMINAL_V0.md"
+      - "docs/ADVANCED_INTELLIGENCE_EXPERIMENTS.md"
       - "scripts/preflight/validate_*corpus.py"
       - ".github/workflows/preflight-fixtures.yml"
 
@@ -36,3 +40,5 @@ jobs:
         run: python scripts/preflight/validate_normalization_provenance_corpus.py
       - name: Validate hostile terminal corpus
         run: python scripts/preflight/validate_terminal_corpus.py
+      - name: Validate hostile advanced intelligence corpus
+        run: python scripts/preflight/validate_advanced_intelligence_corpus.py
