@@ -7,14 +7,13 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from time import perf_counter_ns
+from typing import Any, cast
 from uuid import uuid4
 
+import psycopg
 import pytest
-
-psycopg = pytest.importorskip("psycopg")
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
+from httpx import Client
 
 from frontier.adapters.acquisition.normalizers import normalize_hn_frontpage
 from frontier.adapters.api.public_read import create_public_read_app
@@ -23,6 +22,7 @@ from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligence
 from frontier.adapters.postgres.public_read import PostgresPublicReadRepository
 from frontier.application.intelligence import run_baseline_intelligence
 from frontier.application.public_read import PublicReadService
+from frontier.domain.canonical_json import CanonicalValue
 from frontier.domain.collection import CollectionReason, CollectionRun
 from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
@@ -120,18 +120,21 @@ def _insert_nonpublishable_snapshots() -> tuple[str, str]:
     corrupt_receipt = _hex_id("receipt_")
     as_of = datetime(2026, 1, 1, tzinfo=UTC)
     digest = "sha256:" + "9" * 64
-    payload = {
-        "algorithm_version": "windowed-episode-metrics-v0",
-        "as_of": "2026-01-01T00:00:00.000000Z",
-        "coverage_state": "UNKNOWN",
-        "episodes": [],
-        "freshness_state": "UNKNOWN",
-        "projection_version": "baseline-intelligence-v0",
-        "ranking_policy_version": "naive-episode-activity-v0",
-        "schema_state": "UNKNOWN",
-        "schema_version": "baseline-intelligence-snapshot-v0",
-        "transport_state": "UNKNOWN",
-    }
+    payload = cast(
+        dict[str, CanonicalValue],
+        {
+            "algorithm_version": "windowed-episode-metrics-v0",
+            "as_of": "2026-01-01T00:00:00.000000Z",
+            "coverage_state": "UNKNOWN",
+            "episodes": [],
+            "freshness_state": "UNKNOWN",
+            "projection_version": "baseline-intelligence-v0",
+            "ranking_policy_version": "naive-episode-activity-v0",
+            "schema_state": "UNKNOWN",
+            "schema_version": "baseline-intelligence-snapshot-v0",
+            "transport_state": "UNKNOWN",
+        },
+    )
     with psycopg.connect(DB_URL) as conn, conn.cursor() as cur:
         for receipt_id, snapshot_id, status in (
             (failed_receipt, failed_snapshot, "FAILED"),
@@ -199,36 +202,44 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
         assert write_error.value.sqlstate == "25006"
 
         app = create_public_read_app(PublicReadService(repository))
-        methods = {method.upper() for path in app.openapi()["paths"].values() for method in path}
+        document = cast(dict[str, Any], app.openapi())
+        paths = cast(dict[str, dict[str, Any]], document["paths"])
+        methods = {method.upper() for path in paths.values() for method in path}
         assert methods == {"GET"}
 
-        client = TestClient(app)
+        client: Client = TestClient(app)
         radar = client.get("/v0/radar", params={"snapshot_id": snapshot_id})
         assert radar.status_code == 200
-        body = radar.json()
-        assert body["snapshot"]["snapshot_id"] == snapshot_id
-        assert body["snapshot"]["receipt_id"].startswith("receipt_")
-        assert body["snapshot"]["ranking_policy_version"] == "naive-episode-activity-v0"
+        body = cast(dict[str, Any], radar.json())
+        binding = cast(dict[str, Any], body["snapshot"])
+        items = cast(list[dict[str, Any]], body["items"])
+        assert binding["snapshot_id"] == snapshot_id
+        assert cast(str, binding["receipt_id"]).startswith("receipt_")
+        assert binding["ranking_policy_version"] == "naive-episode-activity-v0"
         assert body["semantic_scope"] == "BASELINE_SUBSTRATE"
         assert body["coverage_state"] == "DEGRADED"
-        assert body["items"] == sorted(body["items"], key=lambda item: item["rank"])
+        assert items == sorted(items, key=lambda item: cast(int, item["rank"]))
 
         drilldown = client.get(f"/v0/episodes/{episode_id}", params={"snapshot_id": snapshot_id})
         assert drilldown.status_code == 200
-        drilldown_body = drilldown.json()
-        expected_ids = drilldown_body["episode"]["observation_ids"]
-        assert [item["observation_id"] for item in drilldown_body["observations"]] == expected_ids
+        drilldown_body = cast(dict[str, Any], drilldown.json())
+        episode_body = cast(dict[str, Any], drilldown_body["episode"])
+        expected_ids = cast(list[str], episode_body["observation_ids"])
+        observations = cast(list[dict[str, Any]], drilldown_body["observations"])
+        assert [cast(str, item["observation_id"]) for item in observations] == expected_ids
 
         future = client.get(
             f"/v0/observations/{future_observation_id}",
             params={"snapshot_id": snapshot_id},
         )
         assert future.status_code == 404
-        assert future.json()["error"] == "OBSERVATION_NOT_FOUND"
+        future_body = cast(dict[str, Any], future.json())
+        assert future_body["error"] == "OBSERVATION_NOT_FOUND"
 
         health = client.get("/v0/health", params={"snapshot_id": snapshot_id})
         assert health.status_code == 200
-        assert health.json()["coverage_state"] == body["coverage_state"]
+        health_body = cast(dict[str, Any], health.json())
+        assert health_body["coverage_state"] == body["coverage_state"]
 
         samples_ms: list[float] = []
         for _ in range(60):
