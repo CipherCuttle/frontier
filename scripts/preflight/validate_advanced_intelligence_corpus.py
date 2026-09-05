@@ -62,12 +62,14 @@ def main() -> int:
         return fail("promotion_contract must be an object")
     expected_promotion = {
         "shadow_authority_state": "EXPERIMENTAL_SHADOW",
+        "experiment_class": "RANKING_EMERGENCE_EXISTING_EPISODE_UNIVERSE",
         "qualifying_domain_ids": [
             "AI_MODELS",
             "SECURITY_VULNERABILITIES",
             "SOFTWARE_PACKAGES",
         ],
         "minimum_qualifying_domains": 2,
+        "operating_point_contract": "same_preregistered_positive_rank_cutoff_k_per_domain_both_arms",
         "point_precision_floor": "candidate_gte_control_each_qualifying_domain",
         "lead_time_floor": "median_positive_each_qualifying_domain_and_pooled",
         "requires_preregistration_before_confirmatory_window": True,
