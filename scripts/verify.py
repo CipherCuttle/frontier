@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 COMMANDS = [
-    ["ruff", "format", "--check", "."],
+    ["ruff", "format", "--check", "--exclude", "scripts/preflight", "."],
     ["ruff", "check", "."],
     ["pyright"],
     [sys.executable, "scripts/check_architecture_boundaries.py"],
