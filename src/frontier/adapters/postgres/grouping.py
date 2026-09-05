@@ -20,9 +20,15 @@ def _payload(value: object) -> dict[str, object]:
 
 
 def _roles(value: object) -> tuple[str, ...]:
-    if not isinstance(value, list) or not all(isinstance(role, str) for role in value):
+    if not isinstance(value, list):
         raise RuntimeError("source signal_roles are malformed")
-    return tuple(cast(list[str], value))
+    raw_roles = cast(list[object], value)
+    roles: list[str] = []
+    for role in raw_roles:
+        if not isinstance(role, str):
+            raise RuntimeError("source signal_roles are malformed")
+        roles.append(role)
+    return tuple(roles)
 
 
 class PostgresGroupingRepository:
