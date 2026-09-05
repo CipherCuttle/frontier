@@ -147,8 +147,10 @@ def run_worker(database_url: str, config_root: Path, *, once: bool, idle_seconds
 
 
 def _database_url(args: argparse.Namespace, parser: argparse.ArgumentParser) -> str:
-    value = args.database_url or os.getenv("FRONTIER_DATABASE_URL") or os.getenv(
-        "FRONTIER_TEST_DATABASE_URL"
+    value = (
+        args.database_url
+        or os.getenv("FRONTIER_DATABASE_URL")
+        or os.getenv("FRONTIER_TEST_DATABASE_URL")
     )
     if not value:
         parser.error("--database-url or FRONTIER_DATABASE_URL is required")
