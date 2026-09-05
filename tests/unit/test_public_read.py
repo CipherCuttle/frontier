@@ -5,12 +5,14 @@ from datetime import UTC, datetime
 import pytest
 
 from frontier.application.public_read import PublicReadService
+from frontier.domain.canonical_json import CanonicalValue
 from frontier.domain.public_read import (
     ObservationEvidenceRead,
     PublicViewKind,
     ResolvedPublicSnapshot,
     SnapshotBinding,
     SnapshotIntegrityError,
+    SourceHealthRead,
     select_public_view,
 )
 
@@ -40,7 +42,7 @@ def _episode(
     mentions_1h: int = 0,
     velocity_6h_delta: int = 0,
     observation_ids: list[str] | None = None,
-) -> dict[str, object]:
+) -> dict[str, CanonicalValue]:
     return {
         "episode_id": episode_id,
         "rank": rank,
@@ -52,7 +54,7 @@ def _episode(
     }
 
 
-def _snapshot(*episodes: dict[str, object]) -> ResolvedPublicSnapshot:
+def _snapshot(*episodes: dict[str, CanonicalValue]) -> ResolvedPublicSnapshot:
     return ResolvedPublicSnapshot(
         binding=_binding(),
         generated_at="2026-09-05T12:00:01.000000Z",
@@ -60,18 +62,27 @@ def _snapshot(*episodes: dict[str, object]) -> ResolvedPublicSnapshot:
         freshness_state="OK",
         coverage_state="DEGRADED",
         schema_state="OK",
-        episodes=tuple(episodes),  # type: ignore[arg-type]
+        episodes=tuple(episodes),
     )
 
 
 def test_radar_orders_by_existing_baseline_rank_without_renumbering() -> None:
     page = select_public_view(
-        _snapshot(_episode("episode-c", 3), _episode("episode-a", 1), _episode("episode-b", 2)),
+        _snapshot(
+            _episode("episode-c", 3),
+            _episode("episode-a", 1),
+            _episode("episode-b", 2),
+        ),
         view=PublicViewKind.RADAR,
     )
-    assert [item["episode_id"] for item in page.items] == ["episode-a", "episode-b", "episode-c"]
+    assert [item["episode_id"] for item in page.items] == [
+        "episode-a",
+        "episode-b",
+        "episode-c",
+    ]
     assert [item["rank"] for item in page.items] == [1, 2, 3]
     assert page.semantic_scope == "BASELINE_SUBSTRATE"
+    assert page.coverage_state == "DEGRADED"
 
 
 def test_now_and_trending_filter_without_reranking() -> None:
@@ -138,7 +149,7 @@ class _MembershipRepository:
     ) -> ObservationEvidenceRead | None:
         return self._observation(observation_id)
 
-    def list_source_health(self, *, as_of: datetime) -> list[object]:
+    def list_source_health(self, *, as_of: datetime) -> list[SourceHealthRead]:
         return []
 
     def _observation(self, observation_id: str) -> ObservationEvidenceRead:
@@ -166,7 +177,6 @@ def test_episode_drilldown_requires_exact_membership() -> None:
     value = PublicReadService(_MembershipRepository(expected)).get_episode("episode-a")
     assert tuple(item.observation_id for item in value.observations) == expected
 
+    extra = expected + ("obs_" + "c" * 64,)
     with pytest.raises(SnapshotIntegrityError, match="exactly match"):
-        PublicReadService(_MembershipRepository(expected + ("obs_" + "c" * 64,))).get_episode(
-            "episode-a"
-        )
+        PublicReadService(_MembershipRepository(extra)).get_episode("episode-a")
