@@ -62,6 +62,7 @@ class GroupingInput:
             raise ValueError("observed_at must be timezone-aware")
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
+        signal_roles: list[CanonicalValue] = [role for role in sorted(self.signal_roles)]
         return {
             "artifact_name": self.artifact_name,
             "artifact_type": self.artifact_type,
@@ -70,7 +71,7 @@ class GroupingInput:
             "kind": self.kind,
             "observation_id": self.observation_id,
             "observed_at": canonical_timestamp(self.observed_at),
-            "signal_roles": sorted(self.signal_roles),
+            "signal_roles": signal_roles,
             "source_id": self.source_id,
             "source_item_key": self.source_item_key,
             "text": self.text,
