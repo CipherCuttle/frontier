@@ -9,12 +9,20 @@ from uuid import UUID, uuid4
 
 from frontier.adapters.acquisition.config import FetchPolicy, RegisteredSource, SourceRegistry
 from frontier.adapters.acquisition.normalizers import NormalizationError, normalize_source
+from frontier.application.acquisition_state import SourceFetchState
 from frontier.application.ports.fetcher import FetcherPort
 from frontier.application.ports.repositories import AcquisitionRepository
-from frontier.contracts.fetch import BoundedFetchResult, FetchOutcome, FetchRequest
+from frontier.contracts.fetch import (
+    BoundedFetchResult,
+    FetchFailure,
+    FetchOutcome,
+    FetchRequest,
+)
+from frontier.domain.canonical_json import CanonicalValue
 from frontier.domain.collection import CollectionReason, CollectionRun, CollectionRunStatus
-from frontier.domain.digests import Digest, sha256_digest
+from frontier.domain.digests import sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
+from frontier.domain.observation import ObservationCandidate
 
 Clock = Callable[[], datetime]
 Sleep = Callable[[float], Awaitable[None]]
@@ -98,7 +106,11 @@ class AcquisitionService:
             self._record_health(
                 source_id,
                 run.run_id,
-                transport=HealthValue.FAILED if result.outcome is FetchOutcome.FAILED else HealthValue.DEGRADED,
+                transport=(
+                    HealthValue.FAILED
+                    if result.outcome is FetchOutcome.FAILED
+                    else HealthValue.DEGRADED
+                ),
                 freshness=HealthValue.UNKNOWN,
                 completeness=HealthValue.DEGRADED,
                 schema=HealthValue.UNKNOWN,
@@ -291,7 +303,10 @@ class AcquisitionService:
         )
 
     async def _fetch_with_retry(
-        self, source: RegisteredSource, run_id: UUID, state: object | None
+        self,
+        source: RegisteredSource,
+        run_id: UUID,
+        state: SourceFetchState | None,
     ) -> BoundedFetchResult:
         last_result: BoundedFetchResult | None = None
         for attempt in range(1, self._policy.retry.max_attempts + 1):
@@ -303,7 +318,10 @@ class AcquisitionService:
             if failure is None or not failure.retryable or attempt == self._policy.retry.max_attempts:
                 return last_result
             delay = self._retry_delay(failure.retry_after_seconds, attempt)
-            if failure.retry_after_seconds is not None and delay > self._policy.retry.max_delay_ms / 1000:
+            if (
+                failure.retry_after_seconds is not None
+                and delay > self._policy.retry.max_delay_ms / 1000
+            ):
                 return last_result
             await self._sleep(delay)
         assert last_result is not None
@@ -341,18 +359,20 @@ class AcquisitionService:
         return last_result
 
     def _request(
-        self, source: RegisteredSource, run_id: UUID, attempt: int, state: object | None
+        self,
+        source: RegisteredSource,
+        run_id: UUID,
+        attempt: int,
+        state: SourceFetchState | None,
     ) -> FetchRequest:
         headers = {
             "Accept": ", ".join(source.accepted_content_types),
             "User-Agent": "FRONTIER/0.1 (+https://github.com/CipherCuttle/frontier)",
         }
-        etag = getattr(state, "etag", None)
-        last_modified = getattr(state, "last_modified", None)
-        if isinstance(etag, str) and etag:
-            headers["If-None-Match"] = etag
-        if isinstance(last_modified, str) and last_modified:
-            headers["If-Modified-Since"] = last_modified
+        if state is not None and state.etag:
+            headers["If-None-Match"] = state.etag
+        if state is not None and state.last_modified:
+            headers["If-Modified-Since"] = state.last_modified
         return FetchRequest(
             request_id=f"{run_id.hex}:{attempt}",
             source_id=source.contract.source_id,
@@ -375,27 +395,31 @@ class AcquisitionService:
             capped = max(capped, float(retry_after))
         return min(float(self._policy.retry.max_retry_after_seconds), capped)
 
-    def _next_retry_at(self, failure: object | None, *, attempt: int) -> datetime | None:
-        retryable = getattr(failure, "retryable", False)
-        if retryable is not True:
+    def _next_retry_at(
+        self, failure: FetchFailure | None, *, attempt: int
+    ) -> datetime | None:
+        if failure is None or not failure.retryable:
             return None
-        retry_after = getattr(failure, "retry_after_seconds", None)
-        delay = self._retry_delay(retry_after if isinstance(retry_after, int) else None, attempt)
+        delay = self._retry_delay(failure.retry_after_seconds, attempt)
         return self._clock() + timedelta(seconds=delay)
 
     def _freshness(
         self,
         source: RegisteredSource,
-        candidates: tuple[object, ...],
+        candidates: tuple[ObservationCandidate, ...],
         retrieved_at: datetime,
     ) -> HealthValue:
-        timestamps: list[datetime] = []
-        for candidate in candidates:
-            published = getattr(candidate, "source_published_at", None)
-            if isinstance(published, datetime):
-                timestamps.append(published)
+        timestamps = [
+            candidate.source_published_at
+            for candidate in candidates
+            if candidate.source_published_at is not None
+        ]
         if not timestamps:
-            return HealthValue.UNKNOWN if source.contract.source_id == "cisa.kev" else HealthValue.OK
+            return (
+                HealthValue.UNKNOWN
+                if source.contract.source_id == "cisa.kev"
+                else HealthValue.OK
+            )
         newest = max(timestamps)
         age = max(0.0, (retrieved_at - newest).total_seconds())
         return (
@@ -413,13 +437,8 @@ class AcquisitionService:
         freshness: HealthValue,
         completeness: HealthValue,
         schema: HealthValue,
-        details: dict[str, object],
+        details: dict[str, CanonicalValue],
     ) -> None:
-        safe_details = {
-            key: value
-            for key, value in details.items()
-            if value is None or isinstance(value, (bool, int, str, list, dict))
-        }
         self._repository.add_source_health(
             SourceHealthObservation(
                 source_id=source_id,
@@ -428,7 +447,7 @@ class AcquisitionService:
                 freshness=freshness,
                 completeness=completeness,
                 schema=schema,
-                details=safe_details,
+                details=details,
             ),
             run_id,
         )
@@ -474,7 +493,7 @@ class AcquisitionService:
         *,
         transport: HealthValue,
         schema: HealthValue,
-        details: dict[str, object],
+        details: dict[str, CanonicalValue],
     ) -> AcquisitionResult:
         self._repository.record_fetch_failure(source.contract.source_id, next_retry_at=None)
         self._record_health(
