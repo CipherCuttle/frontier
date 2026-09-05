@@ -1,0 +1,47 @@
+{
+  "schema_version": "source-contract-v0",
+  "source_id": "gdelt.frontier",
+  "display_name": "GDELT Frontier Discovery",
+  "enabled": true,
+  "acquisition_class": "B_OPEN_AGGREGATION",
+  "signal_roles": [
+    "DISCOVERY"
+  ],
+  "transport": "JSON_HTTP",
+  "endpoint": {
+    "url": "https://api.gdeltproject.org/api/v2/doc/doc?query=(AI%20OR%20%22artificial%20intelligence%22%20OR%20LLM%20OR%20%22machine%20learning%22%20OR%20cryptocurrency%20OR%20bitcoin%20OR%20ethereum%20OR%20cybersecurity%20OR%20%22open%20source%22)&mode=artlist&format=json&timespan=1h&maxrecords=250&sort=datedesc",
+    "method": "GET",
+    "accepted_content_types": [
+      "application/json",
+      "text/json"
+    ],
+    "policy_profile": "structured-public-v0",
+    "authentication": "NONE",
+    "credential_ref": null
+  },
+  "expected_cadence": {
+    "freshness_class": "F2",
+    "poll_interval_seconds": 900
+  },
+  "policy": {
+    "access_state": "ALLOWED",
+    "browser_authorized": false,
+    "raw_artifact_retention": "NONE",
+    "extracted_text_retention": "BOUNDED_CANONICAL",
+    "public_excerpt_mode": "METADATA_ONLY",
+    "attribution_required": true,
+    "policy_reviewed_at": "2026-09-05",
+    "policy_references": [
+      "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+      "https://www.gdeltproject.org/about.html"
+    ],
+    "notes": "Discovery metadata only. GDELT articles are pointers/propagation observations, not independent factual corroboration or publisher authority."
+  },
+  "capability": {
+    "primary_evidence_eligible": false,
+    "etag_support": "UNKNOWN",
+    "last_modified_support": "UNKNOWN",
+    "finite_window": true,
+    "schema_reference": null
+  }
+}

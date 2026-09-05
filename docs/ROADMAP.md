@@ -2,7 +2,9 @@
 
 Status: CURRENT_IMPLEMENTATION_STATE_V0
 
-Snapshot base: `main@012bfffecc761c0ff25df9deeb730bba63e5103f`.
+Snapshot parent: `main@a084fe67b1d60fe73d67b08dcf0ae67dd7b822dc`.
+
+Promotion rule for this file: merge of PR #7 promotes `SOURCE_DIVERSITY_V0` to CLOSED and makes `GROUPING_BASELINE_V0` the next product phase. Until that merge, the parent `main` state remains authoritative.
 
 This file records implementation state and next-phase priority. It does not override the Constitution or accepted ADRs. If this roadmap conflicts with higher authority, implementation fails closed until governance is repaired.
 
@@ -17,22 +19,25 @@ Do not infer implementation phase from GitHub pull-request number. Preflight and
 | PR-02 hostile preflight authority | #3 | CLOSED | 56 acquisition / transport / normalization / provenance attack fixtures |
 | PR-02 executable fetch/source contracts | #4 | CLOSED | machine-readable fetch, source, policy and registry contracts |
 | Live acquisition V0 | #5 | CLOSED | secure `frontier-fetch`, PyPI Latest Updates, CISA KEV, source health, trusted canonical writes |
+| Roadmap / implementation-state authority | #6 | CLOSED | living roadmap, stale bootstrap repair, D007 unprotected-main debt |
+| Source diversity V0 | #7 | CLOSED_ON_MERGE | HN ATTENTION, GDELT DISCOVERY, Hugging Face PRIMARY_EMISSION; five-source registry |
 
-## Current system capability
+## Current system capability after PR #7 promotion
 
-FRONTIER can currently:
-- acquire two zero-paid/keyless authoritative structured source lanes;
+FRONTIER can:
+- acquire five zero-paid / no-mandatory-key live source lanes;
+- observe authoritative primary emission through PyPI, CISA KEV and Hugging Face model metadata;
+- observe Hacker News as an `ATTENTION` surface without promoting linked claims into factual truth;
+- observe GDELT as a `DISCOVERY` surface without treating syndication as independent corroboration;
 - keep the hostile fetch role DB-blind;
 - reject forbidden/private network targets and bounded-resource violations;
-- normalize PyPI releases and CISA KEV items into canonical observations;
-- preserve first-durable `observed_at`, collection causality and source health;
-- replay and verify canonical evidence deterministically;
-- distinguish transport, freshness, completeness and schema health.
+- preserve first-durable `observed_at`, collection causality and multidimensional source health;
+- mark capped finite result windows as incomplete rather than silently healthy;
+- distinguish discovery/attention timestamps from publisher publication time and FRONTIER knowledge time;
+- replay and verify canonical evidence deterministically.
 
-FRONTIER cannot yet:
-- observe a live ATTENTION lane;
-- observe a live DISCOVERY lane;
-- establish cross-source evidence independence / syndication structure;
+FRONTIER still cannot:
+- infer cross-source factual-root independence or true syndication ancestry;
 - group observations into topics/episodes;
 - compute a prospective naive trend baseline;
 - publish immutable public intelligence snapshots;
@@ -41,7 +46,7 @@ FRONTIER cannot yet:
 
 ## Immediate repository-control gap
 
-GitHub reported `main` unprotected at this roadmap snapshot. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. Record this as debt and enable protection before parallel agent development becomes routine.
+GitHub reported `main` unprotected at the roadmap snapshot. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
 
 ## Priority sequence
 
@@ -55,40 +60,45 @@ Required outcome:
 - PR-based merge path retained;
 - no bypass assumption embedded in automation.
 
-This is operational governance, not a product phase.
+This is operational governance, not a product phase, and remains open as D007.
 
-### 1. SOURCE_DIVERSITY_V0 — NEXT PRODUCT PHASE
+### 1. SOURCE_DIVERSITY_V0 — CLOSED_ON_PR7_MERGE
 
 Goal: create structurally different live evidence roles so emergence, attention, discovery, syndication and coverage can be tested empirically.
 
-Preferred first lanes:
-- Hacker News public API as `ATTENTION`;
-- GDELT as `DISCOVERY`;
-- one additional overlapping technical/research lane selected through the existing source gates, with Hugging Face, arXiv or GH Archive as leading candidates.
+Delivered lanes:
+- Hacker News official front-page RSS as `ATTENTION`;
+- GDELT DOC ArticleList as `DISCOVERY`;
+- Hugging Face public Hub model metadata as `PRIMARY_EMISSION`;
+- existing PyPI and CISA KEV source semantics preserved.
 
-Acceptance direction:
-- same external root appearing through multiple attention/discovery observations does not become multiple factual confirmations;
-- source outage/degradation remains visible;
-- backfill/recovery bursts do not become organic emergence;
-- new source adapters do not require edits to unrelated adapters or future ranking code;
-- all sources pass technical, policy, information-value and reliability gates.
+Frozen phase semantics:
+- multiple attention/discovery observations do not become multiple factual confirmations;
+- GDELT discovery time is not publisher time or FRONTIER knowledge time;
+- capped result windows degrade completeness;
+- absence of usable source timestamps yields freshness `UNKNOWN`;
+- volatile Hugging Face popularity counters do not contaminate canonical model-emission identity;
+- no advanced ranking, entity authority or embedding dependency was introduced.
 
-Explicit exclusions:
-- no advanced trend score;
-- no entity-resolution authority;
-- no embedding/vector dependency;
-- no public frontend.
-
-### 2. GROUPING_BASELINE_V0
+### 2. GROUPING_BASELINE_V0 — NEXT PRODUCT PHASE
 
 Goal: establish the simplest defensible observation grouping/dedupe layer needed to say that multiple observations concern the same episode without pretending to know true ancestry.
 
 Method:
-- label a representative corpus;
+- label a representative corpus spanning primary-emission, attention, discovery, syndication, correction/retraction and ambiguous-alias cases;
 - compare canonical URL / exact content / title / SimHash / MinHash / TF-IDF and similarly simple candidates;
 - select the simplest Pareto-efficient method that meets the required cases;
 - preserve propagation magnitude separately from evidence independence;
-- keep uncertain provenance reversible and explicit.
+- keep uncertain provenance reversible and explicit;
+- retain an explicit no-group / ambiguous outcome when evidence is insufficient.
+
+Acceptance direction:
+- two HN submissions to the same external root may share an episode while remaining two attention observations;
+- GDELT syndication cascades may preserve propagation count without inflating independent-root count;
+- similar titles or equal content digests never automatically prove common origin;
+- corrections/retractions remain append-only evidence and can affect episode interpretation without rewriting history;
+- grouping is deterministic/versioned for frozen inputs and `as_of`;
+- historical `as_of` cannot use observations first seen later.
 
 No embeddings are authorized unless simpler methods fail measured requirements.
 
