@@ -2,9 +2,9 @@
 
 Status: CURRENT_IMPLEMENTATION_STATE_V0
 
-Snapshot parent: `main@a084fe67b1d60fe73d67b08dcf0ae67dd7b822dc`.
+Snapshot parent: `main@4c70e92c6ceb42a009a63d6f71c0d2eba90ddd77`.
 
-Promotion rule for this file: merge of PR #7 promotes `SOURCE_DIVERSITY_V0` to CLOSED and makes `GROUPING_BASELINE_V0` the next product phase. Until that merge, the parent `main` state remains authoritative.
+Promotion rule for this file: merge of PR #8 promotes `GROUPING_BASELINE_V0` to CLOSED and makes `BASELINE_INTELLIGENCE_V0` the next product phase. The exact merged tree `main@4c70e92c6ceb42a009a63d6f71c0d2eba90ddd77` is the parent authority for that transition.
 
 This file records implementation state and next-phase priority. It does not override the Constitution or accepted ADRs. If this roadmap conflicts with higher authority, implementation fails closed until governance is repaired.
 
@@ -20,9 +20,10 @@ Do not infer implementation phase from GitHub pull-request number. Preflight and
 | PR-02 executable fetch/source contracts | #4 | CLOSED | machine-readable fetch, source, policy and registry contracts |
 | Live acquisition V0 | #5 | CLOSED | secure `frontier-fetch`, PyPI Latest Updates, CISA KEV, source health, trusted canonical writes |
 | Roadmap / implementation-state authority | #6 | CLOSED | living roadmap, stale bootstrap repair, D007 unprotected-main debt |
-| Source diversity V0 | #7 | CLOSED_ON_MERGE | HN ATTENTION, GDELT DISCOVERY, Hugging Face PRIMARY_EMISSION; five-source registry |
+| Source diversity V0 | #7 | CLOSED | HN ATTENTION, GDELT DISCOVERY, Hugging Face PRIMARY_EMISSION; five-source registry |
+| Grouping baseline V0 | #8 | CLOSED | frozen 22-case grouping authority, guarded-hybrid-v0, explicit ambiguity, PIT-safe receipts, pairwise-safe episode groups |
 
-## Current system capability after PR #7 promotion
+## Current system capability after PR #8 promotion
 
 FRONTIER can:
 - acquire five zero-paid / no-mandatory-key live source lanes;
@@ -34,11 +35,13 @@ FRONTIER can:
 - preserve first-durable `observed_at`, collection causality and multidimensional source health;
 - mark capped finite result windows as incomplete rather than silently healthy;
 - distinguish discovery/attention timestamps from publisher publication time and FRONTIER knowledge time;
-- replay and verify canonical evidence deterministically.
+- replay and verify canonical evidence deterministically;
+- group observations into deterministic, versioned episode projections with explicit `GROUP`, `NO_GROUP`, and `AMBIGUOUS` semantics;
+- prevent a direct `NO_GROUP` or `AMBIGUOUS` pair from entering one episode through transitive bridge merging;
+- keep observation identity, episode interpretation, provenance-root independence, and entity identity separate.
 
 FRONTIER still cannot:
 - infer cross-source factual-root independence or true syndication ancestry;
-- group observations into topics/episodes;
 - compute a prospective naive trend baseline;
 - publish immutable public intelligence snapshots;
 - serve a public read API;
@@ -46,7 +49,7 @@ FRONTIER still cannot:
 
 ## Immediate repository-control gap
 
-GitHub reported `main` unprotected at the roadmap snapshot. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
+GitHub still reports `main` unprotected after PR #8. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
 
 ## Priority sequence
 
@@ -62,7 +65,7 @@ Required outcome:
 
 This is operational governance, not a product phase, and remains open as D007.
 
-### 1. SOURCE_DIVERSITY_V0 — CLOSED_ON_PR7_MERGE
+### 1. SOURCE_DIVERSITY_V0 — CLOSED
 
 Goal: create structurally different live evidence roles so emergence, attention, discovery, syndication and coverage can be tested empirically.
 
@@ -80,29 +83,30 @@ Frozen phase semantics:
 - volatile Hugging Face popularity counters do not contaminate canonical model-emission identity;
 - no advanced ranking, entity authority or embedding dependency was introduced.
 
-### 2. GROUPING_BASELINE_V0 — NEXT PRODUCT PHASE
+### 2. GROUPING_BASELINE_V0 — CLOSED
 
 Goal: establish the simplest defensible observation grouping/dedupe layer needed to say that multiple observations concern the same episode without pretending to know true ancestry.
 
-Method:
-- label a representative corpus spanning primary-emission, attention, discovery, syndication, correction/retraction and ambiguous-alias cases;
-- compare canonical URL / exact content / title / SimHash / MinHash / TF-IDF and similarly simple candidates;
-- select the simplest Pareto-efficient method that meets the required cases;
-- preserve propagation magnitude separately from evidence independence;
-- keep uncertain provenance reversible and explicit;
-- retain an explicit no-group / ambiguous outcome when evidence is insufficient.
+Delivered method:
+- froze a representative 22-case corpus spanning primary-emission, attention, discovery, syndication, correction/retraction, shared-index, revision, Unicode and ambiguous-alias cases before runtime selection;
+- compared canonical URL, exact semantic text, normalized title, token Jaccard, SimHash, MinHash, TF-IDF and a guarded transparent hybrid;
+- selected `guarded-hybrid-v0` at pair precision `1.000000`, group recall `0.900000`, false-group count `0` on the frozen corpus;
+- preserved propagation/attention observations separately from evidence independence;
+- retained explicit `NO_GROUP` / `AMBIGUOUS` outcomes;
+- made grouping deterministic, versioned, point-in-time safe and receipt-backed;
+- repaired hostile-review H-001 so final episode groups merge only when every cross-component pair is directly `GROUP`, preventing transitive uncertainty/negative-evidence collapse.
 
-Acceptance direction:
-- two HN submissions to the same external root may share an episode while remaining two attention observations;
-- GDELT syndication cascades may preserve propagation count without inflating independent-root count;
-- similar titles or equal content digests never automatically prove common origin;
-- corrections/retractions remain append-only evidence and can affect episode interpretation without rewriting history;
-- grouping is deterministic/versioned for frozen inputs and `as_of`;
-- historical `as_of` cannot use observations first seen later.
+Closure evidence:
+- one hostile review;
+- one High repaired narrowly;
+- one targeted re-review PASS with no new Critical/High findings;
+- exact merged-tree verification on `main@4c70e92c6ceb42a009a63d6f71c0d2eba90ddd77`;
+- Ruff/Pyright/architecture/preflights PASS;
+- `58 passed`.
 
-No embeddings are authorized unless simpler methods fail measured requirements.
+No embeddings, provenance-root inference, entity resolution, trend scoring, public API or frontend were introduced.
 
-### 3. BASELINE_INTELLIGENCE_V0
+### 3. BASELINE_INTELLIGENCE_V0 — NEXT PRODUCT PHASE
 
 Goal: run the permanent naive prospective baseline before sophisticated ranking.
 
