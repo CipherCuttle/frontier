@@ -115,4 +115,10 @@ PR-02 or later normalization/provenance work fails if it can:
 - `NORM-019` NFC equivalence
 - `NORM-020` fuzzy over-normalization
 
+## Review receipt
+
+One hostile pre-merge review found two bounded governance defects: the acquisition corpus document referenced a nonexistent manifest path, and global case-ID uniqueness was not enforced across all three fixture packs. Both were repaired on the branch and the combined Python 3.14 preflight workflow passed at head `291ffaf19f83fb2a7e06c16751f33cc3a35434ca`.
+
+No Critical or High defect remains in this fixture-authority scope.
+
 This pack specifies test authority only. It does not select the future URL-canonicalization, dedupe, provenance-inference, clustering, or entity-resolution algorithms.
