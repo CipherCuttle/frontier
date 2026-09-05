@@ -315,7 +315,11 @@ class AcquisitionService:
             if last_result.outcome is FetchOutcome.SUCCESS:
                 return last_result
             failure = last_result.failure
-            if failure is None or not failure.retryable or attempt == self._policy.retry.max_attempts:
+            if (
+                failure is None
+                or not failure.retryable
+                or attempt == self._policy.retry.max_attempts
+            ):
                 return last_result
             delay = self._retry_delay(failure.retry_after_seconds, attempt)
             if (
@@ -395,9 +399,7 @@ class AcquisitionService:
             capped = max(capped, float(retry_after))
         return min(float(self._policy.retry.max_retry_after_seconds), capped)
 
-    def _next_retry_at(
-        self, failure: FetchFailure | None, *, attempt: int
-    ) -> datetime | None:
+    def _next_retry_at(self, failure: FetchFailure | None, *, attempt: int) -> datetime | None:
         if failure is None or not failure.retryable:
             return None
         delay = self._retry_delay(failure.retry_after_seconds, attempt)
@@ -416,17 +418,11 @@ class AcquisitionService:
         ]
         if not timestamps:
             return (
-                HealthValue.UNKNOWN
-                if source.contract.source_id == "cisa.kev"
-                else HealthValue.OK
+                HealthValue.UNKNOWN if source.contract.source_id == "cisa.kev" else HealthValue.OK
             )
         newest = max(timestamps)
         age = max(0.0, (retrieved_at - newest).total_seconds())
-        return (
-            HealthValue.OK
-            if age <= source.poll_interval_seconds * 2
-            else HealthValue.DEGRADED
-        )
+        return HealthValue.OK if age <= source.poll_interval_seconds * 2 else HealthValue.DEGRADED
 
     def _record_health(
         self,
