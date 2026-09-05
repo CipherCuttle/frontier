@@ -31,7 +31,7 @@ class _SchemaOnlyRepository:
 def openapi_document() -> JsonObject:
     repository: PublicReadRepository = _SchemaOnlyRepository()
     app = create_public_read_app(PublicReadService(repository))
-    return cast(JsonObject, app.openapi())
+    return app.openapi()
 
 
 def openapi_text(document: JsonObject) -> str:
