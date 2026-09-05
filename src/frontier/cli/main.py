@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 from pathlib import Path
 from uuid import uuid4
 
+from frontier.adapters.acquisition.config import load_fetch_policy, load_source_registry
+from frontier.adapters.acquisition.fetcher import SecureHttpFetcher
 from frontier.adapters.fixture.normalizer import load_fixture_candidate
+from frontier.application.acquisition import AcquisitionService
+from frontier.application.worker import AcquisitionWorker
 from frontier.domain.canonical_json import canonical_json_text
-from frontier.domain.collection import CollectionReason, CollectionRun
+from frontier.domain.collection import CollectionReason, CollectionRun, CollectionRunStatus
 from frontier.domain.observation import Observation
 from frontier.domain.source import (
     AcquisitionClass,
@@ -57,20 +62,137 @@ def ingest_fixture(path: Path, database_url: str) -> int:
     return 0
 
 
+def acquire_source(source_id: str, database_url: str, config_root: Path) -> int:
+    import psycopg
+
+    from frontier.adapters.postgres import PostgresEvidenceStore
+
+    policy = load_fetch_policy(config_root)
+    registry = load_source_registry(config_root)
+    fetcher = SecureHttpFetcher(policy)
+    with psycopg.connect(database_url) as conn:
+        store = PostgresEvidenceStore(conn)
+        service = AcquisitionService(
+            registry=registry,
+            policy=policy,
+            fetcher=fetcher,
+            repository=store,
+        )
+        result = asyncio.run(service.acquire(source_id))
+    print(
+        json.dumps(
+            {
+                "duplicates": result.duplicates,
+                "failure_code": result.failure_code,
+                "inserted": result.inserted,
+                "observations": len(result.observation_ids),
+                "rejected": result.rejected,
+                "run_id": str(result.run_id),
+                "source_id": result.source_id,
+                "status": result.status.value,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0 if result.status in (CollectionRunStatus.SUCCESS, CollectionRunStatus.PARTIAL) else 2
+
+
+def run_worker(database_url: str, config_root: Path, *, once: bool, idle_seconds: float) -> int:
+    import psycopg
+
+    from frontier.adapters.postgres import PostgresEvidenceStore
+
+    policy = load_fetch_policy(config_root)
+    registry = load_source_registry(config_root)
+    fetcher = SecureHttpFetcher(policy)
+    with psycopg.connect(database_url) as conn:
+        store = PostgresEvidenceStore(conn)
+        service = AcquisitionService(
+            registry=registry,
+            policy=policy,
+            fetcher=fetcher,
+            repository=store,
+        )
+        worker = AcquisitionWorker(
+            registry=registry,
+            repository=store,
+            service=service,
+            idle_seconds=idle_seconds,
+        )
+        if once:
+            cycle = asyncio.run(worker.run_once())
+            print(
+                json.dumps(
+                    {
+                        "acquired": [
+                            {
+                                "failure_code": result.failure_code,
+                                "inserted": result.inserted,
+                                "source_id": result.source_id,
+                                "status": result.status.value,
+                            }
+                            for result in cycle.acquired
+                        ],
+                        "skipped_not_due": list(cycle.skipped_not_due),
+                    },
+                    sort_keys=True,
+                )
+            )
+            return 0
+        try:
+            asyncio.run(worker.run_forever())
+        except KeyboardInterrupt:
+            return 0
+    return 0
+
+
+def _database_url(args: argparse.Namespace, parser: argparse.ArgumentParser) -> str:
+    value = (
+        args.database_url
+        or os.getenv("FRONTIER_DATABASE_URL")
+        or os.getenv("FRONTIER_TEST_DATABASE_URL")
+    )
+    if not value:
+        parser.error("--database-url or FRONTIER_DATABASE_URL is required")
+    return str(value)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="frontier")
     sub = parser.add_subparsers(dest="command", required=True)
+
     replay = sub.add_parser("replay-fixture")
     replay.add_argument("fixture", type=Path)
+
     ingest = sub.add_parser("ingest-fixture")
     ingest.add_argument("fixture", type=Path)
-    ingest.add_argument("--database-url", default=os.getenv("FRONTIER_TEST_DATABASE_URL"))
+    ingest.add_argument("--database-url")
+
+    acquire = sub.add_parser("acquire")
+    acquire.add_argument("source_id")
+    acquire.add_argument("--database-url")
+    acquire.add_argument("--config-root", type=Path, default=Path("."))
+
+    worker = sub.add_parser("worker")
+    worker.add_argument("--database-url")
+    worker.add_argument("--config-root", type=Path, default=Path("."))
+    worker.add_argument("--once", action="store_true")
+    worker.add_argument("--idle-seconds", type=float, default=30.0)
+
     args = parser.parse_args()
     if args.command == "replay-fixture":
         return replay_fixture(args.fixture)
-    if not args.database_url:
-        parser.error("--database-url or FRONTIER_TEST_DATABASE_URL is required")
-    return ingest_fixture(args.fixture, args.database_url)
+    database_url = _database_url(args, parser)
+    if args.command == "ingest-fixture":
+        return ingest_fixture(args.fixture, database_url)
+    if args.command == "acquire":
+        return acquire_source(args.source_id, database_url, args.config_root)
+    return run_worker(
+        database_url,
+        args.config_root,
+        once=args.once,
+        idle_seconds=args.idle_seconds,
+    )
 
 
 if __name__ == "__main__":
