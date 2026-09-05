@@ -18,6 +18,7 @@ COMMANDS = [
     [sys.executable, "scripts/preflight/validate_public_read_plane_corpus.py"],
     [sys.executable, "scripts/preflight/validate_terminal_corpus.py"],
     [sys.executable, "scripts/preflight/validate_advanced_intelligence_corpus.py"],
+    [sys.executable, "scripts/preflight/validate_pef_v0_preregistration.py"],
     [sys.executable, "scripts/generate_public_contracts.py", "--check"],
     ["pytest", "-q"],
 ]
