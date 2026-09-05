@@ -7,7 +7,17 @@ from enum import StrEnum
 
 from .canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
 from .digests import Digest, sha256_digest, sha256_hex
-from .intelligence import BaselineEpisode, BaselineObservationInput, BaselineSnapshot
+from .health import HealthValue
+from .intelligence import (
+    BASELINE_ALGORITHM_VERSION,
+    BASELINE_PROJECTION_NAME,
+    BASELINE_PROJECTION_VERSION,
+    BASELINE_RANKING_POLICY_VERSION,
+    BASELINE_SCHEMA_VERSION,
+    BaselineEpisode,
+    BaselineObservationInput,
+    BaselineSnapshot,
+)
 from .receipt import ProjectionReceipt, ProjectionStatus
 
 PEF_EXPERIMENT_ID = "advanced-ranking-pef-v0"
@@ -386,4 +396,272 @@ def build_pef_receipt(
         input_digest=pef_input_digest(observations, control_snapshot=control_snapshot),
         output_digest=artifact.output_digest,
         status=receipt_status,
+    )
+
+
+SHADOW_SCHEMA_VERSION = "shadow-experiment-run-v0"
+SHADOW_RUN_ID_PREFIX = "shadowrun_"
+SHADOW_SOURCE_REGISTRY_VERSION_LABEL = "source_registry_version"
+
+
+@dataclass(frozen=True, slots=True)
+class ShadowControlArmRanking:
+    """Control-arm surface of a paired shadow run (R6 permanent comparator)."""
+
+    rank: int
+    episode_id: str
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {"episode_id": self.episode_id, "rank": self.rank}
+
+
+def shadow_universe_digest(control_snapshot: BaselineSnapshot) -> Digest:
+    """Digest the exact paired episode universe both arms must rank.
+
+    R1/R6: the universe is the control grouping's episode membership over the
+    eligible evidence at ``as_of``; both arms must see exactly this universe.
+    """
+    episode_values: list[CanonicalValue] = [
+        {
+            "episode_id": episode.episode_id,
+            "observation_ids": list(episode.observation_ids),
+        }
+        for episode in sorted(control_snapshot.episodes, key=lambda item: item.episode_id)
+    ]
+    material: dict[str, CanonicalValue] = {
+        "as_of": canonical_timestamp(control_snapshot.as_of),
+        "episodes": episode_values,
+        "snapshot_id": control_snapshot.snapshot_id,
+    }
+    return sha256_digest(canonical_json_bytes(material))
+
+
+class ShadowRunStatus(StrEnum):
+    """Paired shadow-run lifecycle status (R8).
+
+    RAN means both arms completed against the identical universe; FAILED runs
+    carry an explicit failure reason and never a ranking payload, so a failed
+    run can never masquerade as a completed comparison.
+    """
+
+    RAN = "RAN"
+    FAILED = "FAILED"
+
+
+@dataclass(frozen=True, slots=True)
+class ShadowExperimentRun:
+    """Paired control-vs-candidate shadow result (EXPERIMENTAL_SHADOW, R7).
+
+    The run is bound to the exact control snapshot id, control receipt id,
+    candidate artifact id/digest, configuration digest, episode-universe
+    digest, ``as_of``, and the coverage/health states both arms observed (R4,
+    R8). It never modifies the control snapshot and carries no scalar score.
+    """
+
+    as_of: datetime
+    generated_at: datetime
+    control_snapshot_id: str
+    control_receipt_id: str
+    coverage_state: HealthValue
+    freshness_state: HealthValue
+    transport_state: HealthValue
+    schema_state: HealthValue
+    status: ShadowRunStatus
+    episode_universe_digest: Digest
+    candidate_artifact_id: str
+    candidate_output_digest: Digest
+    control_ranking: tuple[ShadowControlArmRanking, ...] = ()
+    failure_reason: str | None = None
+    experiment_id: str = PEF_EXPERIMENT_ID
+    candidate_id: str = PEF_CANDIDATE_ID
+    schema_version: str = SHADOW_SCHEMA_VERSION
+    algorithm_version: str = PEF_ALGORITHM_VERSION
+    configuration_digest: Digest = PEF_CONFIGURATION_DIGEST
+    authority_state: str = PEF_AUTHORITY_STATE
+
+    def __post_init__(self) -> None:
+        if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
+            raise ValueError("shadow run as_of must be timezone-aware")
+        if self.generated_at.tzinfo is None or self.generated_at.utcoffset() is None:
+            raise ValueError("shadow run generated_at must be timezone-aware")
+        if self.status is ShadowRunStatus.RAN and self.failure_reason is not None:
+            raise ValueError("RAN shadow run cannot carry a failure reason")
+        if self.status is ShadowRunStatus.FAILED and not self.failure_reason:
+            raise ValueError("FAILED shadow run requires an explicit failure reason")
+        if self.status is not ShadowRunStatus.RAN and self.control_ranking:
+            raise ValueError("only RAN shadow runs may carry a control ranking payload")
+
+    @property
+    def run_id(self) -> str:
+        return SHADOW_RUN_ID_PREFIX + sha256_hex(canonical_json_bytes(self.to_canonical()))
+
+    @property
+    def run_digest(self) -> Digest:
+        return sha256_digest(canonical_json_bytes(self.to_canonical()))
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        ranking_values: list[CanonicalValue] = [
+            item.to_canonical() for item in self.control_ranking
+        ]
+        return {
+            "algorithm_version": self.algorithm_version,
+            "as_of": canonical_timestamp(self.as_of),
+            "authority_state": self.authority_state,
+            "candidate_artifact_id": self.candidate_artifact_id,
+            "candidate_id": self.candidate_id,
+            "candidate_output_digest": str(self.candidate_output_digest),
+            "configuration_digest": str(self.configuration_digest),
+            "control_coverage_state": self.coverage_state.value,
+            "control_freshness_state": self.freshness_state.value,
+            "control_ranking": ranking_values,
+            "control_ranking_policy_version": BASELINE_RANKING_POLICY_VERSION,
+            "control_receipt_id": self.control_receipt_id,
+            "control_schema_state": self.schema_state.value,
+            "control_snapshot_id": self.control_snapshot_id,
+            "control_transport_state": self.transport_state.value,
+            "episode_universe_digest": str(self.episode_universe_digest),
+            "experiment_id": self.experiment_id,
+            "failure_reason": self.failure_reason,
+            "generated_at": canonical_timestamp(self.generated_at),
+            "schema_version": self.schema_version,
+            "status": self.status.value,
+        }
+
+
+def _shadow_control_ranking(
+    control_snapshot: BaselineSnapshot,
+) -> tuple[ShadowControlArmRanking, ...]:
+    return tuple(
+        ShadowControlArmRanking(rank=episode.rank, episode_id=episode.episode_id)
+        for episode in sorted(control_snapshot.episodes, key=lambda item: item.rank)
+    )
+
+
+def _require_paired_universe(
+    control_snapshot: BaselineSnapshot, candidate_artifact: PefArtifact
+) -> None:
+    control_universe = {
+        episode.episode_id: tuple(episode.observation_ids) for episode in control_snapshot.episodes
+    }
+    candidate_universe = {
+        episode.episode_id: tuple(episode.observation_ids)
+        for episode in candidate_artifact.episodes
+    }
+    if len(candidate_universe) != len(candidate_artifact.episodes):
+        raise ValueError("candidate ranking contains duplicate episode ids")
+    if control_universe != candidate_universe:
+        raise ValueError("shadow experiment requires an identical episode universe for both arms")
+
+
+def _require_candidate_identity(
+    candidate_artifact: PefArtifact, candidate_receipt: ProjectionReceipt
+) -> None:
+    if candidate_artifact.experiment_id != PEF_EXPERIMENT_ID:
+        raise ValueError("candidate artifact experiment id mismatch")
+    if candidate_artifact.candidate_id != PEF_CANDIDATE_ID:
+        raise ValueError("candidate artifact candidate id mismatch")
+    if candidate_artifact.schema_version != PEF_SCHEMA_VERSION:
+        raise ValueError("candidate artifact schema version mismatch")
+    if candidate_artifact.configuration_digest != PEF_CONFIGURATION_DIGEST:
+        raise ValueError("candidate artifact configuration digest mismatch")
+    if candidate_artifact.authority_state != PEF_AUTHORITY_STATE:
+        raise ValueError("candidate artifact authority state mismatch")
+    if candidate_receipt.output_digest != candidate_artifact.output_digest:
+        raise ValueError("candidate receipt does not bind the candidate artifact")
+    if candidate_receipt.projection_name != PEF_PROJECTION_NAME:
+        raise ValueError("candidate receipt projection name mismatch")
+    if candidate_receipt.projection_version != PEF_PROJECTION_VERSION:
+        raise ValueError("candidate receipt projection version mismatch")
+    if candidate_receipt.schema_version != PEF_SCHEMA_VERSION:
+        raise ValueError("candidate receipt schema version mismatch")
+    if candidate_receipt.configuration_digest != PEF_CONFIGURATION_DIGEST:
+        raise ValueError("candidate receipt configuration digest mismatch")
+    if candidate_artifact.status is PefArtifactStatus.RAN:
+        if candidate_receipt.status is not ProjectionStatus.COMPLETE:
+            raise ValueError("RAN candidate artifact requires a COMPLETE receipt")
+    elif candidate_artifact.status is PefArtifactStatus.FAILED:
+        if candidate_receipt.status is not ProjectionStatus.FAILED:
+            raise ValueError("FAILED candidate artifact requires a FAILED receipt")
+    else:
+        raise ValueError("NOT_RUN candidate artifacts cannot join a shadow experiment")
+
+
+def build_shadow_experiment_run(
+    *,
+    control_snapshot: BaselineSnapshot,
+    control_receipt: ProjectionReceipt,
+    candidate_artifact: PefArtifact,
+    candidate_receipt: ProjectionReceipt,
+    as_of: datetime,
+    generated_at: datetime,
+) -> ShadowExperimentRun:
+    """Pair a control arm and a PEF_V0 candidate arm over an identical universe.
+
+    Both arms are read-only with respect to the baseline snapshot (R6): this
+    builder only reads the snapshot and the candidate artifact. Point-in-time
+    discipline (R1) and backfill safety (R3) are inherited from both arms by
+    construction: each arm was computed from evidence with
+    ``observed_at <= as_of`` and prospective-only momentum semantics.
+    """
+    require_pef_configuration_identity()
+    if control_receipt.status is not ProjectionStatus.COMPLETE:
+        raise ValueError("shadow experiment requires a COMPLETE control snapshot")
+    if (
+        control_receipt.output_digest.value.removeprefix("sha256:")
+        != (control_snapshot.snapshot_id.split("snapshot_")[-1])
+    ):
+        raise ValueError("control receipt does not bind the given control snapshot")
+    if control_receipt.projection_name != BASELINE_PROJECTION_NAME:
+        raise ValueError("control receipt projection name mismatch")
+    if control_receipt.projection_version != BASELINE_PROJECTION_VERSION:
+        raise ValueError("control receipt projection version mismatch")
+    if control_receipt.schema_version != BASELINE_SCHEMA_VERSION:
+        raise ValueError("control receipt schema version mismatch")
+    if control_receipt.algorithm_version != BASELINE_ALGORITHM_VERSION:
+        raise ValueError("control receipt algorithm version mismatch")
+    if control_receipt.ranking_policy_version != BASELINE_RANKING_POLICY_VERSION:
+        raise ValueError("control receipt ranking policy version mismatch")
+    if as_of.tzinfo is None or as_of.utcoffset() is None:
+        raise ValueError("shadow run as_of must be timezone-aware")
+    if as_of != control_snapshot.as_of:
+        raise ValueError("shadow experiment requires identical as_of for both arms")
+    if candidate_artifact.as_of != as_of:
+        raise ValueError("candidate artifact as_of must match the shadow experiment as_of")
+    if candidate_artifact.control_snapshot_id != control_snapshot.snapshot_id:
+        raise ValueError("candidate artifact must bind the control snapshot")
+    _require_candidate_identity(candidate_artifact, candidate_receipt)
+
+    if candidate_artifact.status is PefArtifactStatus.RAN:
+        # Only a completed candidate arm can prove it ranked the paired universe;
+        # FAILED candidate arms carry no ranking payload to pair against (R8).
+        _require_paired_universe(control_snapshot, candidate_artifact)
+        return ShadowExperimentRun(
+            as_of=as_of,
+            generated_at=generated_at,
+            control_snapshot_id=control_snapshot.snapshot_id,
+            control_receipt_id=control_receipt.receipt_id,
+            coverage_state=control_snapshot.coverage_state,
+            freshness_state=control_snapshot.freshness_state,
+            transport_state=control_snapshot.transport_state,
+            schema_state=control_snapshot.schema_state,
+            status=ShadowRunStatus.RAN,
+            episode_universe_digest=shadow_universe_digest(control_snapshot),
+            candidate_artifact_id=candidate_artifact.artifact_id,
+            candidate_output_digest=candidate_artifact.output_digest,
+            control_ranking=_shadow_control_ranking(control_snapshot),
+        )
+    return ShadowExperimentRun(
+        as_of=as_of,
+        generated_at=generated_at,
+        control_snapshot_id=control_snapshot.snapshot_id,
+        control_receipt_id=control_receipt.receipt_id,
+        coverage_state=control_snapshot.coverage_state,
+        freshness_state=control_snapshot.freshness_state,
+        transport_state=control_snapshot.transport_state,
+        schema_state=control_snapshot.schema_state,
+        status=ShadowRunStatus.FAILED,
+        episode_universe_digest=shadow_universe_digest(control_snapshot),
+        candidate_artifact_id=candidate_artifact.artifact_id,
+        candidate_output_digest=candidate_artifact.output_digest,
+        failure_reason=candidate_artifact.failure_reason,
     )

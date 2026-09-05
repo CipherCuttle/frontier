@@ -7,13 +7,18 @@ from psycopg.types.json import Jsonb
 
 from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
+    PEF_AUTHORITY_STATE,
+    PEF_CANDIDATE_ID,
     PEF_CONFIGURATION_DIGEST,
+    PEF_EXPERIMENT_ID,
     PEF_PROJECTION_NAME,
     PEF_PROJECTION_VERSION,
     PEF_RANKING_POLICY_VERSION,
     PEF_SCHEMA_VERSION,
+    SHADOW_SCHEMA_VERSION,
     PefArtifact,
     PefArtifactStatus,
+    ShadowExperimentRun,
 )
 from frontier.domain.canonical_json import canonical_json_bytes
 from frontier.domain.digests import sha256_digest
@@ -178,6 +183,103 @@ class PostgresPefArtifactRepository:
             cur.execute(
                 "SELECT artifact_json FROM pef_ranking_artifacts WHERE artifact_id = %s",
                 (artifact_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return cast(dict[str, object], row[0])
+
+
+class PostgresShadowRunRepository:
+    """Append-only persistence for paired shadow experiment runs."""
+
+    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
+        self._connection = connection
+
+    def record_run(self, run: ShadowExperimentRun) -> None:
+        if run.experiment_id != PEF_EXPERIMENT_ID:
+            raise ValueError("shadow run experiment id mismatch")
+        if run.candidate_id != PEF_CANDIDATE_ID:
+            raise ValueError("shadow run candidate id mismatch")
+        if run.schema_version != SHADOW_SCHEMA_VERSION:
+            raise ValueError("shadow run schema version mismatch")
+        if run.algorithm_version != PEF_ALGORITHM_VERSION:
+            raise ValueError("shadow run algorithm version mismatch")
+        if run.configuration_digest != PEF_CONFIGURATION_DIGEST:
+            raise ValueError("shadow run configuration digest mismatch")
+        if run.authority_state != PEF_AUTHORITY_STATE:
+            raise ValueError("shadow run authority state mismatch")
+        if run.run_digest != sha256_digest(canonical_json_bytes(run.to_canonical())):
+            raise ValueError("shadow run digest does not bind its canonical payload")
+
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO shadow_experiment_runs (
+                    run_id, experiment_id, candidate_id, schema_version,
+                    algorithm_version, configuration_digest, authority_state,
+                    status, as_of, control_snapshot_id, control_receipt_id,
+                    candidate_artifact_id, candidate_output_digest,
+                    coverage_state, episode_universe_digest, run_digest,
+                    failure_reason, run_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (run_id) DO NOTHING
+                RETURNING run_id
+                """,
+                (
+                    run.run_id,
+                    run.experiment_id,
+                    run.candidate_id,
+                    run.schema_version,
+                    run.algorithm_version,
+                    str(run.configuration_digest),
+                    run.authority_state,
+                    run.status.value,
+                    run.as_of,
+                    run.control_snapshot_id,
+                    run.control_receipt_id,
+                    run.candidate_artifact_id,
+                    str(run.candidate_output_digest),
+                    run.coverage_state.value,
+                    str(run.episode_universe_digest),
+                    str(run.run_digest),
+                    run.failure_reason,
+                    Jsonb(run.to_canonical()),
+                ),
+            )
+            inserted = cur.fetchone()
+            if inserted is None:
+                cur.execute(
+                    "SELECT run_digest, status FROM shadow_experiment_runs WHERE run_id = %s",
+                    (run.run_id,),
+                )
+                existing = cur.fetchone()
+                if existing is None:
+                    raise RuntimeError("shadow run conflict without existing row")
+                if (
+                    cast(str, existing[0]) != str(run.run_digest)
+                    or cast(str, existing[1]) != run.status.value
+                ):
+                    raise RuntimeError("shadow run identity conflict with different digest")
+
+    def latest_run_id(self) -> str | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT run_id
+                FROM shadow_experiment_runs
+                ORDER BY as_of DESC, run_id DESC
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+        return None if row is None else cast(str, row[0])
+
+    def get_run_json(self, run_id: str) -> dict[str, object] | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                "SELECT run_json FROM shadow_experiment_runs WHERE run_id = %s",
+                (run_id,),
             )
             row = cur.fetchone()
         if row is None:
