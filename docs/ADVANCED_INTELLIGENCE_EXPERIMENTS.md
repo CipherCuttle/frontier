@@ -67,7 +67,7 @@ The preregistration MUST freeze before the confirmatory window starts:
 - prohibited feature families;
 - domain mapping;
 - evaluation start condition and end condition;
-- positive integer rank cutoff `K_domain` for each qualifying domain, applied identically to candidate and control;
+- one positive integer global rank cutoff `K`, applied identically to candidate and control at every eligible snapshot;
 - outcome-label definition, `resolution_at` rule, and adjudication procedure;
 - exclusions applied identically to candidate and control;
 - precision comparison rule;
@@ -116,17 +116,19 @@ These are evaluation strata, not ontological entity/domain truth.
 
 For V0, `multiple domains` means at least two distinct qualifying strata from the list above, with non-overlapping outcome-label populations. Post-hoc reassignment to rescue results is forbidden.
 
-## Matched operating point and comparable precision
+## Matched global operating point and comparable precision
 
-V0 uses an equal rank budget, not candidate-specific score thresholds.
+V0 evaluates the actual global ranking surface. It does not create a separate authoritative per-domain ranking.
 
-For each qualifying domain, preregistration freezes one positive integer `K_domain`. At every eligible evaluation snapshot:
+Preregistration freezes one positive integer global `K`. At every eligible evaluation snapshot:
 
-- candidate and control rank the same eligible domain population;
-- each arm surfaces exactly the first `min(K_domain, eligible_population_size)` episodes from its ranking;
-- the same `K_domain` is used for candidate and control;
-- no arm may abstain, threshold away hard cases, or silently change `K_domain` after the window starts;
+- candidate and control rank the same full eligible episode population;
+- each arm surfaces exactly the first `min(K, eligible_population_size)` episodes from its global ranking;
+- the same `K` is used for candidate and control;
+- no arm may abstain, threshold away hard cases, or silently change `K` after the window starts;
 - deterministic tie behavior is frozen before the window.
+
+Evaluation results are then stratified by the frozen V0 domain taxonomy without re-ranking inside a domain. Original candidate/control global ranks are preserved.
 
 Precision uses the same positive-outcome definition and eligible opportunity population for both arms.
 
@@ -138,7 +140,7 @@ The candidate-specific statistical uncertainty/non-inferiority rule and minimum 
 
 For each labeled positive opportunity, `resolution_at` is frozen by the preregistered outcome-label rule.
 
-For each arm, evaluation detection time is the earliest eligible snapshot at or before `resolution_at` where the episode enters that arm's top `K_domain`. If an arm never surfaces that positive opportunity by `resolution_at`, its evaluation detection time is set to `resolution_at` for lead-time arithmetic and the miss is retained explicitly in evaluation counts.
+For each arm, evaluation detection time is the earliest eligible snapshot at or before `resolution_at` where the episode enters that arm's global top `K`. If an arm never surfaces that positive opportunity by `resolution_at`, its evaluation detection time is set to `resolution_at` for lead-time arithmetic and the miss is retained explicitly in evaluation counts.
 
 `lead_time_advantage_seconds = baseline_detection_time - candidate_detection_time`.
 
@@ -207,7 +209,7 @@ A candidate receives no ranking authority unless one immutable evaluation receip
 1. no point-in-time/leakage violation;
 2. same eligible universe/horizon as the naive comparator;
 3. COMPLETE candidate/control artifacts only;
-4. the same preregistered `K_domain`, label rules, exclusions and tie behavior remained frozen;
+4. the same preregistered global `K`, label rules, exclusions and tie behavior remained frozen;
 5. V0 point precision is at least the control precision in at least two qualifying V0 domains;
 6. candidate-specific statistical precision/sample-adequacy rules PASS in each qualifying domain;
 7. median lead-time advantage is strictly positive in each qualifying domain and pooled across them;
@@ -224,7 +226,7 @@ Failure leaves `naive-episode-activity-v0` authoritative and the advanced candid
 
 ## Frozen hostile cases
 
-`fixtures/advanced_intelligence/corpus_v0.json` freezes the attack surface before candidate implementation. It covers future leakage, retrospective tuning, universe mismatch, backfill/recovered contamination, health/coverage coercion, source-count confirmation inflation, domain cherry-picking, denominator gaming, emit-nothing precision, unequal rank budgets, label leakage, config drift, failed-artifact interpretation, stochastic replay drift, post-hoc threshold changes, multiple-comparison winner's curse, non-independent domains, and unauthorized semantic escalation.
+`fixtures/advanced_intelligence/corpus_v0.json` freezes the attack surface before candidate implementation. It covers future leakage, retrospective tuning, universe mismatch, backfill/recovered contamination, health/coverage coercion, source-count confirmation inflation, domain cherry-picking, denominator gaming, emit-nothing precision, unequal global rank budgets, label leakage, config drift, failed-artifact interpretation, stochastic replay drift, post-hoc threshold changes, multiple-comparison winner's curse, non-independent domains, and unauthorized semantic escalation.
 
 ## Explicit exclusions from this authority PR
 
