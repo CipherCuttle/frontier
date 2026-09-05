@@ -1,5 +1,6 @@
 {
   "include": ["src", "tests", "scripts"],
+  "exclude": ["scripts/preflight"],
   "pythonVersion": "3.14",
   "typeCheckingMode": "strict",
   "reportMissingTypeStubs": "none"
