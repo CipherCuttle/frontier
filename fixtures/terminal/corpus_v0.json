@@ -122,6 +122,12 @@
       "category": "generated-client-authority",
       "requirement": "Terminal imports generated public-read client/types as remote contract authority.",
       "forbidden": "hand-copied remote API schema"
+    },
+    {
+      "id": "T021",
+      "category": "experimental-lens",
+      "requirement": "The EXPERIMENTAL lens renders only clearly-labelled EXPERIMENTAL_SHADOW read surfaces with explicit NO_DATA/UNKNOWN availability and rank deltas against the bound snapshot baseline; entering or leaving it never mutates or replaces baseline lens state.",
+      "forbidden": "unlabelled experimental data, fabricated candidate ranks, or baseline replacement/rerank"
     }
   ]
 }

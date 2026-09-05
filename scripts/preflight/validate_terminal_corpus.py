@@ -6,7 +6,7 @@ from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "fixtures" / "terminal" / "corpus_v0.json"
-EXPECTED_IDS = tuple(f"T{index:03d}" for index in range(1, 21))
+EXPECTED_IDS = tuple(f"T{index:03d}" for index in range(1, 22))
 EXPECTED_CATEGORIES = {
     "aggregate-health",
     "api-failure",
@@ -15,6 +15,7 @@ EXPECTED_CATEGORIES = {
     "coverage-unknown",
     "editable-target-guard",
     "empty-view",
+    "experimental-lens",
     "generated-client-authority",
     "get-only-transport",
     "keyboard-contract",
@@ -46,8 +47,8 @@ def main() -> int:
         return fail("unexpected frozen parent")
 
     scenarios = document.get("scenarios")
-    if not isinstance(scenarios, list) or len(scenarios) != 20:
-        return fail("expected exactly 20 frozen scenarios")
+    if not isinstance(scenarios, list) or len(scenarios) != 21:
+        return fail("expected exactly 21 frozen scenarios")
 
     ids: list[str] = []
     categories: set[str] = set()
@@ -77,7 +78,7 @@ def main() -> int:
     if len(categories) != len(scenarios):
         return fail("scenario categories must be unique in V0")
 
-    print("terminal-corpus: PASS 20 frozen hostile scenarios")
+    print("terminal-corpus: PASS 21 frozen hostile scenarios")
     return 0
 
 

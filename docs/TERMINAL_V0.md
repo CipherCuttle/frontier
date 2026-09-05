@@ -364,3 +364,17 @@ J. no excluded scope or new intelligence authority enters the phase.
 Closure policy remains:
 
 `IMPLEMENT -> TEST -> ONE hostile review -> repair Critical/High -> ONE targeted re-review only if required -> CLOSE -> MOVE FORWARD`
+
+## Slice H addendum — EXPERIMENTAL_SHADOW comparison lens
+
+Status: SPRINT_1_SLICE_H (branch `zoocode/sprint-1-intelligence`; fixture T021)
+
+TERMINAL_V0 is extended (not replaced) with one additional keyboard-first lens:
+
+- Key `x` toggles the EXPERIMENTAL lens; keys `1`/`2`/`3` keep returning to the frozen baseline lenses.
+- The EXPERIMENTAL lens is always visibly labelled `EXPERIMENTAL SHADOW` and renders only the labelled `/v0/experimental/*` EXPERIMENTAL_SHADOW read surfaces (overview, shadow-runs, feature-batches): identity, digests, statuses, and availability.
+- Baseline RADAR lens data bound to the same selected snapshot provides baseline ranks. Per-episode candidate ranks are not exposed by the summary read plane and must render as UNKNOWN (never fabricated). Rank delta = experimental rank − baseline rank, shown only when both ranks exist.
+- Feature explanations render the frozen interpretable feature vocabulary with explicit UNKNOWN values; no scalar score, truth, confidence, or confirmation presentation.
+- NO_DATA/UNKNOWN availability states render explicitly; empty experimental data is not observed absence.
+- Snapshot safety: entering/leaving EXPERIMENTAL never mutates or replaces baseline view state (rows, filter, selection, inspector, panels); experimental fetch failures render explicit errors/UNKNOWN without breaking baseline lenses; stale experimental completions are discarded.
+- The generated public client (`clients/typescript/src/generated/public_read_v0.ts`) remains the remote contract authority for the experimental surfaces; terminal transport remains GET-only.
