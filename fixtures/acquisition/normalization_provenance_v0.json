@@ -1,0 +1,336 @@
+{
+  "schema_version": "frontier-normalization-provenance-corpus-v0",
+  "authority": {
+    "runtime_implementation_authorized": false,
+    "purpose": "Preflight authority for normalization, identity, provenance, correction, and ambiguity semantics after secure acquisition."
+  },
+  "references": [
+    {
+      "name": "RFC 3986 URI Generic Syntax",
+      "url": "https://www.rfc-editor.org/rfc/rfc3986"
+    },
+    {
+      "name": "Unicode UTS #39 Security Mechanisms",
+      "url": "https://www.unicode.org/reports/tr39/"
+    }
+  ],
+  "cases": [
+    {
+      "id": "NORM-001",
+      "category": "url_alias",
+      "expected": "ACCEPT",
+      "input": {
+        "urls": [
+          "https://example.invalid/release?id=42&utm_source=hn&utm_medium=social",
+          "https://example.invalid/release?id=42"
+        ],
+        "source_policy": {"ignorable_query_keys": ["utm_source", "utm_medium"]}
+      },
+      "assertions": {
+        "canonical_url_count": 1,
+        "tracking_parameters_do_not_create_new_evidence": true,
+        "normalization_requires_source_policy": true
+      }
+    },
+    {
+      "id": "NORM-002",
+      "category": "url_alias",
+      "expected": "ACCEPT",
+      "input": {
+        "urls": [
+          "https://example.invalid/model?version=1",
+          "https://example.invalid/model?version=2"
+        ]
+      },
+      "assertions": {
+        "canonical_url_count": 2,
+        "semantic_query_parameters_must_not_be_dropped": true
+      }
+    },
+    {
+      "id": "NORM-003",
+      "category": "url_syntax",
+      "expected": "ACCEPT",
+      "input": {
+        "urls": [
+          "HTTP://EXAMPLE.INVALID:80/%7Ealice",
+          "http://example.invalid/~alice"
+        ]
+      },
+      "assertions": {
+        "canonical_url_count": 1,
+        "scheme_host_case_normalized": true,
+        "default_port_normalized": true,
+        "unreserved_percent_encoding_normalized": true
+      }
+    },
+    {
+      "id": "NORM-004",
+      "category": "url_syntax",
+      "expected": "ACCEPT",
+      "input": {
+        "urls": [
+          "https://example.invalid/a/b/../c",
+          "https://example.invalid/a/c"
+        ]
+      },
+      "assertions": {
+        "canonical_url_count": 1,
+        "dot_segments_resolved": true
+      }
+    },
+    {
+      "id": "NORM-005",
+      "category": "url_syntax",
+      "expected": "ACCEPT",
+      "input": {
+        "urls": [
+          "https://example.invalid/post#comments",
+          "https://example.invalid/post#top"
+        ]
+      },
+      "assertions": {
+        "retrieval_resource_count": 1,
+        "fragment_does_not_create_second_network_resource": true,
+        "original_url_may_be_preserved_for_display": true
+      }
+    },
+    {
+      "id": "NORM-006",
+      "category": "source_impersonation",
+      "expected": "DEGRADE",
+      "input": {
+        "registered_source": "pypi.org",
+        "candidate_host": "рypi.org",
+        "note": "candidate begins with Cyrillic U+0440, not Latin p"
+      },
+      "assertions": {
+        "same_source_identity": false,
+        "confusable_risk": true,
+        "authority_must_not_inherit_from_visual_similarity": true
+      }
+    },
+    {
+      "id": "NORM-007",
+      "category": "source_impersonation",
+      "expected": "DEGRADE",
+      "input": {
+        "registered_source_id": "cisa.kev",
+        "unregistered_url": "https://security-news.example.invalid/story",
+        "publisher_supplied_source_name": "CISA"
+      },
+      "assertions": {
+        "resolved_source_id": null,
+        "publisher_label_cannot_assign_registry_authority": true
+      }
+    },
+    {
+      "id": "NORM-008",
+      "category": "mirror",
+      "expected": "ACCEPT",
+      "input": {
+        "documents": [
+          {"url": "https://project.example.invalid/release", "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+          {"url": "https://mirror.example.invalid/release", "content_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+        ]
+      },
+      "assertions": {
+        "content_duplicate_relation": true,
+        "source_identity_count": 2,
+        "identical_content_does_not_prove_common_origin": true
+      }
+    },
+    {
+      "id": "NORM-009",
+      "category": "syndication",
+      "expected": "ACCEPT",
+      "input": {
+        "documents": [
+          {"url": "https://vendor.example.invalid/press/42", "title": "Vendor launches X", "body_fingerprint": "press42", "explicit_origin": null},
+          {"url": "https://news-a.example.invalid/x", "title": "X launches today", "body_fingerprint": "press42", "explicit_origin": "https://vendor.example.invalid/press/42"},
+          {"url": "https://news-b.example.invalid/x", "title": "Vendor X is here", "body_fingerprint": "press42", "explicit_origin": "https://vendor.example.invalid/press/42"}
+        ]
+      },
+      "assertions": {
+        "attention_or_propagation_documents": 3,
+        "independent_factual_roots_max": 1,
+        "explicit_origin_edges_preserved": true
+      }
+    },
+    {
+      "id": "NORM-010",
+      "category": "provenance_ambiguity",
+      "expected": "ACCEPT",
+      "input": {
+        "documents": [
+          {"url": "https://alpha.example.invalid/post", "content_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "observed_at": "2026-09-05T00:00:10Z"},
+          {"url": "https://beta.example.invalid/post", "content_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "observed_at": "2026-09-05T00:00:11Z"}
+        ]
+      },
+      "assertions": {
+        "same_content": true,
+        "provenance_status": "UNKNOWN",
+        "earliest_observed_must_not_be_promoted_to_proven_root": true
+      }
+    },
+    {
+      "id": "NORM-011",
+      "category": "content_revision",
+      "expected": "ACCEPT",
+      "input": {
+        "source_id": "fixture.publisher",
+        "source_item_key": "article-42",
+        "versions": [
+          {"body": "Initial claim", "observed_at": "2026-09-05T00:01:00Z"},
+          {"body": "Initial claim with updated detail", "observed_at": "2026-09-05T00:11:00Z"}
+        ]
+      },
+      "assertions": {
+        "observation_count": 2,
+        "first_observation_mutated": false,
+        "same_source_item_key_allowed_across_revisions": true
+      }
+    },
+    {
+      "id": "NORM-012",
+      "category": "correction_chain",
+      "expected": "ACCEPT",
+      "input": {
+        "observations": ["A", "B", "C"],
+        "relations": [
+          {"from": "B", "type": "CORRECTS", "to": "A"},
+          {"from": "C", "type": "CORRECTS", "to": "B"}
+        ]
+      },
+      "assertions": {
+        "historical_observations_retained": 3,
+        "current_assertion_tip": "C",
+        "transitive_history_reconstructible": true
+      }
+    },
+    {
+      "id": "NORM-013",
+      "category": "retraction_chain",
+      "expected": "ACCEPT",
+      "input": {
+        "observations": ["A", "B"],
+        "relations": [
+          {"from": "B", "type": "RETRACTS", "to": "A"}
+        ]
+      },
+      "assertions": {
+        "historical_observations_retained": 2,
+        "assertion_state_of_A": "RETRACTED",
+        "trend_attention_may_remain_nonzero": true,
+        "physical_delete_allowed": false
+      }
+    },
+    {
+      "id": "NORM-014",
+      "category": "timestamp_conflict",
+      "expected": "ACCEPT",
+      "input": {
+        "documents": [
+          {"url": "https://origin.example.invalid/a", "source_published_at": "2026-09-05T00:20:00Z", "observed_at": "2026-09-05T00:21:00Z"},
+          {"url": "https://copy.example.invalid/a", "source_published_at": "2026-09-04T23:00:00Z", "observed_at": "2026-09-05T00:22:00Z"}
+        ]
+      },
+      "assertions": {
+        "knowledge_order": ["https://origin.example.invalid/a", "https://copy.example.invalid/a"],
+        "source_timestamp_does_not_reorder_FRONTIER_knowledge": true,
+        "timestamp_conflict_preserved": true
+      }
+    },
+    {
+      "id": "NORM-015",
+      "category": "same_url_changed_bytes",
+      "expected": "ACCEPT",
+      "input": {
+        "url": "https://example.invalid/live-announcement",
+        "retrievals": [
+          {"body_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "observed_at": "2026-09-05T00:30:00Z"},
+          {"body_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "observed_at": "2026-09-05T00:40:00Z"}
+        ]
+      },
+      "assertions": {
+        "observation_count": 2,
+        "same_url_does_not_force_same_observation": true,
+        "provenance_relation_without_explicit_source_signal": "UNKNOWN"
+      }
+    },
+    {
+      "id": "NORM-016",
+      "category": "discovery_lineage",
+      "expected": "ACCEPT",
+      "input": {
+        "discovered_via": "https://news-index.example.invalid/redirect?id=123",
+        "final_primary_url": "https://vendor.example.invalid/release/123"
+      },
+      "assertions": {
+        "primary_source_url": "https://vendor.example.invalid/release/123",
+        "discovered_via_preserved": true,
+        "discovery_source_not_promoted_to_primary": true
+      }
+    },
+    {
+      "id": "NORM-017",
+      "category": "ambiguous_ancestry",
+      "expected": "ACCEPT",
+      "input": {
+        "documents": [
+          {"id": "A", "observed_at": "2026-09-05T00:50:00Z", "similarity": 0.98, "explicit_reference": null},
+          {"id": "B", "observed_at": "2026-09-05T00:50:03Z", "similarity": 0.99, "explicit_reference": null},
+          {"id": "C", "observed_at": "2026-09-05T00:50:05Z", "similarity": 0.98, "explicit_reference": null}
+        ]
+      },
+      "assertions": {
+        "earliest_observed_origin": "A",
+        "origin_status": "INFERRED_OR_UNKNOWN",
+        "proven_root_id": null,
+        "similarity_alone_cannot_create_explicit_provenance": true
+      }
+    },
+    {
+      "id": "NORM-018",
+      "category": "entity_confusable",
+      "expected": "DEGRADE",
+      "input": {
+        "names": ["OpenAI", "ОpenAI"],
+        "note": "second name begins with Cyrillic U+041E"
+      },
+      "assertions": {
+        "confusable_risk": true,
+        "automatic_entity_merge": false,
+        "raw_names_preserved": true
+      }
+    },
+    {
+      "id": "NORM-019",
+      "category": "unicode_normalization",
+      "expected": "ACCEPT",
+      "input": {
+        "strings": ["Café", "Café"],
+        "note": "second form uses U+0065 followed by U+0301"
+      },
+      "assertions": {
+        "canonical_text_form": "NFC",
+        "canonical_serialization_equal": true,
+        "original_source_text_may_be_retained_as_bounded_metadata": true
+      }
+    },
+    {
+      "id": "NORM-020",
+      "category": "over_normalization",
+      "expected": "ACCEPT",
+      "input": {
+        "titles": ["Model X 2", "Model X-2"],
+        "urls": ["https://example.invalid/model-x-2", "https://example.invalid/model-x2"]
+      },
+      "assertions": {
+        "automatic_entity_merge": false,
+        "automatic_url_alias": false,
+        "fuzzy_similarity_must_not_rewrite_canonical_identity": true
+      }
+    }
+  ]
+}
