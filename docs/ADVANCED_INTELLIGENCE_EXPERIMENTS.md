@@ -12,9 +12,17 @@ It is subordinate to `docs/CONSTITUTION.md`, `docs/P03_QUALITY_ATTRIBUTES.md`, `
 
 ## Objective
 
-Determine whether an advanced intelligence model adds prospective operator value over `naive-episode-activity-v0` without sacrificing epistemic integrity.
+Determine whether an advanced intelligence ranking model adds prospective operator value over `naive-episode-activity-v0` without sacrificing epistemic integrity.
 
 The burden of proof is on the advanced model. Complexity has no presumption of value.
+
+## V0 experiment class
+
+This V0 authority governs advanced **ranking/emergence** candidates operating on the existing point-in-time episode universe produced under current grouping authority.
+
+It does NOT authorize a new episode/entity universe, provenance-root inference, confirmation inference, manipulation verdicts, or assertion-lifecycle inference. Richer entity resolution, provenance inference, confirmation models, manipulation/reflexivity models, or other experiment classes require their own dedicated frozen sub-authority before confirmatory evaluation or promotion.
+
+The preregistration, leakage, replay, shadow-only, and epistemic-non-escalation principles here remain constraints on later experiment classes where applicable, but this V0 promotion gate must not be misrepresented as automatic authority for them.
 
 ## Permanent comparator
 
@@ -59,15 +67,14 @@ The preregistration MUST freeze before the confirmatory window starts:
 - prohibited feature families;
 - domain mapping;
 - evaluation start condition and end condition;
-- candidate decision/rank operating point;
-- control decision/rank operating point;
+- positive integer rank cutoff `K_domain` for each qualifying domain, applied identically to candidate and control;
 - outcome-label definition, `resolution_at` rule, and adjudication procedure;
 - exclusions applied identically to candidate and control;
 - precision comparison rule;
 - lead-time statistic and comparison rule;
 - minimum evidence/sample adequacy rule;
 - handling of missing/degraded coverage;
-- tie behavior;
+- deterministic tie behavior;
 - multiplicity policy if more than one candidate is tested.
 
 Changing any frozen item creates a new candidate/preregistration and restarts confirmatory evidence for that candidate.
@@ -109,17 +116,21 @@ These are evaluation strata, not ontological entity/domain truth.
 
 For V0, `multiple domains` means at least two distinct qualifying strata from the list above, with non-overlapping outcome-label populations. Post-hoc reassignment to rescue results is forbidden.
 
-## Comparable precision
+## Matched operating point and comparable precision
 
-A candidate may not obtain apparent lead time by emitting a much larger, noisier alert/rank surface than the control.
+V0 uses an equal rank budget, not candidate-specific score thresholds.
 
-Each preregistration must freeze matched operating points before confirmatory evaluation. At those operating points:
+For each qualifying domain, preregistration freezes one positive integer `K_domain`. At every eligible evaluation snapshot:
 
-- candidate and control are evaluated on the same eligible opportunity set;
-- precision uses the same positive-outcome definition;
-- an `emit nothing` candidate cannot pass;
-- a candidate cannot drop difficult opportunities from its denominator;
-- the V0 global precision floor is `candidate_precision >= control_precision` as a point estimate in every qualifying domain used for promotion.
+- candidate and control rank the same eligible domain population;
+- each arm surfaces exactly the first `min(K_domain, eligible_population_size)` episodes from its ranking;
+- the same `K_domain` is used for candidate and control;
+- no arm may abstain, threshold away hard cases, or silently change `K_domain` after the window starts;
+- deterministic tie behavior is frozen before the window.
+
+Precision uses the same positive-outcome definition and eligible opportunity population for both arms.
+
+The V0 global precision floor is `candidate_precision >= control_precision` as a point estimate in every qualifying domain used for promotion.
 
 The candidate-specific statistical uncertainty/non-inferiority rule and minimum sample-adequacy rule are additional preregistration requirements because label rate and opportunity frequency differ by domain. They may be stricter than the V0 global floor but MUST NOT weaken it. They cannot be chosen after confirmatory outcomes are visible.
 
@@ -127,7 +138,7 @@ The candidate-specific statistical uncertainty/non-inferiority rule and minimum 
 
 For each labeled positive opportunity, `resolution_at` is frozen by the preregistered outcome-label rule.
 
-For each arm, evaluation detection time is the earliest eligible snapshot at or before `resolution_at` where the preregistered operating point surfaces the episode. If an arm never surfaces that positive opportunity by `resolution_at`, its evaluation detection time is set to `resolution_at` for lead-time arithmetic and the miss is retained explicitly in evaluation counts.
+For each arm, evaluation detection time is the earliest eligible snapshot at or before `resolution_at` where the episode enters that arm's top `K_domain`. If an arm never surfaces that positive opportunity by `resolution_at`, its evaluation detection time is set to `resolution_at` for lead-time arithmetic and the miss is retained explicitly in evaluation counts.
 
 `lead_time_advantage_seconds = baseline_detection_time - candidate_detection_time`.
 
@@ -196,11 +207,11 @@ A candidate receives no ranking authority unless one immutable evaluation receip
 1. no point-in-time/leakage violation;
 2. same eligible universe/horizon as the naive comparator;
 3. COMPLETE candidate/control artifacts only;
-4. preregistered operating points and label rules unchanged;
+4. the same preregistered `K_domain`, label rules, exclusions and tie behavior remained frozen;
 5. V0 point precision is at least the control precision in at least two qualifying V0 domains;
 6. candidate-specific statistical precision/sample-adequacy rules PASS in each qualifying domain;
 7. median lead-time advantage is strictly positive in each qualifying domain and pooled across them;
-8. no hidden post-hoc domain, label, exclusion, threshold, or candidate selection;
+8. no hidden post-hoc domain, label, exclusion, threshold, rank-budget, or candidate selection;
 9. health/coverage degradation remains explicit and cannot be converted to evidence of absence;
 10. no unauthorized confirmation/provenance/entity/lifecycle/truth semantics;
 11. deterministic/replay requirements for the candidate class PASS;
@@ -213,7 +224,7 @@ Failure leaves `naive-episode-activity-v0` authoritative and the advanced candid
 
 ## Frozen hostile cases
 
-`fixtures/advanced_intelligence/corpus_v0.json` freezes the attack surface before candidate implementation. It covers future leakage, retrospective tuning, universe mismatch, backfill/recovered contamination, health/coverage coercion, source-count confirmation inflation, domain cherry-picking, denominator gaming, emit-nothing precision, alert-budget mismatch, label leakage, config drift, failed-artifact interpretation, stochastic replay drift, post-hoc threshold changes, multiple-comparison winner's curse, non-independent domains, and unauthorized semantic escalation.
+`fixtures/advanced_intelligence/corpus_v0.json` freezes the attack surface before candidate implementation. It covers future leakage, retrospective tuning, universe mismatch, backfill/recovered contamination, health/coverage coercion, source-count confirmation inflation, domain cherry-picking, denominator gaming, emit-nothing precision, unequal rank budgets, label leakage, config drift, failed-artifact interpretation, stochastic replay drift, post-hoc threshold changes, multiple-comparison winner's curse, non-independent domains, and unauthorized semantic escalation.
 
 ## Explicit exclusions from this authority PR
 
@@ -225,6 +236,6 @@ This authority freeze follows:
 
 `AUTHORIZE -> PREFLIGHT -> ONE hostile authority review -> fix Critical/High -> ONE targeted re-review only if required -> VERIFY -> MERGE -> VERIFY MERGED TREE -> MOVE FORWARD`
 
-After it merges, each concrete advanced candidate follows:
+After it merges, each concrete advanced ranking candidate follows:
 
 `PREREGISTER -> ONE hostile preregistration review -> IMPLEMENT -> TEST -> SHADOW PROSPECTIVE EVALUATION -> ONE hostile evaluation review -> fix Critical/High -> ONE targeted re-review only if required -> PROMOTION DECISION`
