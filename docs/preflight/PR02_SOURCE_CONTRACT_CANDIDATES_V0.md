@@ -45,4 +45,4 @@ No source timestamp, feed position, GDELT `seendate`, HN Unix `time`, or KEV `da
 
 ## Closure receipt
 
-The preflight fixture authority was subjected to one hostile review. Two bounded governance defects were found and repaired: an incorrect fixture path reference and missing global case-ID uniqueness across the three packs. Final Python 3.14 preflight CI passed on head `73f95e137211e693c067880ceabe317a7a8dd8b5` with no remaining Critical/High defect in scope.
+The preflight fixture authority was subjected to one hostile review. Two bounded governance defects were found and repaired: an incorrect fixture path reference and missing global case-ID uniqueness across the three packs. Final Python 3.14 preflight CI passed on head `42bd571bc3c1d1b7e96df1d61a1c9e59cdca4f8e` with no remaining Critical/High defect in scope.
