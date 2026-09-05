@@ -169,31 +169,38 @@ def _seed_probe(database_url: str) -> str:
 
 
 def _postgres_client_command(
-    admin_url: str, executable: str, database: str, *arguments: str
+    admin_url: str,
+    executable: str,
+    database: str,
+    *arguments: str,
+    interactive: bool = False,
 ) -> tuple[list[str], dict[str, str]]:
     host, user, password, port = _connection_parts(admin_url)
     environment = os.environ.copy()
     environment["PGPASSWORD"] = password
-    command = [
-        "docker",
-        "run",
-        "--rm",
-        "--network",
-        "host",
-        "-e",
-        "PGPASSWORD",
-        POSTGRES_IMAGE,
-        executable,
-        "-h",
-        host,
-        "-p",
-        str(port),
-        "-U",
-        user,
-        "-d",
-        database,
-        *arguments,
-    ]
+    command = ["docker", "run"]
+    if interactive:
+        command.append("-i")
+    command.extend(
+        [
+            "--rm",
+            "--network",
+            "host",
+            "-e",
+            "PGPASSWORD",
+            POSTGRES_IMAGE,
+            executable,
+            "-h",
+            host,
+            "-p",
+            str(port),
+            "-U",
+            user,
+            "-d",
+            database,
+            *arguments,
+        ]
+    )
     return command, environment
 
 
@@ -222,6 +229,7 @@ def _restore_database(admin_url: str, dump_path: Path) -> None:
         "--exit-on-error",
         "--no-owner",
         "--no-privileges",
+        interactive=True,
     )
     with dump_path.open("rb") as backup:
         subprocess.run(command, check=True, env=environment, stdin=backup)
@@ -255,7 +263,9 @@ def _verify_restore(database_url: str, expected_revision: str) -> None:
                 )
         except psycopg.Error as exc:
             if exc.sqlstate != "55000":
-                raise RuntimeError("restored append-only trigger failed with wrong SQLSTATE") from exc
+                raise RuntimeError(
+                    "restored append-only trigger failed with wrong SQLSTATE"
+                ) from exc
         else:
             raise RuntimeError("restored canonical observation unexpectedly accepted mutation")
 
