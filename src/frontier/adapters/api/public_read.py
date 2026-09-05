@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
@@ -22,6 +22,9 @@ from frontier.domain.public_read import (
     SnapshotIntegrityError,
     SnapshotNotFoundError,
 )
+
+if TYPE_CHECKING:
+    from frontier.application.experimental_read import ExperimentalReadService
 
 SnapshotQuery = Annotated[str | None, Query()]
 LimitQuery = Annotated[int, Query(ge=1, le=PUBLIC_READ_MAX_LIMIT)]
@@ -242,7 +245,10 @@ def _view_response(page: PublicViewPage) -> ViewResponse:
     )
 
 
-def create_public_read_app(service: PublicReadService) -> FastAPI:
+def create_public_read_app(
+    service: PublicReadService,
+    experimental_service: ExperimentalReadService | None = None,
+) -> FastAPI:
     app = FastAPI(
         title="FRONTIER Public Read API",
         version=PUBLIC_READ_API_VERSION,
@@ -368,4 +374,10 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         response_model=HealthResponse,
         operation_id="getHealth",
     )
+    if experimental_service is not None:
+        from frontier.adapters.api.experimental_read import (
+            register_experimental_routes,
+        )
+
+        register_experimental_routes(app, experimental_service)
     return app

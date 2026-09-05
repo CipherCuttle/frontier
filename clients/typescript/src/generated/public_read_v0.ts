@@ -8,6 +8,17 @@ export interface FrontierPublicReadTransport {
 export type CollectionOccurrenceResponse = { "completed_at": string | null; "occurrence_status": string; "reason": string; "recovered_after_gap": boolean; "run_id": string; "started_at": string; "trigger_id": string | null; };
 export type EpisodeEvidenceResponse = { "episode": EpisodeResponse; "generated_at": string; "observations": Array<ObservationEvidenceResponse>; "schema_version"?: string; "snapshot": SnapshotBindingResponse; };
 export type EpisodeResponse = { "acceleration_6h": number; "age_seconds": number; "backfill_evidence_count": number; "confirmation": string; "episode_id": string; "evidence_count_total": number; "evidence_root_diversity"?: null; "first_observed_at": string; "last_observed_at": string; "mentions_1h": number; "mentions_24h": number; "mentions_6h": number; "observation_ids": Array<string>; "preprevious_6h": number; "previous_6h": number; "prospective_evidence_count": number; "rank": number; "recovered_backlog_evidence_count": number; "signal_roles": Array<string>; "source_count": number; "source_ids": Array<string>; "source_role_diversity": number; "velocity_6h_delta": number; };
+export type ExperimentalAnalysisArtifactResponse = { "algorithm_version": string; "analysis_id": string; "as_of": string; "authority_state": string; "configuration_digest": string; "control_receipt_id": string | null; "control_snapshot_id": string | null; "episode_universe_digest": string | null; "generated_at": string; "input_digest": string | null; "kind": string; "output_digest": string; "schema_version": string; "source_registry_version": string | null; "status": string; };
+export type ExperimentalAnalysisArtifactSectionResponse = { "authority_state"?: string; "availability": string; "interpretation"?: string; "kind": string; "latest": ExperimentalAnalysisArtifactResponse | null; "schema_version"?: string; };
+export type ExperimentalEvaluationReceiptResponse = { "as_of": string; "authority_state": string; "candidate_configuration_digest": string; "candidate_freeze_receipt_id": string; "candidate_id": string; "evaluation_algorithm_version": string; "evaluation_configuration_digest": string; "evaluation_id": string; "experiment_id": string; "freeze_receipt_digest": string; "freeze_status": string; "generated_at": string; "preregistration_digest": string; "receipt_digest": string; "schema_version": string; "shadow_run_ids": Array<string>; "status": string; "status_reason": string | null; "verdict": string | null; };
+export type ExperimentalEvaluationReceiptSectionResponse = { "authority_state"?: string; "availability": string; "interpretation"?: string; "latest": ExperimentalEvaluationReceiptResponse | null; "schema_version"?: string; };
+export type ExperimentalFeatureBatchResponse = { "algorithm_version": string; "as_of": string; "authority_state": string; "batch_digest": string; "batch_id": string; "configuration_digest": string; "control_receipt_id": string; "control_snapshot_id": string; "episode_universe_digest": string; "generated_at": string; "schema_version": string; "status": string; "vector_count": number | null; };
+export type ExperimentalFeatureBatchSectionResponse = { "authority_state"?: string; "availability": string; "interpretation"?: string; "latest": ExperimentalFeatureBatchResponse | null; "schema_version"?: string; };
+export type ExperimentalOverviewResponse = { "analysis_artifacts": Record<string, ExperimentalAnalysisArtifactResponse>; "as_of": string; "authority_state"?: string; "availability": Record<string, string>; "candidate_id": string; "configuration_digest": string; "experiment_id": string; "generated_at": string; "interpretation"?: string; "latest_evaluation_receipt": ExperimentalEvaluationReceiptResponse | null; "latest_feature_batch": ExperimentalFeatureBatchResponse | null; "latest_pef_artifact": ExperimentalPefArtifactResponse | null; "latest_shadow_run": ExperimentalShadowRunResponse | null; "schema_version"?: string; };
+export type ExperimentalPefArtifactResponse = { "algorithm_version": string; "artifact_id": string; "as_of": string; "authority_state": string; "candidate_id": string; "configuration_digest": string; "control_receipt_id": string; "control_snapshot_id": string; "episode_count": number | null; "experiment_id": string; "failure_reason": string | null; "generated_at": string; "output_digest": string; "ranking_policy_version": string; "receipt_id": string; "schema_version": string; "status": string; };
+export type ExperimentalPefArtifactSectionResponse = { "authority_state"?: string; "availability": string; "interpretation"?: string; "latest": ExperimentalPefArtifactResponse | null; "schema_version"?: string; };
+export type ExperimentalShadowRunResponse = { "algorithm_version": string; "as_of": string; "authority_state": string; "candidate_artifact_id": string; "candidate_freeze_receipt_id": string | null; "candidate_id": string; "candidate_output_digest": string; "configuration_digest": string; "control_receipt_id": string; "control_snapshot_id": string; "episode_universe_digest": string; "experiment_id": string; "failure_reason": string | null; "generated_at": string; "run_digest": string; "run_id": string; "schema_version": string; "status": string; };
+export type ExperimentalShadowRunSectionResponse = { "authority_state"?: string; "availability": string; "interpretation"?: string; "latest": ExperimentalShadowRunResponse | null; "schema_version"?: string; };
 export type HTTPValidationError = { "detail"?: Array<ValidationError>; };
 export type HealthResponse = { "coverage_state": string; "freshness_state": string; "generated_at": string; "schema_state": string; "schema_version"?: string; "snapshot": SnapshotBindingResponse; "sources": Array<SourceHealthResponse>; "transport_state": string; };
 export type MetaResponse = { "api_version": string; "intelligence_authority": string; "mutation_authority": boolean; "openapi_typescript_authority": string; "response_schema_family": string; };
@@ -22,6 +33,30 @@ export type ViewResponse = { "coverage_state": string; "freshness_state": string
 
 export async function getEpisode(transport: FrontierPublicReadTransport, episode_id: string, query: { snapshot_id?: string | null; } = {}): Promise<EpisodeEvidenceResponse> {
   return transport.get<EpisodeEvidenceResponse>(`/v0/episodes/${encodeURIComponent(String(episode_id))}`, query);
+}
+
+export async function getExperimentalAnalysisArtifacts(transport: FrontierPublicReadTransport, kind: string, query: { as_of?: string | null; } = {}): Promise<ExperimentalAnalysisArtifactSectionResponse> {
+  return transport.get<ExperimentalAnalysisArtifactSectionResponse>(`/v0/experimental/analysis/${encodeURIComponent(String(kind))}`, query);
+}
+
+export async function getExperimentalEvaluationReceipts(transport: FrontierPublicReadTransport, query: { as_of?: string | null; } = {}): Promise<ExperimentalEvaluationReceiptSectionResponse> {
+  return transport.get<ExperimentalEvaluationReceiptSectionResponse>("/v0/experimental/evaluation-receipts", query);
+}
+
+export async function getExperimentalFeatureBatches(transport: FrontierPublicReadTransport, query: { as_of?: string | null; } = {}): Promise<ExperimentalFeatureBatchSectionResponse> {
+  return transport.get<ExperimentalFeatureBatchSectionResponse>("/v0/experimental/feature-batches", query);
+}
+
+export async function getExperimentalOverview(transport: FrontierPublicReadTransport, query: { as_of?: string | null; } = {}): Promise<ExperimentalOverviewResponse> {
+  return transport.get<ExperimentalOverviewResponse>("/v0/experimental/overview", query);
+}
+
+export async function getExperimentalPefArtifacts(transport: FrontierPublicReadTransport, query: { as_of?: string | null; } = {}): Promise<ExperimentalPefArtifactSectionResponse> {
+  return transport.get<ExperimentalPefArtifactSectionResponse>("/v0/experimental/pef-artifacts", query);
+}
+
+export async function getExperimentalShadowRuns(transport: FrontierPublicReadTransport, query: { as_of?: string | null; } = {}): Promise<ExperimentalShadowRunSectionResponse> {
+  return transport.get<ExperimentalShadowRunSectionResponse>("/v0/experimental/shadow-runs", query);
 }
 
 export async function getHealth(transport: FrontierPublicReadTransport, query: { snapshot_id?: string | null; } = {}): Promise<HealthResponse> {
