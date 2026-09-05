@@ -208,7 +208,9 @@ def _sorted_string_list(
         truncated = _truncate_utf8(text, 512)
         if truncated is not None:
             strings.add(truncated)
-    return list(sorted(strings))[:maximum_items]
+    result: list[CanonicalValue] = []
+    result.extend(sorted(strings)[:maximum_items])
+    return result
 
 
 def normalize_cisa_kev(
