@@ -11,6 +11,25 @@
     "configuration": {
       "algorithm_version": "prospective-primary-emission-freshness-lexicographic-v0",
       "input_contract": "same-baseline-observation-and-grouping-inputs-as-control",
+      "activity_eligibility": {
+        "eligible_reasons": [
+          "ACTIVE_ENRICHMENT",
+          "DISCOVERY",
+          "SCHEDULED"
+        ],
+        "exclude_backfill": true,
+        "exclude_recovered_after_gap": true
+      },
+      "feature_definitions": {
+        "has_any_prospective_evidence": "true iff episode has at least one member BaselineObservationInput with is_prospective=true at as_of",
+        "has_prospective_primary_emission": "true iff at least one prospective member observation has signal role PRIMARY_EMISSION",
+        "prospective_last_observed_at": "maximum observed_at among prospective member observations; null when none",
+        "prospective_age_seconds": "integer whole seconds from prospective_last_observed_at to as_of; null when no prospective member",
+        "prospective_source_role_diversity": "count of distinct signal roles across prospective member observations only",
+        "prospective_evidence_count": "count of prospective member observations only",
+        "baseline_activity_metrics": "reuse control BaselineEpisode mentions_1h, mentions_6h, mentions_24h, velocity_6h_delta, acceleration_6h for the exact same current grouping episode"
+      },
+      "primary_emission_role": "PRIMARY_EMISSION",
       "ranking_order": [
         "has_prospective_primary_emission_desc",
         "has_any_prospective_evidence_desc",
@@ -24,20 +43,11 @@
         "prospective_evidence_count_desc",
         "episode_id_asc"
       ],
-      "activity_eligibility": {
-        "eligible_reasons": [
-          "ACTIVE_ENRICHMENT",
-          "DISCOVERY",
-          "SCHEDULED"
-        ],
-        "exclude_backfill": true,
-        "exclude_recovered_after_gap": true
-      },
-      "primary_emission_role": "PRIMARY_EMISSION",
       "no_prospective_evidence_policy": "sort_after_any_episode_with_prospective_evidence",
-      "score_semantics": "NO_SCALAR_SCORE_LEXICOGRAPHIC_RANK_ONLY"
+      "score_semantics": "NO_SCALAR_SCORE_LEXICOGRAPHIC_RANK_ONLY",
+      "grouping_contract": "candidate uses exact control grouping episode membership at each as_of and never regroups observations"
     },
-    "configuration_digest": "sha256:4b1f7987e83933cd0586e33aebf514e8adffa7f03e576bce308152ed2eaf90e2",
+    "configuration_digest": "sha256:e2627f62deac24e5f1b09960687761ebbcc61b3fd0c8fec07fec0006dcff7dc1",
     "deterministic": true,
     "implementation_status": "NOT_IMPLEMENTED_PREREGISTRATION_ONLY",
     "authority_state_before_promotion": "EXPERIMENTAL_SHADOW"
@@ -73,7 +83,7 @@
     "snapshot_schedule": {
       "cadence_seconds": 300,
       "alignment": "UTC_UNIX_EPOCH_MULTIPLE_OF_300_SECONDS",
-      "start": "first aligned boundary strictly after durable candidate-freeze receipt on main",
+      "start": "first UTC epoch-multiple-of-300 boundary strictly after the GitHub main merge commit committer timestamp of the durable candidate-freeze receipt",
       "ranking_window_seconds": 2419200,
       "ranking_window_interval": "[start,start+2419200)",
       "label_maturation_seconds_after_window": 86400,
@@ -161,7 +171,9 @@
       "min_surfaced_resolved_opportunities_per_arm_per_domain": 20,
       "min_resolved_label_fraction_bps_per_domain": 9000,
       "underpowered_domain": "NOT_QUALIFYING; retained and reported; cannot be selected as a promotion domain",
-      "fewer_than_two_adequately_sampled_domains": "INCONCLUSIVE_NO_PROMOTION"
+      "fewer_than_two_adequately_sampled_domains": "INCONCLUSIVE_NO_PROMOTION",
+      "resolved_label_fraction_denominator": "all retained non-duplicate non-UNQUALIFIED_MIXED opportunities in the domain",
+      "resolved_label_fraction_numerator": "retained opportunities resolved POSITIVE or NEGATIVE; UNRESOLVED_COVERAGE is not resolved"
     },
     "coverage_and_health": {
       "ranking_runs_under_real_observed_health_state": true,
