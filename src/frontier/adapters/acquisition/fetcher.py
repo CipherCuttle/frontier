@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Protocol
+from typing import Protocol, cast
 from urllib.parse import urljoin, urlsplit
 
 from frontier.contracts.fetch import (
@@ -68,6 +68,11 @@ class Exchange(Protocol):
     ) -> WireResponse: ...
 
 
+class Decompressor(Protocol):
+    def decompress(self, data: bytes) -> bytes: ...
+    def flush(self) -> bytes: ...
+
+
 Resolver = Callable[[str, int], tuple[str, ...]]
 
 
@@ -83,16 +88,11 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     ) -> None:
         super().__init__(host=host, port=port, timeout=timeout, context=context)
         self._frontier_address = address
+        self._frontier_context = context
 
     def connect(self) -> None:
-        raw = socket.create_connection(
-            (self._frontier_address, self.port), self.timeout, self.source_address
-        )
-        if self._tunnel_host:
-            self.sock = raw
-            self._tunnel()
-            raw = self.sock
-        self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
+        raw = socket.create_connection((self._frontier_address, self.port), self.timeout)
+        self.sock = self._frontier_context.wrap_socket(raw, server_hostname=self.host)
 
 
 class _HttpClientWireResponse:
@@ -144,17 +144,19 @@ def _default_resolver(host: str, port: int) -> tuple[str, ...]:
     try:
         literal = ipaddress.ip_address(host)
     except ValueError:
-        addresses = {
-            sockaddr[0]
-            for family, _socktype, _proto, _canonname, sockaddr in socket.getaddrinfo(
-                host,
-                port,
-                family=socket.AF_UNSPEC,
-                type=socket.SOCK_STREAM,
-                proto=socket.IPPROTO_TCP,
-            )
-            if family in (socket.AF_INET, socket.AF_INET6)
-        }
+        addresses: set[str] = set()
+        for family, _socktype, _proto, _canonname, sockaddr in socket.getaddrinfo(
+            host,
+            port,
+            family=socket.AF_UNSPEC,
+            type=socket.SOCK_STREAM,
+            proto=socket.IPPROTO_TCP,
+        ):
+            if family not in (socket.AF_INET, socket.AF_INET6):
+                continue
+            address = sockaddr[0]
+            if isinstance(address, str):
+                addresses.add(address)
         if not addresses:
             raise OSError("DNS returned no usable addresses") from None
         return tuple(sorted(addresses))
@@ -229,7 +231,10 @@ def _sanitize_headers(
         if canonical is not None:
             value = raw_value.strip()
             previous = result.get(canonical)
-            result[canonical] = value if previous is None else previous + ", " + value
+            combined = value if previous is None else previous + ", " + value
+            if len(combined) > 4096 or "\r" in combined or "\n" in combined:
+                raise ValueError("response header value exceeds bounded contract")
+            result[canonical] = combined
     return result
 
 
@@ -257,14 +262,14 @@ def _retry_after(headers: dict[str, str], maximum: int) -> int | None:
     return min(maximum, max(0, seconds))
 
 
-def _decoder(content_encoding: str | None) -> zlib.decompressobj | None:
+def _decoder(content_encoding: str | None) -> Decompressor | None:
     if content_encoding is None or content_encoding.lower() in ("", "identity"):
         return None
     normalized = content_encoding.lower().strip()
     if normalized == "gzip":
-        return zlib.decompressobj(16 + zlib.MAX_WBITS)
+        return cast(Decompressor, zlib.decompressobj(16 + zlib.MAX_WBITS))
     if normalized == "deflate":
-        return zlib.decompressobj()
+        return cast(Decompressor, zlib.decompressobj())
     raise ValueError(f"unsupported content encoding: {normalized}")
 
 
@@ -327,7 +332,8 @@ class SecureHttpFetcher:
                 )
             try:
                 try:
-                    headers = _sanitize_headers(response.headers(), self._policy.max_header_bytes)
+                    raw_headers = response.headers()
+                    headers = _sanitize_headers(raw_headers, self._policy.max_header_bytes)
                 except ValueError as exc:
                     return self._failure(
                         request,
@@ -340,7 +346,7 @@ class SecureHttpFetcher:
                     )
                 if response.status in _REDIRECT_STATUSES:
                     location = next(
-                        (value for name, value in response.headers() if name.lower() == "location"),
+                        (value for name, value in raw_headers if name.lower() == "location"),
                         None,
                     )
                     if not location:
