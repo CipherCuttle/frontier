@@ -27,13 +27,21 @@ from frontier.domain.candidate_freeze import (
     FreezeStatus,
 )
 from frontier.domain.canonical_json import canonical_json_bytes
-from frontier.domain.digests import sha256_digest
+from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.evaluation import (
     EVALUATION_ALGORITHM_VERSION,
     EVALUATION_AUTHORITY_STATE,
     EVALUATION_CONFIGURATION_DIGEST,
     EVALUATION_SCHEMA_VERSION,
     EvaluationReceipt,
+)
+from frontier.domain.experimental_analysis import (
+    EXPERIMENTAL_ANALYSIS_ALGORITHM_VERSION,
+    EXPERIMENTAL_ANALYSIS_AUTHORITY_STATE,
+    EXPERIMENTAL_ANALYSIS_CONFIGURATION_DIGEST,
+    EXPERIMENTAL_ANALYSIS_SCHEMA_VERSION,
+    ExperimentalAnalysisArtifact,
+    ExperimentalAnalysisKind,
 )
 from frontier.domain.features import (
     ADVANCED_FEATURES_CONFIGURATION_DIGEST,
@@ -641,3 +649,129 @@ class PostgresFeatureVectorRepository:
             )
             row = cur.fetchone()
         return int(cast(int, row[0])) if row is not None else 0
+
+
+class PostgresExperimentalAnalysisRepository:
+    """Append-only persistence for EXPERIMENTAL analysis artifacts (slice F, R8)."""
+
+    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
+        self._connection = connection
+
+    def record_artifact(
+        self, artifact: ExperimentalAnalysisArtifact, *, input_digest: Digest | None = None
+    ) -> None:
+        if artifact.kind not in ExperimentalAnalysisKind:
+            raise ValueError("experimental analysis artifact kind mismatch")
+        if artifact.schema_version != EXPERIMENTAL_ANALYSIS_SCHEMA_VERSION:
+            raise ValueError("experimental analysis schema version mismatch")
+        if artifact.algorithm_version != EXPERIMENTAL_ANALYSIS_ALGORITHM_VERSION:
+            raise ValueError("experimental analysis algorithm version mismatch")
+        if artifact.configuration_digest != EXPERIMENTAL_ANALYSIS_CONFIGURATION_DIGEST:
+            raise ValueError("experimental analysis configuration digest mismatch")
+        if artifact.authority_state != EXPERIMENTAL_ANALYSIS_AUTHORITY_STATE:
+            raise ValueError("experimental analysis authority state mismatch")
+        if artifact.analysis_digest != sha256_digest(canonical_json_bytes(artifact.to_canonical())):
+            raise ValueError("experimental analysis digest does not bind its canonical payload")
+
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO experimental_analysis_artifacts (
+                    analysis_id, artifact_kind, status, authority_state,
+                    as_of, generated_at, control_snapshot_id, control_receipt_id,
+                    source_registry_version, episode_universe_digest,
+                    schema_version, algorithm_version, configuration_digest,
+                    input_digest, output_digest, analysis_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (analysis_id) DO NOTHING
+                RETURNING analysis_id
+                """,
+                (
+                    artifact.analysis_id,
+                    artifact.kind.value,
+                    artifact.status.value,
+                    artifact.authority_state,
+                    artifact.as_of,
+                    artifact.generated_at,
+                    artifact.control_snapshot_id,
+                    artifact.control_receipt_id,
+                    (
+                        None
+                        if artifact.source_registry_version is None
+                        else str(artifact.source_registry_version)
+                    ),
+                    (
+                        None
+                        if artifact.episode_universe_digest is None
+                        else str(artifact.episode_universe_digest)
+                    ),
+                    artifact.schema_version,
+                    artifact.algorithm_version,
+                    str(artifact.configuration_digest),
+                    None if input_digest is None else str(input_digest),
+                    str(artifact.analysis_digest),
+                    Jsonb(artifact.to_canonical()),
+                ),
+            )
+            inserted = cur.fetchone()
+            if inserted is None:
+                cur.execute(
+                    """
+                    SELECT output_digest, status FROM experimental_analysis_artifacts
+                    WHERE analysis_id = %s
+                    """,
+                    (artifact.analysis_id,),
+                )
+                existing = cur.fetchone()
+                if existing is None:
+                    raise RuntimeError("experimental analysis conflict without existing row")
+                if (
+                    cast(str, existing[0]) != str(artifact.analysis_digest)
+                    or cast(str, existing[1]) != artifact.status.value
+                ):
+                    raise RuntimeError("experimental analysis conflict with different digest")
+
+    def count_for_kind(self, kind: ExperimentalAnalysisKind) -> int:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM experimental_analysis_artifacts WHERE artifact_kind = %s",
+                (kind.value,),
+            )
+            row = cur.fetchone()
+        return int(cast(int, row[0])) if row is not None else 0
+
+    def latest_analysis_id(self, kind: ExperimentalAnalysisKind | None = None) -> str | None:
+        with self._connection.cursor() as cur:
+            if kind is None:
+                cur.execute(
+                    """
+                    SELECT analysis_id
+                    FROM experimental_analysis_artifacts
+                    ORDER BY as_of DESC, analysis_id DESC
+                    LIMIT 1
+                    """
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT analysis_id
+                    FROM experimental_analysis_artifacts
+                    WHERE artifact_kind = %s
+                    ORDER BY as_of DESC, analysis_id DESC
+                    LIMIT 1
+                    """,
+                    (kind.value,),
+                )
+            row = cur.fetchone()
+        return None if row is None else cast(str, row[0])
+
+    def get_artifact_json(self, analysis_id: str) -> dict[str, object] | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                "SELECT analysis_json FROM experimental_analysis_artifacts WHERE analysis_id = %s",
+                (analysis_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return cast(dict[str, object], row[0])
