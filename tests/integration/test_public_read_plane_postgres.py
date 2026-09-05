@@ -84,7 +84,19 @@ def _seed_complete_baseline() -> tuple[str, str, str]:
         evidence.start_collection_run(first_run)
         first_observation, inserted = evidence.append_observation(candidates[0], first_run.run_id)
         assert inserted
-        as_of = first_observation.observed_at
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT recorded_at
+                FROM collection_run_observations
+                WHERE run_id = %s AND observation_id = %s
+                """,
+                (first_run.run_id, first_observation.observation_id),
+            )
+            occurrence_row = cur.fetchone()
+        assert occurrence_row is not None
+        as_of = cast(datetime, occurrence_row[0])
+        assert as_of >= first_observation.observed_at
         evidence.add_source_health(
             SourceHealthObservation(
                 source_id=source_id,
@@ -247,6 +259,7 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
         observations = cast(list[dict[str, Any]], drilldown_body["observations"])
         assert [cast(str, item["observation_id"]) for item in observations] == expected_ids
         occurrences = cast(list[dict[str, Any]], observations[0]["collection_occurrences"])
+        assert len(occurrences) == 1
         assert occurrences[0]["completed_at"] is None
 
         future = client.get(
