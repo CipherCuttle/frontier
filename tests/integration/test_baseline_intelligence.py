@@ -136,7 +136,6 @@ def test_postgres_baseline_retains_complete_snapshot_and_rolls_back_conflict() -
             conn.cursor() as cur,
         ):
             cur.execute(
-                "UPDATE baseline_intelligence_snapshots SET as_of = as_of "
-                "WHERE snapshot_id = %s",
+                "UPDATE baseline_intelligence_snapshots SET as_of = as_of WHERE snapshot_id = %s",
                 (result.snapshot.snapshot_id,),
             )
