@@ -76,6 +76,10 @@ class ViewResponse(BaseModel):
     schema_version: str = PUBLIC_READ_RESPONSE_SCHEMA
     snapshot: SnapshotBindingResponse
     generated_at: str
+    transport_state: str
+    freshness_state: str
+    coverage_state: str
+    schema_state: str
     view: PublicViewKind
     view_policy_version: str
     semantic_scope: str
@@ -219,6 +223,10 @@ def _view_response(page: PublicViewPage) -> ViewResponse:
         {
             "snapshot": asdict(page.snapshot),
             "generated_at": page.generated_at,
+            "transport_state": page.transport_state,
+            "freshness_state": page.freshness_state,
+            "coverage_state": page.coverage_state,
+            "schema_state": page.schema_state,
             "view": page.view,
             "view_policy_version": page.view_policy_version,
             "semantic_scope": page.semantic_scope,
