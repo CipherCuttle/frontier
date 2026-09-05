@@ -15,6 +15,7 @@ The next product priority is source diversity: add structurally different ATTENT
 
 See `docs/ROADMAP.md` for current implementation state and sequencing.
 See `docs/PLANNING_INDEX.md` for governance authority and precedence.
+See `docs/OPERATIONS.md` for startup, readiness, recovery-drill, and capacity-measurement operations.
 
 ## Core rules
 
