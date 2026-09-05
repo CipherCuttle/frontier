@@ -229,8 +229,7 @@ def test_projection_does_not_bridge_no_group_or_ambiguous_pairs() -> None:
         as_of=NOW + timedelta(minutes=10),
     )
     assert not any(
-        {artifact_v1.observation_id, artifact_v2.observation_id}
-        <= set(group.observation_ids)
+        {artifact_v1.observation_id, artifact_v2.observation_id} <= set(group.observation_ids)
         for group in artifact_projection.groups
     )
 
