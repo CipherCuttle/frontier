@@ -177,6 +177,6 @@ def test_episode_drilldown_requires_exact_membership() -> None:
     value = PublicReadService(_MembershipRepository(expected)).get_episode("episode-a")
     assert tuple(item.observation_id for item in value.observations) == expected
 
-    extra = expected + ("obs_" + "c" * 64,)
+    extra = (*expected, "obs_" + "c" * 64)
     with pytest.raises(SnapshotIntegrityError, match="exactly match"):
         PublicReadService(_MembershipRepository(extra)).get_episode("episode-a")
