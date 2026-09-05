@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -17,6 +16,8 @@ from frontier.domain.observation import (
     ObservationCandidate,
     ObservationKind,
 )
+
+from .json_values import JsonValueError, parse_typed_json
 
 _CVE_RE = re.compile(r"^CVE-\d{4}-\d{4,}$")
 _CISA_CATALOG_URL = "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
@@ -143,14 +144,14 @@ def normalize_pypi_updates(
     )
 
 
-def _string(value: object) -> str | None:
+def _string(value: CanonicalValue | None) -> str | None:
     if not isinstance(value, str):
         return None
     stripped = value.strip()
     return stripped or None
 
 
-def _string_list(value: object, maximum_items: int = 64) -> list[CanonicalValue]:
+def _string_list(value: CanonicalValue | None, maximum_items: int = 64) -> list[CanonicalValue]:
     if not isinstance(value, list):
         return []
     result: list[CanonicalValue] = []
@@ -165,8 +166,8 @@ def normalize_cisa_kev(
     body: bytes, *, retrieved_at: datetime, fetch_digest: Digest
 ) -> NormalizedBatch:
     try:
-        raw = json.loads(body)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raw = parse_typed_json(body)
+    except JsonValueError as exc:
         raise NormalizationError("JSON_PARSE_FAILED", "CISA KEV JSON is malformed") from exc
     if not isinstance(raw, dict):
         raise NormalizationError("CISA_SCHEMA_FAILED", "CISA KEV root must be an object")
@@ -220,13 +221,14 @@ def normalize_cisa_kev(
             )
         )
     schema_health = HealthValue.OK if rejected == 0 else HealthValue.DEGRADED
+    count_value = raw.get("count")
     return NormalizedBatch(
         candidates=tuple(candidates),
         records_received=len(vulnerabilities),
         records_rejected=rejected,
         schema_health=schema_health,
         details={
-            "catalog_count": raw.get("count") if isinstance(raw.get("count"), int) else None,
+            "catalog_count": count_value if isinstance(count_value, int) else None,
             "catalog_version": _string(raw.get("catalogVersion")),
             "parser": "stdlib-json-v0",
         },
