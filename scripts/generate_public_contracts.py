@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from frontier.adapters.api.public_read import create_public_read_app
 from frontier.application.public_read import PublicReadRepository, PublicReadService
@@ -11,6 +11,7 @@ from frontier.application.public_read import PublicReadRepository, PublicReadSer
 ROOT = Path(__file__).resolve().parents[1]
 OPENAPI_PATH = ROOT / "contracts" / "public" / "openapi_v0.json"
 TYPESCRIPT_PATH = ROOT / "clients" / "typescript" / "src" / "generated" / "public_read_v0.ts"
+JsonObject = dict[str, Any]
 
 
 class _SchemaOnlyRepository:
@@ -27,13 +28,13 @@ class _SchemaOnlyRepository:
         raise RuntimeError("schema-only repository")
 
 
-def openapi_document() -> dict[str, Any]:
+def openapi_document() -> JsonObject:
     repository: PublicReadRepository = _SchemaOnlyRepository()
     app = create_public_read_app(PublicReadService(repository))
-    return app.openapi()
+    return cast(JsonObject, app.openapi())
 
 
-def openapi_text(document: dict[str, Any]) -> str:
+def openapi_text(document: JsonObject) -> str:
     return json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
 
 
@@ -44,13 +45,13 @@ def _ref_name(ref: str) -> str:
     return ref[len(prefix) :]
 
 
-def _ts_type(schema: dict[str, Any]) -> str:
+def _ts_type(schema: JsonObject) -> str:
     if "$ref" in schema:
         return _ref_name(str(schema["$ref"]))
     if "enum" in schema:
-        return " | ".join(json.dumps(value) for value in schema["enum"])
+        return " | ".join(json.dumps(value) for value in cast(list[Any], schema["enum"]))
     if "anyOf" in schema:
-        return " | ".join(_ts_type(item) for item in schema["anyOf"])
+        return " | ".join(_ts_type(cast(JsonObject, item)) for item in cast(list[Any], schema["anyOf"]))
     schema_type = schema.get("type")
     if schema_type == "string":
         return "string"
@@ -61,11 +62,11 @@ def _ts_type(schema: dict[str, Any]) -> str:
     if schema_type == "null":
         return "null"
     if schema_type == "array":
-        item_type = _ts_type(schema.get("items", {}))
+        item_type = _ts_type(cast(JsonObject, schema.get("items", {})))
         return f"Array<{item_type}>"
     if schema_type == "object" or "properties" in schema:
-        properties = schema.get("properties", {})
-        required = set(schema.get("required", []))
+        properties = cast(dict[str, JsonObject], schema.get("properties", {}))
+        required = set(cast(list[str], schema.get("required", [])))
         if properties:
             fields: list[str] = []
             for name in sorted(properties):
@@ -74,24 +75,25 @@ def _ts_type(schema: dict[str, Any]) -> str:
             return "{ " + " ".join(fields) + " }"
         additional = schema.get("additionalProperties")
         if isinstance(additional, dict):
-            return f"Record<string, {_ts_type(additional)}>"
+            return f"Record<string, {_ts_type(cast(JsonObject, additional))}>"
         return "Record<string, unknown>"
     return "unknown"
 
 
-def _response_type(operation: dict[str, Any]) -> str:
-    response = operation.get("responses", {}).get("200", {})
-    content = response.get("content", {}).get("application/json", {})
-    schema = content.get("schema", {})
-    return _ts_type(schema) if isinstance(schema, dict) else "unknown"
+def _response_type(operation: JsonObject) -> str:
+    responses = cast(JsonObject, operation.get("responses", {}))
+    response = cast(JsonObject, responses.get("200", {}))
+    content = cast(JsonObject, response.get("content", {}))
+    json_content = cast(JsonObject, content.get("application/json", {}))
+    schema = cast(JsonObject, json_content.get("schema", {}))
+    return _ts_type(schema)
 
 
-def _parameter_type(parameter: dict[str, Any]) -> str:
-    schema = parameter.get("schema", {})
-    return _ts_type(schema) if isinstance(schema, dict) else "unknown"
+def _parameter_type(parameter: JsonObject) -> str:
+    return _ts_type(cast(JsonObject, parameter.get("schema", {})))
 
 
-def typescript_text(document: dict[str, Any]) -> str:
+def typescript_text(document: JsonObject) -> str:
     lines = [
         "// GENERATED from contracts/public/openapi_v0.json. DO NOT EDIT.",
         "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0.",
@@ -105,23 +107,21 @@ def typescript_text(document: dict[str, Any]) -> str:
         "",
     ]
 
-    schemas = document.get("components", {}).get("schemas", {})
+    components = cast(JsonObject, document.get("components", {}))
+    schemas = cast(dict[str, JsonObject], components.get("schemas", {}))
     for name in sorted(schemas):
-        schema = schemas[name]
-        if isinstance(schema, dict):
-            lines.append(f"export type {name} = {_ts_type(schema)};")
+        lines.append(f"export type {name} = {_ts_type(schemas[name])};")
     lines.append("")
 
-    paths = document.get("paths", {})
+    paths = cast(dict[str, JsonObject], document.get("paths", {}))
     for path in sorted(paths):
         path_item = paths[path]
-        if not isinstance(path_item, dict) or "get" not in path_item:
+        operation_value = path_item.get("get")
+        if not isinstance(operation_value, dict):
             continue
-        operation = path_item["get"]
-        if not isinstance(operation, dict):
-            continue
+        operation = cast(JsonObject, operation_value)
         operation_id = str(operation.get("operationId", "unnamedOperation"))
-        parameters = operation.get("parameters", [])
+        parameters = cast(list[JsonObject], operation.get("parameters", []))
         path_parameters = [item for item in parameters if item.get("in") == "path"]
         query_parameters = [item for item in parameters if item.get("in") == "query"]
         response_type = _response_type(operation)
@@ -129,10 +129,9 @@ def typescript_text(document: dict[str, Any]) -> str:
         required_args = ["transport: FrontierPublicReadTransport"]
         for parameter in path_parameters:
             required_args.append(f"{parameter['name']}: {_parameter_type(parameter)}")
-        query_shape = ""
         if query_parameters:
-            fields = []
-            for parameter in sorted(query_parameters, key=lambda item: item["name"]):
+            fields: list[str] = []
+            for parameter in sorted(query_parameters, key=lambda item: str(item["name"])):
                 optional = "" if parameter.get("required") else "?"
                 fields.append(f"{parameter['name']}{optional}: {_parameter_type(parameter)};")
             query_shape = "{ " + " ".join(fields) + " }"
@@ -140,13 +139,13 @@ def typescript_text(document: dict[str, Any]) -> str:
 
         rendered_path = json.dumps(path)
         for parameter in path_parameters:
-            name = parameter["name"]
+            name = str(parameter["name"])
             rendered_path = rendered_path.replace(
                 "{" + name + "}",
                 f"${{encodeURIComponent(String({name}))}}",
             )
         if path_parameters:
-            rendered_path = "`" + json.loads(rendered_path).replace("`", "\\`") + "`"
+            rendered_path = "`" + cast(str, json.loads(rendered_path)).replace("`", "\\`") + "`"
 
         signature = (
             f"export async function {operation_id}({', '.join(required_args)}): "
@@ -174,7 +173,7 @@ def main() -> int:
     openapi = openapi_text(document)
     typescript = typescript_text(document)
     if args.check:
-        failures = []
+        failures: list[str] = []
         if not _check(OPENAPI_PATH, openapi):
             failures.append(str(OPENAPI_PATH.relative_to(ROOT)))
         if not _check(TYPESCRIPT_PATH, typescript):
