@@ -108,8 +108,7 @@ def _minhash_similarity(left: str, right: str) -> float:
 def _tfidf_vectors(items: Iterable[GroupingInput]) -> dict[str, dict[str, float]]:
     material = tuple(items)
     documents = {
-        item.observation_id: list(grouping_token_sequence(semantic_text(item)))
-        for item in material
+        item.observation_id: list(grouping_token_sequence(semantic_text(item))) for item in material
     }
     document_frequency: dict[str, int] = {}
     for document in documents.values():
@@ -123,8 +122,7 @@ def _tfidf_vectors(items: Iterable[GroupingInput]) -> dict[str, dict[str, float]
         for token in document:
             frequency[token] = frequency.get(token, 0) + 1
         vectors[observation_id] = {
-            token: occurrences
-            * (math.log((count + 1) / (document_frequency[token] + 1)) + 1.0)
+            token: occurrences * (math.log((count + 1) / (document_frequency[token] + 1)) + 1.0)
             for token, occurrences in frequency.items()
         }
     return vectors
