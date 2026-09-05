@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from itertools import combinations
-from typing import Iterable
 
 from .canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
 from .digests import Digest, sha256_digest, sha256_hex
