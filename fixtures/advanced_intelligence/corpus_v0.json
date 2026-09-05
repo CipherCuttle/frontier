@@ -1,0 +1,153 @@
+{
+  "schema_version": "advanced-intelligence-hostile-corpus-v0",
+  "authority": "docs/ADVANCED_INTELLIGENCE_EXPERIMENTS.md",
+  "parent": "e54c36f538e0f28535b853c49d62d2d6c35f5e2c",
+  "runtime_implementation_authorized": false,
+  "control": {
+    "projection_name": "baseline-intelligence",
+    "projection_version": "baseline-intelligence-v0",
+    "ranking_policy_version": "naive-episode-activity-v0"
+  },
+  "promotion_contract": {
+    "shadow_authority_state": "EXPERIMENTAL_SHADOW",
+    "experiment_class": "RANKING_EMERGENCE_EXISTING_EPISODE_UNIVERSE",
+    "qualifying_domain_ids": [
+      "AI_MODELS",
+      "SECURITY_VULNERABILITIES",
+      "SOFTWARE_PACKAGES"
+    ],
+    "minimum_qualifying_domains": 2,
+    "operating_point_contract": "same_preregistered_positive_global_rank_cutoff_k_both_arms",
+    "point_precision_floor": "candidate_gte_control_each_qualifying_domain",
+    "lead_time_floor": "median_positive_each_qualifying_domain_and_pooled",
+    "requires_preregistration_before_confirmatory_window": true,
+    "requires_hostile_preregistration_review": true,
+    "requires_candidate_freeze_before_confirmatory_window": true,
+    "candidate_freeze_identity_required_in_artifacts": true,
+    "outcome_labels_model_independent": true,
+    "historical_development_counts_as_confirmatory": false,
+    "public_promotion_requires_separate_authority_change": true
+  },
+  "scenarios": [
+    {
+      "id": "A001",
+      "category": "future-observation-leakage",
+      "requirement": "Candidate features at as_of T use only FRONTIER knowledge available by T.",
+      "forbidden": "observation first known after T influences candidate rank at T"
+    },
+    {
+      "id": "A002",
+      "category": "future-operational-metadata",
+      "requirement": "Collection and operational metadata are point-in-time reconstructed before use.",
+      "forbidden": "later completion or status metadata leaks into an earlier candidate artifact"
+    },
+    {
+      "id": "A003",
+      "category": "retrospective-tuning",
+      "requirement": "Confirmatory evidence starts only after immutable candidate preregistration, hostile preregistration review, and a post-test candidate-freeze receipt.",
+      "forbidden": "historical development outcomes or pre-freeze shadow outputs are counted as confirmatory evidence"
+    },
+    {
+      "id": "A004",
+      "category": "universe-mismatch",
+      "requirement": "Candidate and naive control use the same eligible episode universe and as_of horizon.",
+      "forbidden": "candidate removes hard episodes or receives a richer future-aware universe"
+    },
+    {
+      "id": "A005",
+      "category": "backfill-recovered-contamination",
+      "requirement": "BACKFILL and recovered backlog remain non-organic prospective activity unless a separately frozen feature explicitly treats them as retained evidence only.",
+      "forbidden": "backfill or outage recovery manufactures early organic momentum"
+    },
+    {
+      "id": "A006",
+      "category": "coverage-coercion",
+      "requirement": "Missing or degraded source coverage remains explicit in both experiment arms.",
+      "forbidden": "missing input is converted into observed absence or healthy zero activity"
+    },
+    {
+      "id": "A007",
+      "category": "source-count-confirmation",
+      "requirement": "Source count and source-role diversity remain propagation or coverage descriptors unless separate provenance authority exists.",
+      "forbidden": "more feeds are interpreted as independent factual confirmation"
+    },
+    {
+      "id": "A008",
+      "category": "domain-cherry-picking",
+      "requirement": "Promotion uses at least two frozen V0 strata from AI_MODELS, SECURITY_VULNERABILITIES, and SOFTWARE_PACKAGES.",
+      "forbidden": "failed domains are dropped or arbitrary domain IDs are invented after results are visible"
+    },
+    {
+      "id": "A009",
+      "category": "denominator-gaming",
+      "requirement": "Candidate and control precision use the same eligible opportunity population and exclusions after the same global top-K surfacing step.",
+      "forbidden": "candidate excludes difficult opportunities from its precision denominator"
+    },
+    {
+      "id": "A010",
+      "category": "emit-nothing-precision",
+      "requirement": "Each arm surfaces min(K, eligible population) episodes from its global ranking at every eligible snapshot.",
+      "forbidden": "candidate abstains or thresholds away hard opportunities to inflate precision"
+    },
+    {
+      "id": "A011",
+      "category": "operating-point-mismatch",
+      "requirement": "Candidate and control use the same preregistered positive integer global K at every eligible snapshot.",
+      "forbidden": "candidate gains lead time with a larger global rank budget or precision with a smaller global rank budget than the control"
+    },
+    {
+      "id": "A012",
+      "category": "label-leakage",
+      "requirement": "Outcome labels and resolution rules are model-independent; human adjudication used for promotion is blind to arm ranks, scores and detection times.",
+      "forbidden": "candidate or control outputs define the positive label or influence adjudication, or future labels feed ranking inputs"
+    },
+    {
+      "id": "A013",
+      "category": "configuration-drift",
+      "requirement": "One immutable candidate-freeze identity binds preregistration, exact implementation source, dependency lock, build artifact when present, model version and configuration before confirmatory evidence.",
+      "forbidden": "source dependencies build artifact model version configuration exclusions or global K change under one confirmatory candidate identity"
+    },
+    {
+      "id": "A014",
+      "category": "failed-artifact-as-signal",
+      "requirement": "Only COMPLETE candidate and control artifacts carrying the correct candidate-freeze identity participate in evaluation.",
+      "forbidden": "FAILED partial or wrong-freeze output is interpreted as an empty ranking or valid confirmatory candidate output"
+    },
+    {
+      "id": "A015",
+      "category": "stochastic-replay-drift",
+      "requirement": "Stochastic candidates preregister randomness semantics and reproduce evaluation artifacts deterministically from frozen seeds/inputs.",
+      "forbidden": "unseeded reruns select whichever stochastic result looks best"
+    },
+    {
+      "id": "A016",
+      "category": "posthoc-threshold-selection",
+      "requirement": "The candidate must satisfy the global equal-rank-budget precision and positive-median lead-time floors in addition to stricter preregistered rules.",
+      "forbidden": "global rank budget threshold or comparison rule is weakened after inspecting confirmatory outcomes"
+    },
+    {
+      "id": "A017",
+      "category": "multiple-comparison-selection",
+      "requirement": "Preregistration defines multiplicity handling when multiple candidates are evaluated.",
+      "forbidden": "many candidates are tried and only the luckiest winner is reported without correction or restart"
+    },
+    {
+      "id": "A018",
+      "category": "nonindependent-domains",
+      "requirement": "V0 domain qualification is assigned after global ranking by frozen primary-emission authority mapping; ATTENTION and DISCOVERY feeds do not manufacture domain count.",
+      "forbidden": "the same event population or cross-cutting feed is relabeled as multiple domains to satisfy the gate"
+    },
+    {
+      "id": "A019",
+      "category": "semantic-escalation",
+      "requirement": "Ranking output does not silently create confirmation provenance-root entity lifecycle truth or importance authority.",
+      "forbidden": "model score is displayed or stored as truth probability confidence completeness confirmation or causal ancestry"
+    },
+    {
+      "id": "A020",
+      "category": "merge-is-not-promotion",
+      "requirement": "Merged experiment code remains EXPERIMENTAL_SHADOW until a separate promotion authority names the winning candidate/version.",
+      "forbidden": "candidate replaces RADAR NOW TRENDING or canonical ranking merely because implementation merged"
+    }
+  ]
+}
