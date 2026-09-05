@@ -4,6 +4,8 @@ Status: FROZEN_EVALUATION_AUTHORITY_CANDIDATE
 
 Parent authority: `main@e54c36f538e0f28535b853c49d62d2d6c35f5e2c`.
 
+Promotion rule: merge of this authority PR promotes this document to `FROZEN_EVALUATION_AUTHORITY`. No follow-up status-edit commit is required.
+
 This phase freezes the experiment and promotion authority required before any advanced ranking model may be implemented, evaluated for promotion, or exposed as canonical/public ranking authority.
 
 It is subordinate to `docs/CONSTITUTION.md`, `docs/P03_QUALITY_ATTRIBUTES.md`, `docs/P08_DATA_CONTRACT.md`, `docs/BASELINE_INTELLIGENCE_V0.md`, and the current roadmap. If this document conflicts with higher authority, the experiment fails closed.
@@ -46,7 +48,7 @@ No experiment may silently acquire authority merely because its code merged.
 
 ## Prospective confirmatory rule
 
-A candidate's confirmatory evidence begins only after an immutable preregistration artifact exists in canonical repository history.
+A candidate's confirmatory evidence begins only after an immutable preregistration artifact exists in canonical repository history and that preregistration has passed one bounded hostile preregistration review.
 
 The preregistration MUST freeze before the confirmatory window starts:
 
@@ -59,7 +61,7 @@ The preregistration MUST freeze before the confirmatory window starts:
 - evaluation start condition and end condition;
 - candidate decision/rank operating point;
 - control decision/rank operating point;
-- outcome-label definition and adjudication procedure;
+- outcome-label definition, `resolution_at` rule, and adjudication procedure;
 - exclusions applied identically to candidate and control;
 - precision comparison rule;
 - lead-time statistic and comparison rule;
@@ -89,13 +91,23 @@ Forbidden leakage includes, but is not limited to:
 
 Outcome labels MAY be assigned after T for evaluation, but they are evaluator-only data and must never enter the candidate/control ranking path for that confirmatory window.
 
-## Domain requirement
+## V0 evaluation-domain taxonomy
 
-P03 requires prospective advantage across multiple domains. For this authority, `multiple domains` means at least two distinct preregistered domain IDs with non-overlapping outcome-label populations.
+P03 requires prospective advantage across multiple domains. V0 does not permit a candidate to invent arbitrary domain IDs.
 
-A domain is an evaluation stratum, not a source count. Multiple feeds carrying the same event do not manufacture multiple domains or multiple truths.
+The initial qualifying evaluation strata are:
 
-Domain assignment must be deterministic from information available under the preregistered evaluation contract. Post-hoc reassignment to rescue results is forbidden.
+- `SOFTWARE_PACKAGES`: the episode has qualifying `PRIMARY_EMISSION` evidence from `pypi.updates` and no qualifying primary-emission authority from another V0 stratum;
+- `AI_MODELS`: the episode has qualifying `PRIMARY_EMISSION` evidence from `hf.models` and no qualifying primary-emission authority from another V0 stratum;
+- `SECURITY_VULNERABILITIES`: the episode has qualifying `PRIMARY_EMISSION` evidence from `cisa.kev` and no qualifying primary-emission authority from another V0 stratum.
+
+`hn.frontpage` (`ATTENTION`) and `gdelt.frontier` (`DISCOVERY`) may contribute evidence to an episode but do not assign a V0 evaluation domain.
+
+Episodes with qualifying primary-emission authorities from more than one V0 stratum are `UNQUALIFIED_MIXED` for the multiple-domain promotion gate. Episodes with no qualifying V0 primary-emission authority are `UNQUALIFIED`. They may still be analyzed, but they cannot be used to manufacture the required domain count.
+
+These are evaluation strata, not ontological entity/domain truth.
+
+For V0, `multiple domains` means at least two distinct qualifying strata from the list above, with non-overlapping outcome-label populations. Post-hoc reassignment to rescue results is forbidden.
 
 ## Comparable precision
 
@@ -107,21 +119,26 @@ Each preregistration must freeze matched operating points before confirmatory ev
 - precision uses the same positive-outcome definition;
 - an `emit nothing` candidate cannot pass;
 - a candidate cannot drop difficult opportunities from its denominator;
-- a candidate cannot claim comparable precision if its preregistered precision rule fails in either qualifying domain.
+- the V0 global precision floor is `candidate_precision >= control_precision` as a point estimate in every qualifying domain used for promotion.
 
-The exact statistical/non-inferiority rule and minimum sample adequacy are candidate-specific preregistration fields because label rate and opportunity frequency differ by domain. They cannot be chosen after confirmatory outcomes are visible.
+The candidate-specific statistical uncertainty/non-inferiority rule and minimum sample-adequacy rule are additional preregistration requirements because label rate and opportunity frequency differ by domain. They may be stricter than the V0 global floor but MUST NOT weaken it. They cannot be chosen after confirmatory outcomes are visible.
 
 ## Lead-time advantage
 
-For an eventual positive outcome, detection time is the earliest eligible snapshot in the confirmatory window where the preregistered operating point surfaces that episode.
+For each labeled positive opportunity, `resolution_at` is frozen by the preregistered outcome-label rule.
+
+For each arm, evaluation detection time is the earliest eligible snapshot at or before `resolution_at` where the preregistered operating point surfaces the episode. If an arm never surfaces that positive opportunity by `resolution_at`, its evaluation detection time is set to `resolution_at` for lead-time arithmetic and the miss is retained explicitly in evaluation counts.
 
 `lead_time_advantage_seconds = baseline_detection_time - candidate_detection_time`.
 
-Positive means the candidate surfaced the event earlier. Negative means the baseline surfaced it earlier.
+Positive means the candidate surfaced the event earlier. Negative means the baseline surfaced it earlier. If both arms miss by `resolution_at`, the value is zero; the opportunity is not silently dropped.
 
-Lead-time comparison is computed only under the preregistered label/matching policy. Missing detection, censoring, ties, and window-boundary handling must be frozen before evaluation.
+The V0 global lead-time floor is:
 
-A model is not promotable unless the preregistered lead-time rule is strictly positive in every domain used to satisfy the multiple-domain gate while the precision rule also passes there.
+- median `lead_time_advantage_seconds > 0` in every qualifying domain used for promotion; and
+- pooled median `lead_time_advantage_seconds > 0` across those qualifying domains.
+
+A candidate-specific lead-time rule may be stricter but MUST NOT weaken the V0 global floor. Missing detection, ties, and window boundaries may not be excluded after outcomes are visible.
 
 ## Epistemic non-escalation
 
@@ -180,14 +197,15 @@ A candidate receives no ranking authority unless one immutable evaluation receip
 2. same eligible universe/horizon as the naive comparator;
 3. COMPLETE candidate/control artifacts only;
 4. preregistered operating points and label rules unchanged;
-5. comparable-precision rule PASS in at least two qualifying domains;
-6. strictly positive preregistered lead-time rule PASS in each of those domains;
-7. sample-adequacy rule PASS in each qualifying domain;
+5. V0 point precision is at least the control precision in at least two qualifying V0 domains;
+6. candidate-specific statistical precision/sample-adequacy rules PASS in each qualifying domain;
+7. median lead-time advantage is strictly positive in each qualifying domain and pooled across them;
 8. no hidden post-hoc domain, label, exclusion, threshold, or candidate selection;
 9. health/coverage degradation remains explicit and cannot be converted to evidence of absence;
 10. no unauthorized confirmation/provenance/entity/lifecycle/truth semantics;
 11. deterministic/replay requirements for the candidate class PASS;
-12. one hostile review of the evaluation evidence reports no unresolved Critical/High defect.
+12. preregistration hostile review was completed before the confirmatory window;
+13. one hostile review of the final evaluation evidence reports no unresolved Critical/High defect.
 
 Passing this gate does not itself change public ranking. Promotion requires a separate bounded authority change naming the winning candidate/version and its public semantics.
 
@@ -205,8 +223,8 @@ No advanced model implementation; no learned coefficients; no embeddings/vector 
 
 This authority freeze follows:
 
-`AUTHORIZE -> PREFLIGHT -> VERIFY -> MERGE -> VERIFY MERGED TREE -> MOVE FORWARD`
+`AUTHORIZE -> PREFLIGHT -> ONE hostile authority review -> fix Critical/High -> ONE targeted re-review only if required -> VERIFY -> MERGE -> VERIFY MERGED TREE -> MOVE FORWARD`
 
-After it merges, each concrete advanced candidate follows the normal bounded completion policy:
+After it merges, each concrete advanced candidate follows:
 
-`PREREGISTER -> IMPLEMENT -> TEST -> SHADOW PROSPECTIVE EVALUATION -> ONE hostile review -> fix Critical/High -> ONE targeted re-review only if required -> PROMOTION DECISION`
+`PREREGISTER -> ONE hostile preregistration review -> IMPLEMENT -> TEST -> SHADOW PROSPECTIVE EVALUATION -> ONE hostile evaluation review -> fix Critical/High -> ONE targeted re-review only if required -> PROMOTION DECISION`
