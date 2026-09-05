@@ -158,6 +158,26 @@ def test_stream_limit_does_not_trust_content_length_header() -> None:
     assert response.read_calls >= 1
 
 
+def test_short_body_rejects_declared_content_length_mismatch() -> None:
+    body = b'{"ok":true}'
+    response = FakeResponse(
+        200,
+        (("Content-Type", "application/json"), ("Content-Length", str(len(body) + 1))),
+        body,
+    )
+    fetcher = SecureHttpFetcher(
+        policy(),
+        resolver=lambda _host, _port: ("8.8.8.8",),
+        exchange=ScriptedExchange(response),
+    )
+
+    result = fetcher.fetch_sync(request())
+
+    assert result.outcome is FetchOutcome.REJECTED
+    assert result.failure is not None
+    assert result.failure.code == "BODY_REJECTED"
+
+
 def test_expanded_body_limit_rejects_compression_bomb() -> None:
     compressed = gzip.compress(b"z" * 4096)
     response = FakeResponse(
@@ -167,6 +187,27 @@ def test_expanded_body_limit_rejects_compression_bomb() -> None:
     )
     fetcher = SecureHttpFetcher(
         policy(max_expanded_bytes=256),
+        resolver=lambda _host, _port: ("8.8.8.8",),
+        exchange=ScriptedExchange(response),
+    )
+
+    result = fetcher.fetch_sync(request())
+
+    assert result.outcome is FetchOutcome.REJECTED
+    assert result.failure is not None
+    assert result.failure.code == "BODY_REJECTED"
+
+
+def test_truncated_gzip_rejected_even_when_payload_fully_decompresses() -> None:
+    compressed = gzip.compress(b'{"vulnerabilities":[]}')
+    truncated = compressed[:-8]
+    response = FakeResponse(
+        200,
+        (("Content-Type", "application/json"), ("Content-Encoding", "gzip")),
+        truncated,
+    )
+    fetcher = SecureHttpFetcher(
+        policy(),
         resolver=lambda _host, _port: ("8.8.8.8",),
         exchange=ScriptedExchange(response),
     )
