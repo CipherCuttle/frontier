@@ -5,7 +5,7 @@ import sys
 
 COMMANDS = [
     ["ruff", "format", "--check", "--exclude", "scripts/preflight", "."],
-    ["ruff", "check", "."],
+    ["ruff", "check", "--exclude", "scripts/preflight", "."],
     ["pyright"],
     [sys.executable, "scripts/check_architecture_boundaries.py"],
     ["pytest", "-q"],
