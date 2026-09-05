@@ -8,12 +8,13 @@ import psycopg
 from psycopg import sql as psycopg_sql
 
 from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
-from frontier.domain.digests import sha256_digest
+from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.intelligence import (
     BASELINE_ALGORITHM_VERSION,
     BASELINE_PROJECTION_NAME,
     BASELINE_PROJECTION_VERSION,
     BASELINE_RANKING_POLICY_VERSION,
+    BASELINE_RECEIPT_SCHEMA_VERSION,
     BASELINE_SCHEMA_VERSION,
 )
 from frontier.domain.public_read import (
@@ -27,6 +28,7 @@ from frontier.domain.public_read import (
     SnapshotNotFoundError,
     SourceHealthRead,
 )
+from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 
 
 class PostgresPublicReadRepository:
@@ -144,6 +146,8 @@ class PostgresPublicReadRepository:
             raise SnapshotIntegrityError("snapshot receipt binding mismatch")
         if snapshot_output_digest != receipt_output_digest:
             raise SnapshotIntegrityError("snapshot output digest binding mismatch")
+        if receipt_schema_version != BASELINE_RECEIPT_SCHEMA_VERSION:
+            raise SnapshotIntegrityError("receipt schema version identity mismatch")
         expected_versions = (
             BASELINE_PROJECTION_VERSION,
             BASELINE_SCHEMA_VERSION,
@@ -168,6 +172,24 @@ class PostgresPublicReadRepository:
             raise SnapshotIntegrityError("receipt version identity mismatch")
         if snapshot_as_of != receipt_as_of:
             raise SnapshotIntegrityError("snapshot and receipt as_of mismatch")
+
+        reconstructed_receipt = ProjectionReceipt(
+            receipt_schema_version=receipt_schema_version,
+            projection_name=projection_name,
+            projection_version=receipt_projection_version,
+            schema_version=receipt_schema,
+            algorithm_version=receipt_algorithm,
+            ranking_policy_version=receipt_ranking,
+            configuration_digest=Digest(configuration_digest),
+            source_registry_version=Digest(source_registry_version),
+            as_of=receipt_as_of,
+            generated_at=generated_at,
+            input_digest=Digest(input_digest),
+            output_digest=Digest(receipt_output_digest),
+            status=ProjectionStatus.COMPLETE,
+        )
+        if reconstructed_receipt.receipt_id != receipt_id:
+            raise SnapshotIntegrityError("receipt deterministic identity mismatch")
         if str(sha256_digest(canonical_json_bytes(payload))) != receipt_output_digest:
             raise SnapshotIntegrityError("snapshot canonical payload digest mismatch")
 
