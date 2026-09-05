@@ -185,6 +185,8 @@ def test_canonical_tables_are_database_enforced_append_only() -> None:
                 """
             )
             assert {row[0] for row in cur.fetchall()} == {
+                "frontier_append_only_baseline_snapshots",
+                "frontier_append_only_baseline_snapshots_truncate",
                 "frontier_append_only_collection_occurrences",
                 "frontier_append_only_collection_occurrences_truncate",
                 "frontier_append_only_observations",
@@ -224,5 +226,5 @@ def test_canonical_tables_are_database_enforced_append_only() -> None:
             conn.transaction(),
             conn.cursor() as cur,
         ):
-            cur.execute("TRUNCATE projection_receipts")
+            cur.execute("TRUNCATE projection_receipts, baseline_intelligence_snapshots")
         assert truncate_error.value.sqlstate == "55000"

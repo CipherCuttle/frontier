@@ -1,0 +1,274 @@
+{
+  "schema_version": "frontier-baseline-intelligence-corpus-v0",
+  "runtime_implementation_authorized": false,
+  "projection": {
+    "name": "baseline-intelligence",
+    "version": "baseline-intelligence-v0",
+    "schema_version": "baseline-intelligence-snapshot-v0",
+    "algorithm_version": "windowed-episode-metrics-v0",
+    "ranking_policy_version": "naive-episode-activity-v0"
+  },
+  "windows_seconds": {
+    "mentions_1h": 3600,
+    "mentions_6h": 21600,
+    "mentions_24h": 86400,
+    "previous_6h_start": 43200,
+    "preprevious_6h_start": 64800
+  },
+  "ranking_order": [
+    "mentions_1h_desc",
+    "mentions_6h_desc",
+    "velocity_6h_delta_desc",
+    "acceleration_6h_desc",
+    "mentions_24h_desc",
+    "source_role_diversity_desc",
+    "last_observed_at_desc",
+    "evidence_count_total_desc",
+    "episode_id_asc"
+  ],
+  "required_properties": [
+    "deterministic_replay",
+    "point_in_time_no_lookahead",
+    "observed_at_is_knowledge_clock",
+    "backfill_not_live_activity",
+    "recovered_backlog_not_live_activity",
+    "duplicate_collection_not_duplicate_mentions",
+    "coverage_not_zero_activity",
+    "attention_not_confirmation",
+    "source_count_not_provenance_root_count",
+    "assertion_state_orthogonal_to_activity",
+    "complete_snapshot_and_receipt_atomic",
+    "failed_candidate_preserves_prior_complete"
+  ],
+  "scenarios": [
+    {
+      "id": "fresh_primary_emission",
+      "category": "fresh_primary",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "fresh-primary",
+          "observations": [
+            {
+              "key": "pypi-new",
+              "observed_at": "2026-09-05T11:45:00.000000Z",
+              "source_published_at": "2026-09-05T11:40:00.000000Z",
+              "source_id": "pypi.updates",
+              "signal_roles": ["PRIMARY_EMISSION"],
+              "first_reason": "SCHEDULED",
+              "recovered_after_gap": false
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "ranked_episode_keys": ["fresh-primary"],
+        "fresh-primary": {
+          "mentions_1h": 1,
+          "mentions_6h": 1,
+          "mentions_24h": 1,
+          "velocity_6h_delta": 1,
+          "acceleration_6h": 1,
+          "evidence_root_diversity": null,
+          "confirmation": "UNAVAILABLE"
+        }
+      }
+    },
+    {
+      "id": "attention_propagation_not_confirmation",
+      "category": "attention_propagation",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "hn-target",
+          "observations": [
+            {
+              "key": "hn-a",
+              "observed_at": "2026-09-05T11:50:00.000000Z",
+              "source_id": "hn.frontpage",
+              "signal_roles": ["ATTENTION"],
+              "first_reason": "SCHEDULED",
+              "recovered_after_gap": false
+            },
+            {
+              "key": "hn-b",
+              "observed_at": "2026-09-05T11:55:00.000000Z",
+              "source_id": "hn.frontpage",
+              "signal_roles": ["ATTENTION"],
+              "first_reason": "SCHEDULED",
+              "recovered_after_gap": false
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "hn-target": {
+          "mentions_1h": 2,
+          "source_count": 1,
+          "source_role_diversity": 1,
+          "evidence_root_diversity": null,
+          "confirmation": "UNAVAILABLE"
+        }
+      }
+    },
+    {
+      "id": "velocity_and_acceleration",
+      "category": "window_math",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "accelerating",
+          "observations": [
+            {"key":"a0","observed_at":"2026-09-04T21:00:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"a1","observed_at":"2026-09-05T03:00:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"a2","observed_at":"2026-09-05T07:00:00.000000Z","source_id":"hn.frontpage","signal_roles":["ATTENTION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"a3","observed_at":"2026-09-05T09:00:00.000000Z","source_id":"gdelt.frontier","signal_roles":["DISCOVERY"],"first_reason":"DISCOVERY","recovered_after_gap":false},
+            {"key":"a4","observed_at":"2026-09-05T11:30:00.000000Z","source_id":"hf.models","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false}
+          ]
+        },
+        {
+          "episode_key": "cooling",
+          "observations": [
+            {"key":"c0","observed_at":"2026-09-04T20:00:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"c1","observed_at":"2026-09-04T22:00:00.000000Z","source_id":"hn.frontpage","signal_roles":["ATTENTION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"c2","observed_at":"2026-09-05T01:00:00.000000Z","source_id":"gdelt.frontier","signal_roles":["DISCOVERY"],"first_reason":"DISCOVERY","recovered_after_gap":false},
+            {"key":"c3","observed_at":"2026-09-05T03:00:00.000000Z","source_id":"hf.models","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"c4","observed_at":"2026-09-05T05:00:00.000000Z","source_id":"hn.frontpage","signal_roles":["ATTENTION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"c5","observed_at":"2026-09-05T10:00:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false}
+          ]
+        }
+      ],
+      "expect": {
+        "ranked_episode_keys": ["accelerating", "cooling"],
+        "accelerating": {"mentions_6h":3,"previous_6h":1,"preprevious_6h":1,"velocity_6h_delta":2,"acceleration_6h":2},
+        "cooling": {"mentions_6h":1,"previous_6h":3,"preprevious_6h":2,"velocity_6h_delta":-2,"acceleration_6h":-3}
+      }
+    },
+    {
+      "id": "backfill_and_recovered_backlog",
+      "category": "prospective_eligibility",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "mixed-causality",
+          "observations": [
+            {"key":"live","observed_at":"2026-09-05T11:30:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"backfill","observed_at":"2026-09-05T11:40:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"BACKFILL","recovered_after_gap":false},
+            {"key":"recovered-a","observed_at":"2026-09-05T11:45:00.000000Z","source_id":"hn.frontpage","signal_roles":["ATTENTION"],"first_reason":"SCHEDULED","recovered_after_gap":true},
+            {"key":"recovered-b","observed_at":"2026-09-05T11:50:00.000000Z","source_id":"gdelt.frontier","signal_roles":["DISCOVERY"],"first_reason":"DISCOVERY","recovered_after_gap":true}
+          ]
+        }
+      ],
+      "expect": {
+        "mixed-causality": {
+          "evidence_count_total": 4,
+          "prospective_evidence_count": 1,
+          "backfill_evidence_count": 1,
+          "recovered_backlog_evidence_count": 2,
+          "mentions_1h": 1,
+          "mentions_6h": 1
+        }
+      }
+    },
+    {
+      "id": "observed_at_not_source_timestamp",
+      "category": "knowledge_clock",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "old-published-newly-known",
+          "observations": [
+            {"key":"old-source-time","observed_at":"2026-09-05T11:55:00.000000Z","source_published_at":"2020-01-01T00:00:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false}
+          ]
+        }
+      ],
+      "expect": {"old-published-newly-known":{"mentions_1h":1,"age_seconds":300}}
+    },
+    {
+      "id": "future_observation_excluded",
+      "category": "point_in_time",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "pit",
+          "observations": [
+            {"key":"known","observed_at":"2026-09-05T11:59:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"future","observed_at":"2026-09-05T12:01:00.000000Z","source_id":"hn.frontpage","signal_roles":["ATTENTION"],"first_reason":"SCHEDULED","recovered_after_gap":false}
+          ]
+        }
+      ],
+      "expect": {"pit":{"evidence_count_total":1,"mentions_1h":1}}
+    },
+    {
+      "id": "duplicate_collection_one_mention",
+      "category": "collection_deduplication",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "duplicate-safe",
+          "observations": [
+            {"key":"same-observation","observed_at":"2026-09-05T11:50:00.000000Z","source_id":"hf.models","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false,"duplicate_occurrences":3}
+          ]
+        }
+      ],
+      "expect": {"duplicate-safe":{"evidence_count_total":1,"mentions_1h":1}}
+    },
+    {
+      "id": "retraction_activity_orthogonal",
+      "category": "assertion_trend_separation",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {
+          "episode_key": "retracted-but-active",
+          "observations": [
+            {"key":"claim","observed_at":"2026-09-05T08:00:00.000000Z","source_id":"cisa.kev","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false},
+            {"key":"retraction","observed_at":"2026-09-05T11:50:00.000000Z","source_id":"cisa.kev","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false,"relation":"RETRACTS:claim"}
+          ]
+        }
+      ],
+      "expect": {"retracted-but-active":{"mentions_1h":1,"mentions_6h":2}}
+    },
+    {
+      "id": "health_degradation_explicit",
+      "category": "coverage_health",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "enabled_sources": ["pypi.updates","hn.frontpage"],
+      "health": [
+        {"source_id":"pypi.updates","as_of":"2026-09-05T11:59:00.000000Z","transport":"OK","freshness":"OK","completeness":"OK","schema":"OK"},
+        {"source_id":"hn.frontpage","as_of":"2026-09-05T11:58:00.000000Z","transport":"FAILED","freshness":"UNKNOWN","completeness":"DEGRADED","schema":"OK"}
+      ],
+      "episodes": [],
+      "expect": {"transport_state":"FAILED","freshness_state":"UNKNOWN","coverage_state":"DEGRADED","schema_state":"OK"}
+    },
+    {
+      "id": "missing_health_is_unknown",
+      "category": "coverage_unknown",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "enabled_sources": ["pypi.updates","hn.frontpage"],
+      "health": [
+        {"source_id":"pypi.updates","as_of":"2026-09-05T11:59:00.000000Z","transport":"OK","freshness":"OK","completeness":"OK","schema":"OK"}
+      ],
+      "episodes": [],
+      "expect": {"transport_state":"UNKNOWN","freshness_state":"UNKNOWN","coverage_state":"UNKNOWN","schema_state":"UNKNOWN"}
+    },
+    {
+      "id": "deterministic_tie_break",
+      "category": "ranking_tie",
+      "as_of": "2026-09-05T12:00:00.000000Z",
+      "episodes": [
+        {"episode_key":"tie-a","observations":[{"key":"tie-a-observation","observed_at":"2026-09-05T11:30:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false}]},
+        {"episode_key":"tie-b","observations":[{"key":"tie-b-observation","observed_at":"2026-09-05T11:30:00.000000Z","source_id":"pypi.updates","signal_roles":["PRIMARY_EMISSION"],"first_reason":"SCHEDULED","recovered_after_gap":false}]}
+      ],
+      "expect": {"tie_break":"episode_id_ascending"}
+    },
+    {
+      "id": "failed_publish_preserves_prior_complete",
+      "category": "atomic_publication",
+      "expect": {
+        "candidate_status": "FAILED",
+        "new_snapshot_published": false,
+        "prior_complete_remains_latest": true
+      }
+    }
+  ]
+}
