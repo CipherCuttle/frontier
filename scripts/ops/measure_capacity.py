@@ -54,9 +54,7 @@ def _sqlalchemy_url(database_url: str) -> str:
 def _reset_database(admin_url: str) -> None:
     with psycopg.connect(admin_url, autocommit=True) as connection:
         connection.execute(
-            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
-                sql.Identifier(DATABASE_NAME)
-            )
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(DATABASE_NAME))
         )
         connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(DATABASE_NAME)))
 
@@ -64,9 +62,7 @@ def _reset_database(admin_url: str) -> None:
 def _drop_database(admin_url: str) -> None:
     with psycopg.connect(admin_url, autocommit=True) as connection:
         connection.execute(
-            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
-                sql.Identifier(DATABASE_NAME)
-            )
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(DATABASE_NAME))
         )
 
 
