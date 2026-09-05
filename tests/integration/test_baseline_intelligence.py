@@ -17,6 +17,7 @@ from frontier.application.intelligence import run_baseline_intelligence
 from frontier.domain.collection import CollectionReason, CollectionRun
 from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
+from frontier.domain.observation import Observation
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -50,7 +51,7 @@ def test_postgres_baseline_retains_complete_snapshot_and_rolls_back_conflict() -
     with psycopg.connect(DB_URL) as conn:
         evidence = PostgresEvidenceStore(conn)
         evidence.upsert_source(source)
-        observations = []
+        observations: list[Observation] = []
         reasons = (CollectionReason.SCHEDULED, CollectionReason.BACKFILL)
         for candidate, reason in zip(candidates, reasons, strict=True):
             run = CollectionRun(
