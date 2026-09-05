@@ -1,0 +1,127 @@
+{
+  "schema_version": "terminal-hostile-corpus-v0",
+  "authority": "docs/TERMINAL_V0.md",
+  "parent": "641cca5f0001e5e5b644f574aa09765a9d797589",
+  "scenarios": [
+    {
+      "id": "T001",
+      "category": "rank-preservation",
+      "requirement": "Server baseline rank and relative order are preserved by terminal rendering.",
+      "forbidden": "client reranking or rewritten rank"
+    },
+    {
+      "id": "T002",
+      "category": "local-filter",
+      "requirement": "Local text filtering may hide rows but preserves server rank and relative order and exposes LOCAL FILTER state.",
+      "forbidden": "filter-derived relevance ordering"
+    },
+    {
+      "id": "T003",
+      "category": "confirmation-unavailable",
+      "requirement": "confirmation=UNAVAILABLE remains explicitly unavailable.",
+      "forbidden": "confirmed or confidence inference"
+    },
+    {
+      "id": "T004",
+      "category": "provenance-root-unavailable",
+      "requirement": "evidence_root_diversity=null remains explicitly unavailable.",
+      "forbidden": "independent provenance-root count inference"
+    },
+    {
+      "id": "T005",
+      "category": "source-count-not-confirmation",
+      "requirement": "source_count and source_role_diversity remain propagation/coverage descriptors only.",
+      "forbidden": "independent source or factual confirmation label"
+    },
+    {
+      "id": "T006",
+      "category": "aggregate-health",
+      "requirement": "FAILED, DEGRADED, and UNKNOWN aggregate states remain visibly distinct from OK in primary workspace chrome.",
+      "forbidden": "optimistic normalization"
+    },
+    {
+      "id": "T007",
+      "category": "coverage-unknown",
+      "requirement": "UNKNOWN coverage is explicit and is not rendered as healthy or absent evidence.",
+      "forbidden": "unknown-to-ok coercion"
+    },
+    {
+      "id": "T008",
+      "category": "multidimensional-health",
+      "requirement": "Per-source transport, freshness, completeness, and schema health remain separate fields.",
+      "forbidden": "single magic health score"
+    },
+    {
+      "id": "T009",
+      "category": "snapshot-bound-drilldown",
+      "requirement": "Episode drill-down requests carry the same selected snapshot_id as the ranked workspace.",
+      "forbidden": "latest/current evidence substitution"
+    },
+    {
+      "id": "T010",
+      "category": "snapshot-change-invalidation",
+      "requirement": "Changing selected snapshot invalidates inspector evidence bound to the previous snapshot.",
+      "forbidden": "mixed-snapshot workspace"
+    },
+    {
+      "id": "T011",
+      "category": "api-failure",
+      "requirement": "API failure is explicit and does not become an empty or healthy intelligence state.",
+      "forbidden": "silent stale/current substitution"
+    },
+    {
+      "id": "T012",
+      "category": "empty-view",
+      "requirement": "An empty public view is described as zero rows returned by that view, not observed absence in the world.",
+      "forbidden": "nothing is happening claim"
+    },
+    {
+      "id": "T013",
+      "category": "get-only-transport",
+      "requirement": "Terminal remote transport exposes GET only.",
+      "forbidden": "POST PUT PATCH DELETE or mutation RPC"
+    },
+    {
+      "id": "T014",
+      "category": "keyboard-contract",
+      "requirement": "Lens selection, row navigation, inspector, health, audit, help, filter and refresh have frozen keyboard commands.",
+      "forbidden": "pointer-only primary workflow"
+    },
+    {
+      "id": "T015",
+      "category": "editable-target-guard",
+      "requirement": "Global keyboard commands do not fire while typing in editable controls except safe Escape behavior.",
+      "forbidden": "stolen text-input keystrokes"
+    },
+    {
+      "id": "T016",
+      "category": "audit-reachability",
+      "requirement": "Full snapshot/receipt/version/as_of identity is keyboard-reachable and not hover-only.",
+      "forbidden": "hidden audit identity"
+    },
+    {
+      "id": "T017",
+      "category": "non-color-only-health",
+      "requirement": "Critical health and coverage states have textual state labels in addition to visual styling.",
+      "forbidden": "color-only status"
+    },
+    {
+      "id": "T018",
+      "category": "unauthorized-semantics",
+      "requirement": "Terminal does not introduce advanced lifecycle, entity, provenance-root, confirmation, confidence, or manipulation labels absent from public response.",
+      "forbidden": "client-side epistemic inference"
+    },
+    {
+      "id": "T019",
+      "category": "large-fixture-order",
+      "requirement": "A deterministic 500-row fixture preserves semantic order and baseline ranks through terminal view helpers.",
+      "forbidden": "performance shortcut that changes semantic order"
+    },
+    {
+      "id": "T020",
+      "category": "generated-client-authority",
+      "requirement": "Terminal imports generated public-read client/types as remote contract authority.",
+      "forbidden": "hand-copied remote API schema"
+    }
+  ]
+}
