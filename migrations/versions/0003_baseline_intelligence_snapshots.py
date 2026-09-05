@@ -1,12 +1,12 @@
 """Add immutable retained baseline intelligence snapshots.
 
-Revision ID: 0003_baseline_intelligence_snapshots
+Revision ID: 0003_baseline_snapshots
 Revises: 0002_live_acquisition_state
 """
 
 from alembic import op
 
-revision = "0003_baseline_intelligence_snapshots"
+revision = "0003_baseline_snapshots"
 down_revision = "0002_live_acquisition_state"
 branch_labels = None
 depends_on = None
