@@ -4,7 +4,9 @@ from uuid import uuid4
 import pytest
 
 from frontier.domain.collection import CollectionReason, CollectionRun
+from frontier.domain.digests import sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
+from frontier.domain.observation import DocumentPayload, ObservationCandidate, ObservationKind
 from frontier.domain.relation import ObservationRelation, RelationAuthority, RelationType
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
 
@@ -32,6 +34,22 @@ def test_source_roles_are_set_like_and_sorted() -> None:
         transport=SourceTransport.FIXTURE,
     )
     assert source.to_canonical()["signal_roles"] == ["ATTENTION", "PRIMARY_EMISSION"]
+
+
+def test_observation_kind_must_match_payload_contract() -> None:
+    with pytest.raises(ValueError, match="ARTIFACT observation requires ArtifactPayload"):
+        ObservationCandidate(
+            source_id="fixture.hostile_document",
+            source_item_key="item-1",
+            kind=ObservationKind.ARTIFACT,
+            payload=DocumentPayload(
+                canonical_url="https://example.invalid/1",
+                title="not an artifact",
+                excerpt=None,
+            ),
+            retrieved_at=datetime.now(UTC),
+            fetch_digest=sha256_digest(b"fixture"),
+        )
 
 
 def test_relation_requires_exactly_one_target_and_algorithm_for_inference() -> None:
