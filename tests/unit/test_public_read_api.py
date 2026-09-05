@@ -145,9 +145,7 @@ def test_view_exposes_binding_health_and_baseline_semantic_scope() -> None:
 def test_no_complete_snapshot_is_explicit_503_without_internal_detail() -> None:
     client = cast(
         _GetClient,
-        TestClient(
-            create_public_read_app(PublicReadService(_FakeRepository(available=False)))
-        ),
+        TestClient(create_public_read_app(PublicReadService(_FakeRepository(available=False)))),
     )
     response = client.get("/v0/radar")
     assert response.status_code == 503
