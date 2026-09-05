@@ -174,13 +174,12 @@ class ObservationCandidate:
         _require_aware(self.retrieved_at, name="retrieved_at")
         _require_aware(self.source_published_at, name="source_published_at")
         _require_aware(self.effective_at, name="effective_at")
-        expected_payload = {
-            ObservationKind.DOCUMENT: DocumentPayload,
-            ObservationKind.ARTIFACT: ArtifactPayload,
-            ObservationKind.METRIC: MetricPayload,
-        }[self.kind]
-        if not isinstance(self.payload, expected_payload):
-            raise ValueError(f"{self.kind.value} observation requires {expected_payload.__name__}")
+        if self.kind is ObservationKind.DOCUMENT and not isinstance(self.payload, DocumentPayload):
+            raise ValueError("DOCUMENT observation requires DocumentPayload")
+        if self.kind is ObservationKind.ARTIFACT and not isinstance(self.payload, ArtifactPayload):
+            raise ValueError("ARTIFACT observation requires ArtifactPayload")
+        if self.kind is ObservationKind.METRIC and not isinstance(self.payload, MetricPayload):
+            raise ValueError("METRIC observation requires MetricPayload")
 
     def identity_material(self) -> dict[str, CanonicalValue]:
         return {
