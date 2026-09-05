@@ -45,9 +45,11 @@ def ingest_fixture(path: Path, database_url: str) -> int:
     import psycopg
 
     from frontier.adapters.postgres import PostgresEvidenceStore
+    from frontier.adapters.postgres.readiness import verify_database_readiness
 
     candidate, _ = load_fixture_candidate(path)
     with psycopg.connect(database_url) as conn:
+        verify_database_readiness(conn)
         store = PostgresEvidenceStore(conn)
         source = _source()
         store.upsert_source(source)
@@ -67,11 +69,13 @@ def acquire_source(source_id: str, database_url: str, config_root: Path) -> int:
     import psycopg
 
     from frontier.adapters.postgres import PostgresEvidenceStore
+    from frontier.adapters.postgres.readiness import verify_database_readiness
 
     policy = load_fetch_policy(config_root)
     registry = load_source_registry(config_root)
     fetcher = SecureHttpFetcher(policy)
     with psycopg.connect(database_url) as conn:
+        verify_database_readiness(conn)
         store = PostgresEvidenceStore(conn)
         service = AcquisitionService(
             registry=registry,
@@ -96,6 +100,22 @@ def acquire_source(source_id: str, database_url: str, config_root: Path) -> int:
         )
     )
     return 0 if result.status in (CollectionRunStatus.SUCCESS, CollectionRunStatus.PARTIAL) else 2
+
+
+def doctor_database(database_url: str, config_root: Path) -> int:
+    import psycopg
+
+    from frontier.adapters.postgres.readiness import verify_database_readiness
+
+    _ = load_fetch_policy(config_root)
+    registry = load_source_registry(config_root)
+    with psycopg.connect(database_url) as conn:
+        readiness = verify_database_readiness(conn)
+    payload = readiness.to_dict()
+    payload["configured_sources"] = sorted(registry.sources)
+    payload["source_registry_version"] = str(registry.source_registry_version)
+    print(json.dumps(payload, sort_keys=True))
+    return 0
 
 
 def _timestamp(value: datetime | None) -> str | None:
@@ -137,11 +157,13 @@ def run_worker(database_url: str, config_root: Path, *, once: bool, idle_seconds
     import psycopg
 
     from frontier.adapters.postgres import PostgresEvidenceStore
+    from frontier.adapters.postgres.readiness import verify_database_readiness
 
     policy = load_fetch_policy(config_root)
     registry = load_source_registry(config_root)
     fetcher = SecureHttpFetcher(policy)
     with psycopg.connect(database_url) as conn:
+        verify_database_readiness(conn)
         store = PostgresEvidenceStore(conn)
         service = AcquisitionService(
             registry=registry,
@@ -201,6 +223,10 @@ def main() -> int:
     acquire.add_argument("--database-url")
     acquire.add_argument("--config-root", type=Path, default=Path("."))
 
+    doctor = sub.add_parser("doctor")
+    doctor.add_argument("--database-url")
+    doctor.add_argument("--config-root", type=Path, default=Path("."))
+
     worker = sub.add_parser("worker")
     worker.add_argument("--database-url")
     worker.add_argument("--config-root", type=Path, default=Path("."))
@@ -215,6 +241,8 @@ def main() -> int:
         return ingest_fixture(args.fixture, database_url)
     if args.command == "acquire":
         return acquire_source(args.source_id, database_url, args.config_root)
+    if args.command == "doctor":
+        return doctor_database(database_url, args.config_root)
     return run_worker(
         database_url,
         args.config_root,
