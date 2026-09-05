@@ -58,10 +58,10 @@ def test_pypi_malformed_source_time_never_defaults_to_now() -> None:
     assert batch.details["malformed_source_times"] == 1
 
 
-def test_cisa_catalog_creates_one_canonical_document_per_cve() -> None:
-    raw = {
+def cisa_catalog(catalog_version: str) -> dict[str, object]:
+    return {
         "title": "CISA Known Exploited Vulnerabilities Catalog",
-        "catalogVersion": "2026.09.05",
+        "catalogVersion": catalog_version,
         "count": 1,
         "vulnerabilities": [
             {
@@ -79,6 +79,10 @@ def test_cisa_catalog_creates_one_canonical_document_per_cve() -> None:
             }
         ],
     }
+
+
+def test_cisa_catalog_creates_one_canonical_document_per_cve() -> None:
+    raw = cisa_catalog("2026.09.05")
     body = json.dumps(raw).encode()
     batch = normalize_cisa_kev(body, retrieved_at=NOW, fetch_digest=sha256_digest(body))
 
@@ -91,4 +95,24 @@ def test_cisa_catalog_creates_one_canonical_document_per_cve() -> None:
     assert candidate.effective_at is None
     assert isinstance(candidate.payload, DocumentPayload)
     assert candidate.payload.source_metadata["date_added"] == "2026-09-05"
+    assert "catalog_version" not in candidate.payload.source_metadata
+    assert batch.details["catalog_version"] == "2026.09.05"
     assert "Apply mitigations" in (candidate.payload.excerpt or "")
+
+
+def test_cisa_catalog_version_change_does_not_manufacture_new_cve_observation() -> None:
+    first_body = json.dumps(cisa_catalog("2026.09.05")).encode()
+    second_body = json.dumps(cisa_catalog("2026.09.06")).encode()
+
+    first = normalize_cisa_kev(
+        first_body,
+        retrieved_at=NOW,
+        fetch_digest=sha256_digest(first_body),
+    ).candidates[0]
+    second = normalize_cisa_kev(
+        second_body,
+        retrieved_at=NOW,
+        fetch_digest=sha256_digest(second_body),
+    ).candidates[0]
+
+    assert first.observation_id == second.observation_id
