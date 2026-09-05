@@ -16,6 +16,7 @@ from frontier.adapters.postgres.grouping import PostgresGroupingRepository
 from frontier.application.grouping import run_grouping_projection
 from frontier.domain.collection import CollectionReason, CollectionRun
 from frontier.domain.digests import Digest, sha256_digest
+from frontier.domain.observation import Observation
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -51,7 +52,7 @@ def test_postgres_grouping_reads_canonical_evidence_and_persists_receipt() -> No
     with psycopg.connect(DB_URL) as conn:
         evidence = PostgresEvidenceStore(conn)
         evidence.upsert_source(source)
-        observations = []
+        observations: list[Observation] = []
         for candidate in candidates:
             run = CollectionRun(
                 run_id=uuid4(),
