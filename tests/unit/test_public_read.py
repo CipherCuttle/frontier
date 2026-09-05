@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
@@ -43,15 +44,18 @@ def _episode(
     velocity_6h_delta: int = 0,
     observation_ids: list[str] | None = None,
 ) -> dict[str, CanonicalValue]:
-    return {
-        "episode_id": episode_id,
-        "rank": rank,
-        "mentions_1h": mentions_1h,
-        "velocity_6h_delta": velocity_6h_delta,
-        "observation_ids": observation_ids or [],
-        "confirmation": "UNAVAILABLE",
-        "evidence_root_diversity": None,
-    }
+    return cast(
+        dict[str, CanonicalValue],
+        {
+            "episode_id": episode_id,
+            "rank": rank,
+            "mentions_1h": mentions_1h,
+            "velocity_6h_delta": velocity_6h_delta,
+            "observation_ids": observation_ids or [],
+            "confirmation": "UNAVAILABLE",
+            "evidence_root_diversity": None,
+        },
+    )
 
 
 def _snapshot(*episodes: dict[str, CanonicalValue]) -> ResolvedPublicSnapshot:
