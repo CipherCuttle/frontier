@@ -5,7 +5,7 @@ import os
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -17,7 +17,7 @@ from frontier.adapters.postgres import PostgresEvidenceStore
 from frontier.domain.collection import CollectionReason, CollectionRun
 from frontier.domain.digests import sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
-from frontier.domain.observation import DocumentPayload
+from frontier.domain.observation import DocumentPayload, ObservationCandidate
 from frontier.domain.relation import ObservationRelation, RelationAuthority, RelationType
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
 
@@ -26,9 +26,9 @@ DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
 
 
-def source() -> SourceContract:
+def source(source_id: str) -> SourceContract:
     return SourceContract(
-        source_id="fixture.hostile_document",
+        source_id=source_id,
         display_name="Hostile document fixture",
         acquisition_class=AcquisitionClass.C_PERMITTED_EXTRACTION,
         signal_roles=(SignalRole.PRIMARY_EMISSION,),
@@ -36,27 +36,23 @@ def source() -> SourceContract:
     )
 
 
-def reset(conn: Any) -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            "TRUNCATE projection_receipts, source_health_observations, observation_relations, "
-            "collection_run_observations, observations, collection_runs, sources CASCADE"
-        )
-    conn.commit()
+def candidate_for(source_id: str) -> ObservationCandidate:
+    candidate, _ = load_fixture_candidate(FIXTURE)
+    return replace(candidate, source_id=source_id)
 
 
 def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None:
     assert DB_URL is not None
-    candidate, _ = load_fixture_candidate(FIXTURE)
+    source_id = "fixture.idempotency"
+    candidate = candidate_for(source_id)
     with psycopg.connect(DB_URL) as conn:
-        reset(conn)
         store = PostgresEvidenceStore(conn)
-        store.upsert_source(source())
+        store.upsert_source(source(source_id))
         first_observation = None
         for index in range(100):
             run = CollectionRun(
                 run_id=uuid4(),
-                source_id=source().source_id,
+                source_id=source_id,
                 reason=CollectionReason.SCHEDULED,
                 started_at=candidate.retrieved_at + timedelta(seconds=index),
             )
@@ -71,9 +67,17 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
                 assert observation.observed_at == first_observation.observed_at
 
         with conn.cursor() as cur:
-            cur.execute("SELECT count(*) FROM observations")
+            cur.execute("SELECT count(*) FROM observations WHERE source_id = %s", (source_id,))
             assert cur.fetchone()[0] == 1
-            cur.execute("SELECT count(*) FROM collection_run_observations")
+            cur.execute(
+                """
+                SELECT count(*)
+                FROM collection_run_observations cro
+                JOIN collection_runs cr ON cr.run_id = cro.run_id
+                WHERE cr.source_id = %s
+                """,
+                (source_id,),
+            )
             assert cur.fetchone()[0] == 100
 
         assert first_observation is not None
@@ -83,9 +87,9 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
             )
             == []
         )
-        assert store.list_observation_ids_as_of(first_observation.observed_at) == [
-            candidate.observation_id
-        ]
+        assert candidate.observation_id in store.list_observation_ids_as_of(
+            first_observation.observed_at
+        )
 
         retry_candidate = replace(
             candidate,
@@ -95,7 +99,7 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
         assert retry_candidate.observation_id == candidate.observation_id
         retry_run = CollectionRun(
             run_id=uuid4(),
-            source_id=source().source_id,
+            source_id=source_id,
             reason=CollectionReason.SCHEDULED,
             started_at=retry_candidate.retrieved_at,
         )
@@ -120,7 +124,7 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
         )
         run = CollectionRun(
             run_id=uuid4(),
-            source_id=source().source_id,
+            source_id=source_id,
             reason=CollectionReason.BACKFILL,
             started_at=candidate.retrieved_at,
         )
@@ -139,7 +143,7 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
         store.add_relation(relation)
 
         health = SourceHealthObservation(
-            source_id=source().source_id,
+            source_id=source_id,
             as_of=second.observed_at,
             transport=HealthValue.OK,
             freshness=HealthValue.OK,
@@ -149,20 +153,23 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
         )
         store.add_source_health(health)
         with conn.cursor() as cur:
-            cur.execute("SELECT completeness_health FROM source_health_observations")
+            cur.execute(
+                "SELECT completeness_health FROM source_health_observations WHERE source_id = %s",
+                (source_id,),
+            )
             assert cur.fetchone()[0] == "DEGRADED"
 
 
 def test_canonical_tables_are_database_enforced_append_only() -> None:
     assert DB_URL is not None
-    candidate, _ = load_fixture_candidate(FIXTURE)
+    source_id = "fixture.append_only"
+    candidate = candidate_for(source_id)
     with psycopg.connect(DB_URL) as conn:
-        reset(conn)
         store = PostgresEvidenceStore(conn)
-        store.upsert_source(source())
+        store.upsert_source(source(source_id))
         run = CollectionRun(
             run_id=uuid4(),
-            source_id=source().source_id,
+            source_id=source_id,
             reason=CollectionReason.SCHEDULED,
             started_at=candidate.retrieved_at,
         )
@@ -181,10 +188,15 @@ def test_canonical_tables_are_database_enforced_append_only() -> None:
             )
             assert {row[0] for row in cur.fetchall()} == {
                 "frontier_append_only_collection_occurrences",
+                "frontier_append_only_collection_occurrences_truncate",
                 "frontier_append_only_observations",
+                "frontier_append_only_observations_truncate",
                 "frontier_append_only_projection_receipts",
+                "frontier_append_only_projection_receipts_truncate",
                 "frontier_append_only_relations",
+                "frontier_append_only_relations_truncate",
                 "frontier_append_only_source_health",
+                "frontier_append_only_source_health_truncate",
             }
 
         with pytest.raises(psycopg.Error) as update_error:
@@ -202,3 +214,8 @@ def test_canonical_tables_are_database_enforced_append_only() -> None:
                     (observation.observation_id,),
                 )
         assert delete_error.value.sqlstate == "55000"
+
+        with pytest.raises(psycopg.Error) as truncate_error:
+            with conn.transaction(), conn.cursor() as cur:
+                cur.execute("TRUNCATE projection_receipts")
+        assert truncate_error.value.sqlstate == "55000"
