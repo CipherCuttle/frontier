@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import cast
 
 import psycopg
+from psycopg import sql as psycopg_sql
 
 from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
 from frontier.domain.digests import sha256_digest
@@ -75,8 +76,9 @@ class PostgresPublicReadRepository:
                 raise SnapshotNotFoundError(snapshot_id)
         return self._validated_snapshot(row)
 
-    def _snapshot_select_sql(self) -> str:
-        return """
+    def _snapshot_select_sql(self) -> psycopg_sql.SQL:
+        return psycopg_sql.SQL(
+            """
             SELECT
                 b.snapshot_id, b.projection_version, b.schema_version,
                 b.algorithm_version, b.ranking_policy_version, b.as_of,
@@ -88,12 +90,12 @@ class PostgresPublicReadRepository:
                 r.input_digest, r.output_digest, r.status
             FROM baseline_intelligence_snapshots b
             JOIN projection_receipts r ON r.receipt_id = b.receipt_id
-        """
+            """
+        )
 
     def _select_latest_complete_snapshot(self) -> tuple[object, ...] | None:
-        sql = (
-            self._snapshot_select_sql()
-            + """
+        query = self._snapshot_select_sql() + psycopg_sql.SQL(
+            """
             WHERE r.status = 'COMPLETE'
               AND r.projection_name = %s
               AND r.projection_version = %s
@@ -102,13 +104,13 @@ class PostgresPublicReadRepository:
             """
         )
         with self._connection.cursor() as cur:
-            cur.execute(sql, (BASELINE_PROJECTION_NAME, BASELINE_PROJECTION_VERSION))
+            cur.execute(query, (BASELINE_PROJECTION_NAME, BASELINE_PROJECTION_VERSION))
             return cur.fetchone()
 
     def _select_snapshot(self, snapshot_id: str) -> tuple[object, ...] | None:
-        sql = self._snapshot_select_sql() + " WHERE b.snapshot_id = %s"
+        query = self._snapshot_select_sql() + psycopg_sql.SQL(" WHERE b.snapshot_id = %s")
         with self._connection.cursor() as cur:
-            cur.execute(sql, (snapshot_id,))
+            cur.execute(query, (snapshot_id,))
             return cur.fetchone()
 
     def _validated_snapshot(self, row: tuple[object, ...]) -> ResolvedPublicSnapshot:
@@ -295,13 +297,16 @@ class PostgresPublicReadRepository:
                 """
                 SELECT cro.observation_id, cr.run_id::text, cr.reason, cr.trigger_id,
                        cr.recovered_after_gap, cro.occurrence_status,
-                       cr.started_at, cr.completed_at
+                       cr.started_at,
+                       CASE WHEN cr.completed_at <= %s THEN cr.completed_at ELSE NULL END
                 FROM collection_run_observations cro
                 JOIN collection_runs cr ON cr.run_id = cro.run_id
-                WHERE cro.observation_id = ANY(%s) AND cro.recorded_at <= %s
+                WHERE cro.observation_id = ANY(%s)
+                  AND cro.recorded_at <= %s
+                  AND cr.started_at <= %s
                 ORDER BY cro.observation_id, cr.started_at, cr.run_id
                 """,
-                (list(observation_ids), as_of),
+                (as_of, list(observation_ids), as_of, as_of),
             )
             rows = cur.fetchall()
         result: list[tuple[str, CollectionOccurrenceRead]] = []
