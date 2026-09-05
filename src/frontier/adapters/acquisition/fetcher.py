@@ -275,9 +275,7 @@ def _rate_limit_retry_after(
         return retry_after
 
     remaining = [
-        value.strip()
-        for name, value in raw_headers
-        if name.lower() == "x-ratelimit-remaining"
+        value.strip() for name, value in raw_headers if name.lower() == "x-ratelimit-remaining"
     ]
     reset = [value.strip() for name, value in raw_headers if name.lower() == "x-ratelimit-reset"]
     if remaining != ["0"] or len(reset) != 1:
