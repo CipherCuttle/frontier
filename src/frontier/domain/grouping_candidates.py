@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
-from typing import Iterable
 
 from .canonical_json import CanonicalValue
 from .grouping import (
