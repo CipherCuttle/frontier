@@ -344,7 +344,23 @@ def build_grouping_projection(
     if len(ids) != len(set(ids)):
         raise ValueError("duplicate observation_id in grouping inputs")
 
+    explicit_pairs = _explicit_pairs(relations, as_of=as_of, allowed_ids=frozenset(ids))
+    assessments: dict[tuple[str, str], PairAssessment] = {}
+    ambiguous: list[PairAssessment] = []
+    for left, right in combinations(eligible, 2):
+        assessment = assess_pair(left, right, explicit_episode_relations=explicit_pairs)
+        pair = ordered_pair(left.observation_id, right.observation_id)
+        assessments[pair] = assessment
+        if assessment.decision is GroupingDecision.AMBIGUOUS:
+            ambiguous.append(assessment)
+
+    group_pairs = frozenset(
+        pair
+        for pair, assessment in assessments.items()
+        if assessment.decision is GroupingDecision.GROUP
+    )
     parents = {observation_id: observation_id for observation_id in ids}
+    component_members = {observation_id: {observation_id} for observation_id in ids}
 
     def find(observation_id: str) -> str:
         current = observation_id
@@ -353,22 +369,27 @@ def build_grouping_projection(
             current = parents[current]
         return current
 
-    def union(left_id: str, right_id: str) -> None:
+    def union_if_pairwise_group(left_id: str, right_id: str) -> None:
         left_root = find(left_id)
         right_root = find(right_id)
         if left_root == right_root:
             return
+        left_members = component_members[left_root]
+        right_members = component_members[right_root]
+        if any(
+            ordered_pair(left_member, right_member) not in group_pairs
+            for left_member in left_members
+            for right_member in right_members
+        ):
+            return
         first, second = ordered_pair(left_root, right_root)
+        merged_members = left_members | right_members
         parents[second] = first
+        component_members[first] = merged_members
+        del component_members[second]
 
-    explicit_pairs = _explicit_pairs(relations, as_of=as_of, allowed_ids=frozenset(ids))
-    ambiguous: list[PairAssessment] = []
-    for left, right in combinations(eligible, 2):
-        assessment = assess_pair(left, right, explicit_episode_relations=explicit_pairs)
-        if assessment.decision is GroupingDecision.GROUP:
-            union(left.observation_id, right.observation_id)
-        elif assessment.decision is GroupingDecision.AMBIGUOUS:
-            ambiguous.append(assessment)
+    for left_id, right_id in sorted(group_pairs):
+        union_if_pairwise_group(left_id, right_id)
 
     members: dict[str, list[str]] = {}
     for observation_id in ids:
