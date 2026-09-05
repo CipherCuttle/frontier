@@ -78,7 +78,7 @@ def _rss_time(value: str | None) -> datetime | None:
         return None
     try:
         parsed = parsedate_to_datetime(value)
-    except (TypeError, ValueError, OverflowError):
+    except TypeError, ValueError, OverflowError:
         return None
     if parsed.tzinfo is None:
         return None
