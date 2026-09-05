@@ -5,14 +5,14 @@ on:
     paths:
       - "fixtures/acquisition/**"
       - "docs/preflight/PR02_*"
-      - "scripts/preflight/validate_acquisition_corpus.py"
+      - "scripts/preflight/validate_*corpus.py"
       - ".github/workflows/preflight-fixtures.yml"
   push:
     branches: [main]
     paths:
       - "fixtures/acquisition/**"
       - "docs/preflight/PR02_*"
-      - "scripts/preflight/validate_acquisition_corpus.py"
+      - "scripts/preflight/validate_*corpus.py"
       - ".github/workflows/preflight-fixtures.yml"
 
 permissions:
@@ -28,3 +28,5 @@ jobs:
           python-version: "3.14"
       - name: Validate hostile acquisition corpus
         run: python scripts/preflight/validate_acquisition_corpus.py
+      - name: Validate normalization and provenance corpus
+        run: python scripts/preflight/validate_normalization_provenance_corpus.py
