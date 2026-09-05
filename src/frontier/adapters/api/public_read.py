@@ -251,8 +251,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    @app.exception_handler(PublicReadFailure)
-    async def _public_read_failure_handler(
+    async def public_read_failure_handler(
         _request: Request, exc: PublicReadFailure
     ) -> JSONResponse:
         return JSONResponse(
@@ -260,8 +259,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
             content={"error": exc.code, "detail": _failure_detail(exc)},
         )
 
-    @app.get("/v0/meta", response_model=MetaResponse, operation_id="getPublicReadMeta")
-    def _meta() -> MetaResponse:
+    def meta() -> MetaResponse:
         return MetaResponse(
             api_version=PUBLIC_READ_API_VERSION,
             response_schema_family=PUBLIC_READ_RESPONSE_SCHEMA,
@@ -284,54 +282,90 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         )
         return _view_response(page)
 
-    @app.get("/v0/radar", response_model=ViewResponse, operation_id="getRadar")
-    def _radar(
+    def radar(
         snapshot_id: SnapshotQuery = None,
         limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,
         offset: OffsetQuery = 0,
     ) -> ViewResponse:
         return view_endpoint(PublicViewKind.RADAR, snapshot_id, limit, offset)
 
-    @app.get("/v0/now", response_model=ViewResponse, operation_id="getNow")
-    def _now(
+    def now(
         snapshot_id: SnapshotQuery = None,
         limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,
         offset: OffsetQuery = 0,
     ) -> ViewResponse:
         return view_endpoint(PublicViewKind.NOW, snapshot_id, limit, offset)
 
-    @app.get("/v0/trending", response_model=ViewResponse, operation_id="getTrending")
-    def _trending(
+    def trending(
         snapshot_id: SnapshotQuery = None,
         limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,
         offset: OffsetQuery = 0,
     ) -> ViewResponse:
         return view_endpoint(PublicViewKind.TRENDING, snapshot_id, limit, offset)
 
-    @app.get(
-        "/v0/episodes/{episode_id}",
-        response_model=EpisodeEvidenceResponse,
-        operation_id="getEpisode",
-    )
-    def _episode(episode_id: str, snapshot_id: SnapshotQuery = None) -> EpisodeEvidenceResponse:
+    def episode(episode_id: str, snapshot_id: SnapshotQuery = None) -> EpisodeEvidenceResponse:
         value = service.get_episode(episode_id, snapshot_id=snapshot_id)
         return EpisodeEvidenceResponse.model_validate(asdict(value))
 
-    @app.get(
-        "/v0/observations/{observation_id}",
-        response_model=ObservationResponse,
-        operation_id="getObservation",
-    )
-    def _observation(
+    def observation(
         observation_id: str,
         snapshot_id: SnapshotQuery = None,
     ) -> ObservationResponse:
         value = service.get_observation(observation_id, snapshot_id=snapshot_id)
         return ObservationResponse.model_validate(asdict(value))
 
-    @app.get("/v0/health", response_model=HealthResponse, operation_id="getHealth")
-    def _health(snapshot_id: SnapshotQuery = None) -> HealthResponse:
+    def health(snapshot_id: SnapshotQuery = None) -> HealthResponse:
         value = service.get_health(snapshot_id=snapshot_id)
         return HealthResponse.model_validate(asdict(value))
 
+    app.add_exception_handler(PublicReadFailure, public_read_failure_handler)
+    app.add_api_route(
+        "/v0/meta",
+        meta,
+        methods=["GET"],
+        response_model=MetaResponse,
+        operation_id="getPublicReadMeta",
+    )
+    app.add_api_route(
+        "/v0/radar",
+        radar,
+        methods=["GET"],
+        response_model=ViewResponse,
+        operation_id="getRadar",
+    )
+    app.add_api_route(
+        "/v0/now",
+        now,
+        methods=["GET"],
+        response_model=ViewResponse,
+        operation_id="getNow",
+    )
+    app.add_api_route(
+        "/v0/trending",
+        trending,
+        methods=["GET"],
+        response_model=ViewResponse,
+        operation_id="getTrending",
+    )
+    app.add_api_route(
+        "/v0/episodes/{episode_id}",
+        episode,
+        methods=["GET"],
+        response_model=EpisodeEvidenceResponse,
+        operation_id="getEpisode",
+    )
+    app.add_api_route(
+        "/v0/observations/{observation_id}",
+        observation,
+        methods=["GET"],
+        response_model=ObservationResponse,
+        operation_id="getObservation",
+    )
+    app.add_api_route(
+        "/v0/health",
+        health,
+        methods=["GET"],
+        response_model=HealthResponse,
+        operation_id="getHealth",
+    )
     return app
