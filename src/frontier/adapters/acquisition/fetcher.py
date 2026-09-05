@@ -156,7 +156,7 @@ def _default_resolver(host: str, port: int) -> tuple[str, ...]:
             if family in (socket.AF_INET, socket.AF_INET6)
         }
         if not addresses:
-            raise OSError("DNS returned no usable addresses")
+            raise OSError("DNS returned no usable addresses") from None
         return tuple(sorted(addresses))
     return (str(literal),)
 
@@ -483,7 +483,7 @@ class SecureHttpFetcher:
                     raise ValueError("expanded response exceeds max_expanded_bytes")
                 if tail:
                     chunks.append(tail)
-        except (OSError, TimeoutError, socket.timeout) as exc:
+        except (OSError, TimeoutError) as exc:
             return self._failure(
                 request,
                 current_url,
