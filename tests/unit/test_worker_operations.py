@@ -167,9 +167,7 @@ def test_worker_marks_second_cycle_boundary_at_risk_then_breached() -> None:
     at_boundary = asyncio.run(worker.run_once())
     assert at_boundary.schedules[0].cadence_slo is CadenceSlo.AT_RISK
 
-    repo.states["source.slo"] = state(
-        "source.slo", last_success_at=NOW - timedelta(seconds=121)
-    )
+    repo.states["source.slo"] = state("source.slo", last_success_at=NOW - timedelta(seconds=121))
     breached = asyncio.run(worker.run_once())
     assert breached.schedules[0].cadence_slo is CadenceSlo.BREACHED
 
