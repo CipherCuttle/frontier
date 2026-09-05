@@ -28,6 +28,7 @@ from frontier.domain.collection import CollectionReason, CollectionRun, Collecti
 from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
 from frontier.domain.public_read import SnapshotIntegrityError, SnapshotNotFoundError
+from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -148,7 +149,6 @@ def _insert_nonpublishable_snapshots() -> tuple[str, str]:
     failed_snapshot = _hex_id("snapshot_")
     failed_receipt = _hex_id("receipt_")
     corrupt_snapshot = _hex_id("snapshot_")
-    corrupt_receipt = _hex_id("receipt_")
     as_of = datetime(2026, 1, 1, tzinfo=UTC)
     digest = "sha256:" + "9" * 64
     payload = cast(
@@ -166,6 +166,21 @@ def _insert_nonpublishable_snapshots() -> tuple[str, str]:
             "transport_state": "UNKNOWN",
         },
     )
+    corrupt_receipt = ProjectionReceipt(
+        receipt_schema_version="projection-receipt-v1",
+        projection_name="baseline-intelligence",
+        projection_version="baseline-intelligence-v0",
+        schema_version="baseline-intelligence-snapshot-v0",
+        algorithm_version="windowed-episode-metrics-v0",
+        ranking_policy_version="naive-episode-activity-v0",
+        configuration_digest=Digest("sha256:" + "7" * 64),
+        source_registry_version=REGISTRY_VERSION,
+        as_of=as_of,
+        generated_at=as_of,
+        input_digest=Digest("sha256:" + "8" * 64),
+        output_digest=Digest(digest),
+        status=ProjectionStatus.COMPLETE,
+    ).receipt_id
     with psycopg.connect(DB_URL) as conn, conn.cursor() as cur:
         for receipt_id, snapshot_id, status in (
             (failed_receipt, failed_snapshot, "FAILED"),
