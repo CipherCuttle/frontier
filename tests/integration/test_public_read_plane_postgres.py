@@ -109,7 +109,7 @@ def _seed_complete_baseline() -> tuple[str, str, str]:
         )
         evidence.complete_collection_run(
             first_run.run_id,
-            status=CollectionRunStatus.SUCCEEDED,
+            status=CollectionRunStatus.SUCCESS,
             records_received=1,
             records_accepted=1,
             records_rejected=0,
