@@ -75,6 +75,10 @@ class ResolvedPublicSnapshot:
 class PublicViewPage:
     snapshot: SnapshotBinding
     generated_at: str
+    transport_state: str
+    freshness_state: str
+    coverage_state: str
+    schema_state: str
     view: PublicViewKind
     view_policy_version: str
     semantic_scope: str
@@ -220,6 +224,10 @@ def select_public_view(
     return PublicViewPage(
         snapshot=snapshot.binding,
         generated_at=snapshot.generated_at,
+        transport_state=snapshot.transport_state,
+        freshness_state=snapshot.freshness_state,
+        coverage_state=snapshot.coverage_state,
+        schema_state=snapshot.schema_state,
         view=view,
         view_policy_version=PUBLIC_READ_VIEW_POLICY_VERSION,
         semantic_scope=PUBLIC_READ_SEMANTIC_SCOPE,
