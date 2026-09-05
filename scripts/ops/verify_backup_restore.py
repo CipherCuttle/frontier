@@ -239,9 +239,11 @@ def _verify_restore(database_url: str, expected_revision: str) -> None:
     with psycopg.connect(database_url) as connection:
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()
         if revision != (expected_revision,):
-            raise RuntimeError(
-                f"restored Alembic revision mismatch: expected {expected_revision!r}, got {revision!r}"
+            message = (
+                f"restored Alembic revision mismatch: expected {expected_revision!r}, "
+                f"got {revision!r}"
             )
+            raise RuntimeError(message)
 
         restored = connection.execute(
             """
