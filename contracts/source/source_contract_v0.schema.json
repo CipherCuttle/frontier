@@ -13,7 +13,26 @@
     "acquisition_class": {"enum": ["A_AUTHORITATIVE_STRUCTURED","B_OPEN_AGGREGATION","C_PERMITTED_EXTRACTION","D_FRAGILE_UI_EXTRACTION"]},
     "signal_roles": {"type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["PRIMARY_EMISSION","DISCOVERY","ATTENTION","BEHAVIORAL","CORROBORATION"]}},
     "transport": {"enum": ["RSS","ATOM","JSON_HTTP","REST","BULK_FILE","HTML","BROWSER","FIXTURE"]},
-    "endpoint": {"type": "object", "additionalProperties": false, "required": ["url","method","accepted_content_types","policy_profile","authentication","credential_ref"], "properties": {"url": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048}, "method": {"const": "GET"}, "accepted_content_types": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}}, "policy_profile": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"}, "authentication": {"enum": ["NONE","CREDENTIAL_REF"]}, "credential_ref": {"type": ["string","null"], "maxLength": 256}}},
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url","method","accepted_content_types","policy_profile","authentication","credential_ref"],
+      "properties": {
+        "url": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048},
+        "method": {"const": "GET"},
+        "accepted_content_types": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}},
+        "policy_profile": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"},
+        "authentication": {"enum": ["NONE","CREDENTIAL_REF"]},
+        "credential_ref": {"type": ["string","null"], "maxLength": 256},
+        "fallback_urls": {"type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": {"type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048}},
+        "fallback_semantics": {"const": "SAME_AUTHORITY_MIRROR"}
+      },
+      "dependentRequired": {"fallback_urls": ["fallback_semantics"], "fallback_semantics": ["fallback_urls"]},
+      "allOf": [
+        {"if": {"properties": {"authentication": {"const": "NONE"}}, "required": ["authentication"]}, "then": {"properties": {"credential_ref": {"type": "null"}}}},
+        {"if": {"properties": {"authentication": {"const": "CREDENTIAL_REF"}}, "required": ["authentication"]}, "then": {"properties": {"credential_ref": {"type": "string", "minLength": 1, "maxLength": 256}}}}
+      ]
+    },
     "expected_cadence": {"type": "object", "additionalProperties": false, "required": ["freshness_class","poll_interval_seconds"], "properties": {"freshness_class": {"enum": ["F0","F1","F2","F3","F4"]}, "poll_interval_seconds": {"type": "integer", "minimum": 60, "maximum": 86400}}},
     "policy": {"type": "object", "additionalProperties": false, "required": ["access_state","browser_authorized","raw_artifact_retention","extracted_text_retention","public_excerpt_mode","attribution_required","policy_reviewed_at","policy_references","notes"], "properties": {"access_state": {"enum": ["ALLOWED","RESTRICTED","UNKNOWN","PROHIBITED"]}, "browser_authorized": {"type": "boolean"}, "raw_artifact_retention": {"enum": ["NONE","TRANSIENT","BOUNDED_ARCHIVE"]}, "extracted_text_retention": {"enum": ["NONE","BOUNDED_CANONICAL"]}, "public_excerpt_mode": {"enum": ["NONE","METADATA_ONLY","BOUNDED_EXCERPT","POLICY_DEFINED"]}, "attribution_required": {"type": "boolean"}, "policy_reviewed_at": {"type": "string", "format": "date"}, "policy_references": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "format": "uri", "maxLength": 2048}}, "notes": {"type": "string", "maxLength": 2048}}},
     "capability": {"type": "object", "additionalProperties": false, "required": ["primary_evidence_eligible","etag_support","last_modified_support","finite_window","schema_reference"], "properties": {"primary_evidence_eligible": {"type": "boolean"}, "etag_support": {"enum": ["SUPPORTED","UNSUPPORTED","UNKNOWN"]}, "last_modified_support": {"enum": ["SUPPORTED","UNSUPPORTED","UNKNOWN"]}, "finite_window": {"type": "boolean"}, "schema_reference": {"type": ["string","null"], "maxLength": 2048}}}

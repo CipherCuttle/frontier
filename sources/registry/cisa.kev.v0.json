@@ -12,7 +12,9 @@
     "accepted_content_types": ["application/json","text/json"],
     "policy_profile": "structured-public-v0",
     "authentication": "NONE",
-    "credential_ref": null
+    "credential_ref": null,
+    "fallback_urls": ["https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json"],
+    "fallback_semantics": "SAME_AUTHORITY_MIRROR"
   },
   "expected_cadence": {"freshness_class": "F2", "poll_interval_seconds": 900},
   "policy": {

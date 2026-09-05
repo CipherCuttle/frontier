@@ -2,5 +2,5 @@
   "schema_version": "source-registry-v0",
   "source_contract_paths": ["sources/registry/cisa.kev.v0.json","sources/registry/pypi.updates.v0.json"],
   "required_source_ids": ["cisa.kev","pypi.updates"],
-  "source_registry_version": "sha256:ef82b1eda707621aef63dbf77fea088faaf520a713aa47acd0e5696cf9468582"
+  "source_registry_version": "sha256:c0a7653faffbb3827f53e07c10072f31fbb29676ea7c4c35b287c95f77695290"
 }

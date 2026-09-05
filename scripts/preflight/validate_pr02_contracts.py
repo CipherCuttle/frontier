@@ -22,7 +22,8 @@ REQUEST_EXAMPLE = ROOT / "contracts/acquisition/examples/pypi_fetch_request_v0.j
 RESULT_EXAMPLE = ROOT / "contracts/acquisition/examples/pypi_fetch_success_v0.json"
 SOURCE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
-FORBIDDEN_HEADER_NAMES = {"authorization", "cookie", "proxy-authorization"}
+ALLOWED_REQUEST_HEADERS = {"Accept", "If-Modified-Since", "If-None-Match", "User-Agent"}
+ALLOWED_RESPONSE_HEADERS = {"Cache-Control", "Content-Encoding", "Content-Length", "Content-Type", "Date", "ETag", "Last-Modified", "Retry-After", "X-Cache", "X-Cache-Hits"}
 SUSPICIOUS_SECRET_KEYS = {"password", "passwd", "api_key", "apikey", "access_token", "refresh_token", "secret", "secret_key", "private_key"}
 FORBIDDEN_DB_KEYS = {"database_url", "db_url", "db_host", "dsn", "postgres_dsn"}
 EXPECTED_ENDPOINTS = {
@@ -95,6 +96,15 @@ def validate_schemas() -> None:
         require(schema.get("additionalProperties") is False, f"{path}: top-level additionalProperties must fail closed")
         required = schema.get("required")
         require(isinstance(required, list) and required, f"{path}: required list missing")
+    request_schema = load(ROOT / "contracts/acquisition/fetch_request_v0.schema.json")
+    request_header_names = request_schema["properties"]["request_headers"]["propertyNames"].get("enum")
+    require(set(request_header_names or []) == ALLOWED_REQUEST_HEADERS, "FetchRequest schema header allowlist drifted")
+    result_schema = load(ROOT / "contracts/acquisition/bounded_fetch_result_v0.schema.json")
+    response_header_names = result_schema["properties"]["response_headers"]["propertyNames"].get("enum")
+    require(set(response_header_names or []) == ALLOWED_RESPONSE_HEADERS, "BoundedFetchResult schema header allowlist drifted")
+    source_schema = load(ROOT / "contracts/source/source_contract_v0.schema.json")
+    endpoint_schema = source_schema["properties"]["endpoint"]
+    require(isinstance(endpoint_schema.get("allOf"), list) and len(endpoint_schema["allOf"]) == 2, "SourceContract auth/credential conditional missing")
 
 
 def validate_policy() -> dict[str, Any]:
@@ -129,7 +139,7 @@ def validate_source_contract(source: dict[str, Any]) -> None:
     require(endpoint.get("url") == EXPECTED_ENDPOINTS[source_id], f"{source_id}: endpoint changed unexpectedly")
     require(endpoint.get("method") == "GET", f"{source_id}: V0 only authorizes GET")
     require(endpoint.get("authentication") == "NONE", f"{source_id}: auth unexpectedly required")
-    require(endpoint.get("credential_ref") is None, f"{source_id}: zero-key core must not carry credential_ref")
+    require(endpoint.get("credential_ref") is None, f"{source_id}: authentication=NONE requires null credential_ref")
     require(endpoint.get("policy_profile") == "structured-public-v0", f"{source_id}: wrong policy profile")
     accepted = endpoint.get("accepted_content_types")
     require(isinstance(accepted, list) and accepted, f"{source_id}: accepted content types missing")
@@ -150,6 +160,8 @@ def validate_source_contract(source: dict[str, Any]) -> None:
     if source_id == "cisa.kev":
         require(source.get("transport") == "JSON_HTTP", "CISA transport must be JSON_HTTP")
         require(capability.get("finite_window") is False, "CISA KEV is a full catalog, not finite recent window")
+        require(endpoint.get("fallback_urls") == ["https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json"], "CISA same-authority fallback missing or changed")
+        require(endpoint.get("fallback_semantics") == "SAME_AUTHORITY_MIRROR", "CISA fallback must not become independent corroboration")
         require(capability.get("schema_reference") == "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities_schema.json", "CISA schema reference changed unexpectedly")
 
 
@@ -181,12 +193,15 @@ def validate_examples(policy: dict[str, Any], sources: list[dict[str, Any]]) -> 
     require(request.get("max_redirects") == policy["max_redirects"], "request redirect bound must materialize policy")
     headers = request.get("request_headers")
     require(isinstance(headers, dict), "request headers missing")
-    require(not (FORBIDDEN_HEADER_NAMES & {key.lower() for key in headers}), "secret-bearing request header present")
-    require(any(key.lower() == "user-agent" for key in headers), "PyPI request must identify FRONTIER with User-Agent")
+    require(set(headers) <= ALLOWED_REQUEST_HEADERS, "request example contains header outside V0 allowlist")
+    require("User-Agent" in headers, "PyPI request must identify FRONTIER with User-Agent")
     require(result.get("schema_version") == "bounded-fetch-result-v0", "result example schema version mismatch")
     require(result.get("request_id") == request.get("request_id"), "result/request operational correlation mismatch")
     require(result.get("outcome") == "SUCCESS", "success example must be SUCCESS")
     require(result.get("failure") is None, "success example cannot carry failure")
+    response_headers = result.get("response_headers")
+    require(isinstance(response_headers, dict), "result response_headers missing")
+    require(set(response_headers) <= ALLOWED_RESPONSE_HEADERS, "result contains header outside sanitized V0 allowlist")
     chain = result.get("redirect_chain")
     require(isinstance(chain, list) and len(chain) <= int(request["max_redirects"]), "redirect chain exceeds request bound")
     encoded = result.get("body_base64")

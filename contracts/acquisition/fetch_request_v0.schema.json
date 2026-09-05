@@ -30,6 +30,6 @@
     "deadline_ms": {"type": "integer", "minimum": 1000, "maximum": 60000},
     "max_response_bytes": {"type": "integer", "minimum": 1024, "maximum": 16777216},
     "max_redirects": {"type": "integer", "minimum": 0, "maximum": 5},
-    "request_headers": {"type": "object", "maxProperties": 16, "propertyNames": {"pattern": "^[A-Za-z0-9-]{1,64}$"}, "additionalProperties": {"type": "string", "maxLength": 2048}, "description": "Non-secret headers only. Authorization/Cookie/Proxy-Authorization are forbidden by validator."}
+    "request_headers": {"type": "object", "maxProperties": 16, "propertyNames": {"enum": ["Accept", "If-Modified-Since", "If-None-Match", "User-Agent"]}, "additionalProperties": {"type": "string", "maxLength": 2048}, "description": "V0 non-secret header allowlist only."}
   }
 }

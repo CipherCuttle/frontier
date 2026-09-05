@@ -38,11 +38,11 @@ Schema: `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerab
 
 The existing preflight authority pins the reviewed CISA schema mirror blob `3d49b7270847e6088d8e49f5087ef5562e7917c9`.
 
-The source is A_AUTHORITATIVE_STRUCTURED + PRIMARY_EMISSION + BEHAVIORAL.
+The source is A_AUTHORITATIVE_STRUCTURED + PRIMARY_EMISSION + BEHAVIORAL. CISA's own `cisagov/kev-data` mirror may be used as a same-authority fallback; it never counts as an independent corroborating root.
 
 ## Security invariants
 
-The executable preflight fails if V0 authorizes non-GET/non-HTTPS access; embeds plaintext-secret-shaped fields or database coordinates; gives a zero-key source a credential ref; enables browser acquisition for PyPI/CISA; omits private/loopback/link-local/metadata address classes; forwards Authorization cross-origin; removes bounded redirect/body/deadline/retry budgets; enables a source whose access state is not ALLOWED; changes the registry without changing its canonical digest; or ships a golden result whose body digest disagrees with its decoded bytes.
+The executable preflight fails if V0 authorizes non-GET/non-HTTPS access; embeds plaintext-secret-shaped fields or database coordinates; pairs `authentication=NONE` with a credential ref; allows request headers outside the explicit non-secret allowlist; returns response headers outside the sanitized allowlist; enables browser acquisition for PyPI/CISA; omits private/loopback/link-local/metadata address classes; forwards Authorization cross-origin; removes bounded redirect/body/deadline/retry budgets; enables a source whose access state is not ALLOWED; changes the registry without changing its canonical digest; treats a same-authority fallback as independent corroboration; or ships a golden result whose body digest disagrees with its decoded bytes.
 
 ## Bounds
 
@@ -52,7 +52,7 @@ Measured PR-02 behavior may tighten these values. Relaxing a security bound requ
 
 ## Source registry version
 
-`sha256:ef82b1eda707621aef63dbf77fea088faaf520a713aa47acd0e5696cf9468582`
+`sha256:c0a7653faffbb3827f53e07c10072f31fbb29676ea7c4c35b287c95f77695290`
 
 This is SHA-256 over `frontier-canonical-json-v1` serialization of the two source contracts sorted by `source_id`.
 
@@ -63,3 +63,14 @@ No HTTPX/live network calls, DNS resolution, sockets, RSS/XML parser runtime, KE
 ## Closure gate
 
 This preflight closes when the stdlib validator passes on Python 3.14 and one hostile review finds no Critical/High ambiguity that would allow two incompatible PR-02 fetch/source implementations to both claim compliance.
+
+## Hostile review repair
+
+The single hostile preflight review found two High contract defects and two Medium hardenings:
+
+- authentication mode and `credential_ref` were not conditionally bound in the machine schema;
+- request headers were described as non-secret but not schema-allowlisted;
+- result headers needed a sanitized allowlist across the hostile seam;
+- CISA's own synchronized `kev-data` repository should be representable as a same-authority fallback rather than forcing availability through one edge endpoint.
+
+The bounded repair encodes these invariants in schema/validation. One targeted re-review is required before closure.

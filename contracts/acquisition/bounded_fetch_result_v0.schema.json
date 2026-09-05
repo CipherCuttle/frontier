@@ -15,7 +15,7 @@
     "redirect_chain": {"type": "array", "maxItems": 5, "items": {"type": "object", "additionalProperties": false, "required": ["status","url"], "properties": {"status": {"type": "integer", "minimum": 300, "maximum": 399}, "url": {"type": "string", "format": "uri", "maxLength": 2048}}}},
     "http_status": {"type": ["integer","null"], "minimum": 100, "maximum": 599},
     "content_type": {"type": ["string","null"], "maxLength": 256},
-    "response_headers": {"type": "object", "maxProperties": 32, "propertyNames": {"pattern": "^[A-Za-z0-9-]{1,64}$"}, "additionalProperties": {"type": "string", "maxLength": 4096}},
+    "response_headers": {"type": "object", "maxProperties": 32, "propertyNames": {"enum": ["Cache-Control", "Content-Encoding", "Content-Length", "Content-Type", "Date", "ETag", "Last-Modified", "Retry-After", "X-Cache", "X-Cache-Hits"]}, "additionalProperties": {"type": "string", "maxLength": 4096}, "description": "Sanitized V0 response-header allowlist; secret/set-cookie style headers are never returned across the fetch seam."},
     "compressed_bytes": {"type": ["integer","null"], "minimum": 0, "maximum": 16777216},
     "expanded_bytes": {"type": ["integer","null"], "minimum": 0, "maximum": 16777216},
     "body_digest": {"anyOf": [{"type": "null"},{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}], "description": "Advisory until trusted side recomputes SHA-256 over decoded body bytes."},
