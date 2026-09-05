@@ -35,6 +35,26 @@ export class PublicReadHttpError extends Error {
   }
 }
 
+export class StaleSnapshotResponseError extends Error {
+  readonly requestedSnapshotId: string;
+  readonly activeSnapshotId: string | null;
+  readonly context: "episode" | "health";
+
+  constructor(
+    context: "episode" | "health",
+    requestedSnapshotId: string,
+    activeSnapshotId: string | null,
+  ) {
+    super(
+      `Discarded stale ${context} response for snapshot ${requestedSnapshotId}; active snapshot is ${activeSnapshotId ?? "UNBOUND"}.`,
+    );
+    this.name = "StaleSnapshotResponseError";
+    this.context = context;
+    this.requestedSnapshotId = requestedSnapshotId;
+    this.activeSnapshotId = activeSnapshotId;
+  }
+}
+
 export class BrowserPublicReadTransport implements FrontierPublicReadTransport {
   private readonly baseUrl: string;
 
@@ -84,6 +104,17 @@ export interface TerminalPublicReadApi {
 export function createTerminalPublicReadApi(
   transport: FrontierPublicReadTransport,
 ): TerminalPublicReadApi {
+  let activeSnapshotId: string | null = null;
+
+  const requireActiveSnapshot = (
+    context: "episode" | "health",
+    requestedSnapshotId: string,
+  ): void => {
+    if (activeSnapshotId !== requestedSnapshotId) {
+      throw new StaleSnapshotResponseError(context, requestedSnapshotId, activeSnapshotId);
+    }
+  };
+
   return {
     async view(lens, options) {
       const query = {
@@ -91,15 +122,25 @@ export function createTerminalPublicReadApi(
         offset: options.offset ?? 0,
         ...(options.snapshotId ? { snapshot_id: options.snapshotId } : {}),
       };
-      if (lens === "RADAR") return getRadar(transport, query);
-      if (lens === "NOW") return getNow(transport, query);
-      return getTrending(transport, query);
+      if (!options.snapshotId) activeSnapshotId = null;
+      const response =
+        lens === "RADAR"
+          ? await getRadar(transport, query)
+          : lens === "NOW"
+            ? await getNow(transport, query)
+            : await getTrending(transport, query);
+      activeSnapshotId = response.snapshot.snapshot_id;
+      return response;
     },
-    episode(episodeId, snapshotId) {
-      return getEpisode(transport, episodeId, { snapshot_id: snapshotId });
+    async episode(episodeId, snapshotId) {
+      const response = await getEpisode(transport, episodeId, { snapshot_id: snapshotId });
+      requireActiveSnapshot("episode", snapshotId);
+      return response;
     },
-    health(snapshotId) {
-      return getHealth(transport, { snapshot_id: snapshotId });
+    async health(snapshotId) {
+      const response = await getHealth(transport, { snapshot_id: snapshotId });
+      requireActiveSnapshot("health", snapshotId);
+      return response;
     },
   };
 }
