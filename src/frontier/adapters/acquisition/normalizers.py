@@ -205,7 +205,6 @@ def normalize_cisa_kev(
                 ),
                 "notes": _truncate_utf8(_string(entry.get("notes")), 2048),
                 "cwes": _string_list(entry.get("cwes")),
-                "catalog_version": _truncate_utf8(_string(raw.get("catalogVersion")), 128),
             },
         )
         candidates.append(
