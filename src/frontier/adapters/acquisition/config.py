@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
 from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes
 from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
+
+from .json_values import parse_typed_json
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +65,7 @@ class SourceRegistry:
 
 
 def _load_json(path: Path) -> dict[str, CanonicalValue]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = parse_typed_json(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: expected JSON object")
     return raw
