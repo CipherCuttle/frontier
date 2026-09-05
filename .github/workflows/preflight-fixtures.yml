@@ -4,14 +4,18 @@ on:
   pull_request:
     paths:
       - "fixtures/acquisition/**"
+      - "fixtures/terminal/**"
       - "docs/preflight/PR02_*"
+      - "docs/TERMINAL_V0.md"
       - "scripts/preflight/validate_*corpus.py"
       - ".github/workflows/preflight-fixtures.yml"
   push:
     branches: [main]
     paths:
       - "fixtures/acquisition/**"
+      - "fixtures/terminal/**"
       - "docs/preflight/PR02_*"
+      - "docs/TERMINAL_V0.md"
       - "scripts/preflight/validate_*corpus.py"
       - ".github/workflows/preflight-fixtures.yml"
 
@@ -30,3 +34,5 @@ jobs:
         run: python scripts/preflight/validate_acquisition_corpus.py
       - name: Validate normalization and provenance corpus
         run: python scripts/preflight/validate_normalization_provenance_corpus.py
+      - name: Validate hostile terminal corpus
+        run: python scripts/preflight/validate_terminal_corpus.py
