@@ -18,5 +18,6 @@ Current carried items:
 | D004 | DEFERRED_REQUIREMENT | specialist analytical store | only after Postgres workload evidence |
 | D005 | DEFERRED_REQUIREMENT | graph storage | only after relational projection demonstrably fails operator/algorithm need |
 | D006 | UNPROVEN_ASSUMPTION | exact trend/clustering/dedupe algorithms | P04+ experimental evidence; no pre-crowning |
+| D007 | KNOWN_COMPROMISE | GitHub `main` branch is currently unprotected; reviewed exact-head merges + CI reduce but do not eliminate accidental/direct-write risk | enable and verify branch protection/ruleset before parallel agent development becomes routine |
 
 Vague `TODO refactor later` debt is not governance.
