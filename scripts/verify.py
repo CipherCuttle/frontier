@@ -14,6 +14,7 @@ COMMANDS = [
     [sys.executable, "scripts/preflight/validate_grouping_corpus.py"],
     [sys.executable, "scripts/preflight/validate_grouping_selection.py"],
     [sys.executable, "scripts/preflight/validate_baseline_intelligence_corpus.py"],
+    [sys.executable, "scripts/preflight/validate_baseline_intelligence_runtime.py"],
     ["pytest", "-q"],
 ]
 
