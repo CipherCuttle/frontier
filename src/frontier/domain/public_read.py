@@ -217,9 +217,7 @@ def select_public_view(
     elif view is PublicViewKind.NOW:
         filtered = tuple(item for item in ordered if _episode_int(item, "mentions_1h") > 0)
     else:
-        filtered = tuple(
-            item for item in ordered if _episode_int(item, "velocity_6h_delta") > 0
-        )
+        filtered = tuple(item for item in ordered if _episode_int(item, "velocity_6h_delta") > 0)
 
     return PublicViewPage(
         snapshot=snapshot.binding,
@@ -238,9 +236,7 @@ def select_public_view(
     )
 
 
-def find_episode(
-    snapshot: ResolvedPublicSnapshot, episode_id: str
-) -> dict[str, CanonicalValue]:
+def find_episode(snapshot: ResolvedPublicSnapshot, episode_id: str) -> dict[str, CanonicalValue]:
     for episode in _ordered_episodes(snapshot.episodes):
         if episode.get("episode_id") == episode_id:
             return episode

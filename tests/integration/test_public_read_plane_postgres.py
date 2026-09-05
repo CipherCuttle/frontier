@@ -31,9 +31,7 @@ from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract,
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
-REGISTRY_VERSION = Digest(
-    "sha256:498b4afff3b5a0dcbfb448514a08a3e85adf7f8f2dd5d0863aebbcb353c361f8"
-)
+REGISTRY_VERSION = Digest("sha256:498b4afff3b5a0dcbfb448514a08a3e85adf7f8f2dd5d0863aebbcb353c361f8")
 
 
 def _hex_id(prefix: str) -> str:
@@ -201,11 +199,7 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
         assert write_error.value.sqlstate == "25006"
 
         app = create_public_read_app(PublicReadService(repository))
-        methods = {
-            method.upper()
-            for path in app.openapi()["paths"].values()
-            for method in path
-        }
+        methods = {method.upper() for path in app.openapi()["paths"].values() for method in path}
         assert methods == {"GET"}
 
         client = TestClient(app)
@@ -219,9 +213,7 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
         assert body["coverage_state"] == "DEGRADED"
         assert body["items"] == sorted(body["items"], key=lambda item: item["rank"])
 
-        drilldown = client.get(
-            f"/v0/episodes/{episode_id}", params={"snapshot_id": snapshot_id}
-        )
+        drilldown = client.get(f"/v0/episodes/{episode_id}", params={"snapshot_id": snapshot_id})
         assert drilldown.status_code == 200
         drilldown_body = drilldown.json()
         expected_ids = drilldown_body["episode"]["observation_ids"]

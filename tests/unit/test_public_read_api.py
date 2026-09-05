@@ -93,11 +93,7 @@ class _FakeRepository:
 def test_openapi_exposes_only_get_operations() -> None:
     app = create_public_read_app(PublicReadService(_FakeRepository()))
     document = app.openapi()
-    methods = {
-        method.upper()
-        for path_item in document["paths"].values()
-        for method in path_item
-    }
+    methods = {method.upper() for path_item in document["paths"].values() for method in path_item}
     assert methods == {"GET"}
     assert set(document["paths"]) == {
         "/v0/meta",
@@ -125,9 +121,7 @@ def test_view_exposes_binding_health_and_baseline_semantic_scope() -> None:
 
 
 def test_no_complete_snapshot_is_explicit_503_without_internal_detail() -> None:
-    client = TestClient(
-        create_public_read_app(PublicReadService(_FakeRepository(available=False)))
-    )
+    client = TestClient(create_public_read_app(PublicReadService(_FakeRepository(available=False))))
     response = client.get("/v0/radar")
     assert response.status_code == 503
     assert response.json() == {

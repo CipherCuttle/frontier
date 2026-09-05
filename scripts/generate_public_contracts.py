@@ -10,9 +10,7 @@ from frontier.application.public_read import PublicReadRepository, PublicReadSer
 
 ROOT = Path(__file__).resolve().parents[1]
 OPENAPI_PATH = ROOT / "contracts" / "public" / "openapi_v0.json"
-TYPESCRIPT_PATH = (
-    ROOT / "clients" / "typescript" / "src" / "generated" / "public_read_v0.ts"
-)
+TYPESCRIPT_PATH = ROOT / "clients" / "typescript" / "src" / "generated" / "public_read_v0.ts"
 
 
 class _SchemaOnlyRepository:
@@ -133,9 +131,7 @@ def typescript_text(document: dict[str, Any]) -> str:
             fields = []
             for parameter in sorted(query_parameters, key=lambda item: item["name"]):
                 optional = "" if parameter.get("required") else "?"
-                fields.append(
-                    f"{parameter['name']}{optional}: {_parameter_type(parameter)};"
-                )
+                fields.append(f"{parameter['name']}{optional}: {_parameter_type(parameter)};")
             query_shape = "{ " + " ".join(fields) + " }"
             required_args.append(f"query: {query_shape} = {{}}")
 

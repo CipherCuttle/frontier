@@ -59,9 +59,13 @@ class PublicReadService:
         observations = self._repository.list_observations(expected_ids, as_of=as_of)
         by_id = {item.observation_id: item for item in observations}
         if len(by_id) != len(observations):
-            raise SnapshotIntegrityError("public evidence repository returned duplicate observations")
+            raise SnapshotIntegrityError(
+                "public evidence repository returned duplicate observations"
+            )
         if set(by_id) != set(expected_ids):
-            raise SnapshotIntegrityError("episode evidence does not exactly match snapshot membership")
+            raise SnapshotIntegrityError(
+                "episode evidence does not exactly match snapshot membership"
+            )
         ordered = tuple(by_id[observation_id] for observation_id in expected_ids)
         return EpisodeEvidenceRead(
             snapshot=snapshot.binding,
