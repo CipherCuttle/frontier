@@ -58,7 +58,8 @@ def check_fetch_boundary() -> list[str]:
         for module in imported_modules(node):
             if module.startswith(FETCH_PROHIBITED_MODULE_PREFIXES):
                 failures.append(
-                    f"{FETCH_BOUNDARY}: fetch role crosses trusted application/storage boundary: {module}"
+                    f"{FETCH_BOUNDARY}: fetch role crosses trusted "
+                    f"application/storage boundary: {module}"
                 )
     text = FETCH_BOUNDARY.read_text(encoding="utf-8").lower()
     for forbidden in ("database_url", "postgres://", "postgresql://", "frontier_database_url"):
