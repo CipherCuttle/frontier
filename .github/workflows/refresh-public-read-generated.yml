@@ -1,0 +1,39 @@
+name: refresh-public-read-generated
+
+on:
+  push:
+    branches: [agent/public-read-plane-v0]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+      - name: Refresh lock
+        run: uv lock
+      - name: Sync environment
+        run: uv sync --all-extras --frozen
+      - name: Generate transport contracts
+        run: uv run python scripts/generate_public_contracts.py
+      - name: Commit generated artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock contracts/public/openapi_v0.json clients/typescript/src/generated/public_read_v0.ts
+          if git diff --cached --quiet; then
+            echo "Generated artifacts already current."
+            exit 0
+          fi
+          git commit -m "build(read-plane): refresh lock and generated contracts"
+          git push origin HEAD:agent/public-read-plane-v0
