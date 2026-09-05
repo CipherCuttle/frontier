@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import os
 import statistics
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from time import perf_counter_ns
-from typing import Any, cast
+from typing import Any, Protocol, cast
 from uuid import uuid4
 
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Client
+from httpx import Response
+from psycopg.types.json import Jsonb
 
 from frontier.adapters.acquisition.normalizers import normalize_hn_frontpage
 from frontier.adapters.api.public_read import create_public_read_app
@@ -22,7 +24,7 @@ from frontier.adapters.postgres.public_read import PostgresPublicReadRepository
 from frontier.application.intelligence import run_baseline_intelligence
 from frontier.application.public_read import PublicReadService
 from frontier.domain.canonical_json import CanonicalValue
-from frontier.domain.collection import CollectionReason, CollectionRun
+from frontier.domain.collection import CollectionReason, CollectionRun, CollectionRunStatus
 from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
 from frontier.domain.public_read import SnapshotIntegrityError, SnapshotNotFoundError
@@ -31,6 +33,15 @@ from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract,
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
 REGISTRY_VERSION = Digest("sha256:498b4afff3b5a0dcbfb448514a08a3e85adf7f8f2dd5d0863aebbcb353c361f8")
+
+
+class _GetClient(Protocol):
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+    ) -> Response: ...
 
 
 def _hex_id(prefix: str) -> str:
@@ -95,6 +106,15 @@ def _seed_complete_baseline() -> tuple[str, str, str]:
             item
             for item in result.snapshot.episodes
             if first_observation.observation_id in item.observation_ids
+        )
+        evidence.complete_collection_run(
+            first_run.run_id,
+            status=CollectionRunStatus.SUCCEEDED,
+            records_received=1,
+            records_accepted=1,
+            records_rejected=0,
+            duplicates=0,
+            failure_code=None,
         )
 
         second_run = CollectionRun(
@@ -183,7 +203,7 @@ def _insert_nonpublishable_snapshots() -> tuple[str, str]:
                     as_of,
                     digest,
                     receipt_id,
-                    psycopg.types.json.Jsonb(payload),
+                    Jsonb(payload),
                 ),
             )
     return failed_snapshot, corrupt_snapshot
@@ -201,12 +221,12 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
         assert write_error.value.sqlstate == "25006"
 
         app = create_public_read_app(PublicReadService(repository))
-        document = cast(dict[str, Any], app.openapi())
+        document = app.openapi()
         paths = cast(dict[str, dict[str, Any]], document["paths"])
         methods = {method.upper() for path in paths.values() for method in path}
         assert methods == {"GET"}
 
-        client: Client = TestClient(app)
+        client = cast(_GetClient, TestClient(app))
         radar = client.get("/v0/radar", params={"snapshot_id": snapshot_id})
         assert radar.status_code == 200
         body = cast(dict[str, Any], radar.json())
@@ -226,6 +246,8 @@ def test_public_read_plane_is_pit_safe_read_only_and_auditable() -> None:
         expected_ids = cast(list[str], episode_body["observation_ids"])
         observations = cast(list[dict[str, Any]], drilldown_body["observations"])
         assert [cast(str, item["observation_id"]) for item in observations] == expected_ids
+        occurrences = cast(list[dict[str, Any]], observations[0]["collection_occurrences"])
+        assert occurrences[0]["completed_at"] is None
 
         future = client.get(
             f"/v0/observations/{future_observation_id}",
