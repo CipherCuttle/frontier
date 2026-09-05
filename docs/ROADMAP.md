@@ -2,9 +2,9 @@
 
 Status: CURRENT_IMPLEMENTATION_STATE_V0
 
-Snapshot parent: `main@458e0c5e2284eb221c6d92785082ce1c6359c1a0`.
+Snapshot parent: `main@1783c6b10ef92caab72c6e340f0e6bd8562a0ac5`.
 
-Promotion rule for this file: merge of the roadmap promotion following PR #10 records `BASELINE_INTELLIGENCE_V0` as CLOSED and makes `PUBLIC_READ_PLANE_V0` the next product phase. The exact merged tree `main@458e0c5e2284eb221c6d92785082ce1c6359c1a0` is the parent authority for that transition.
+Promotion rule for this file: merge of the roadmap promotion following PR #12 records `PUBLIC_READ_PLANE_V0` as CLOSED and makes `TERMINAL_V0` the next product phase. The exact merged tree `main@1783c6b10ef92caab72c6e340f0e6bd8562a0ac5` is the parent authority for that transition.
 
 This file records implementation state and next-phase priority. It does not override the Constitution or accepted ADRs. If this roadmap conflicts with higher authority, implementation fails closed until governance is repaired.
 
@@ -23,8 +23,9 @@ Do not infer implementation phase from GitHub pull-request number. Preflight and
 | Source diversity V0 | #7 | CLOSED | HN ATTENTION, GDELT DISCOVERY, Hugging Face PRIMARY_EMISSION; five-source registry |
 | Grouping baseline V0 | #8 | CLOSED | frozen 22-case grouping authority, guarded-hybrid-v0, explicit ambiguity, PIT-safe receipts, pairwise-safe episode groups |
 | Baseline intelligence V0 | #10 | CLOSED | frozen naive episode-activity baseline, PIT-safe windows, explicit health/coverage, deterministic ranking, retained COMPLETE snapshots + receipts |
+| Public read plane V0 | #12 | CLOSED | read-only FastAPI over retained COMPLETE baseline snapshots, auditable RADAR/NOW/TRENDING views, PIT-safe evidence drill-down, deterministic OpenAPI/TypeScript contract |
 
-## Current system capability after PR #10 promotion
+## Current system capability after PR #12 promotion
 
 FRONTIER can:
 - acquire five zero-paid / no-mandatory-key live source lanes;
@@ -45,18 +46,24 @@ FRONTIER can:
 - retain explicit aggregate transport/freshness/coverage/schema state without converting missing coverage into zero activity;
 - keep evidence-root diversity and confirmation unavailable rather than fabricating independence;
 - publish deterministic COMPLETE baseline snapshots and projection receipts atomically and append-only;
-- retain prospective baseline snapshots for future advanced-model comparison.
+- retain prospective baseline snapshots for future advanced-model comparison;
+- serve a GET-only public FastAPI read plane over retained COMPLETE baseline snapshots;
+- expose stable baseline-derived RADAR, NOW and TRENDING views without transport-layer reranking;
+- bind public intelligence responses to snapshot, receipt, version and `as_of` identity;
+- reject receipt-schema, deterministic receipt-ID and payload-digest drift at the public trust boundary;
+- expose episode and observation evidence drill-down with point-in-time-safe collection and relation metadata;
+- surface aggregate and per-source health without converting degraded/missing coverage into optimistic certainty;
+- generate deterministic OpenAPI and TypeScript client artifacts from the public contract.
 
 FRONTIER still cannot:
 - infer cross-source factual-root independence or true syndication ancestry;
-- serve a public read API;
-- expose stable API-ready RADAR/NOW/TRENDING read models;
 - render the operator terminal;
-- authorize advanced ranking beyond the frozen naive comparator.
+- authorize advanced ranking beyond the frozen naive comparator;
+- infer richer entity identity, factual confirmation or provenance-root ancestry.
 
 ## Immediate repository-control gap
 
-GitHub still reports `main` unprotected after PR #10. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
+GitHub still reports `main` unprotected after PR #12. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
 
 ## Priority sequence
 
@@ -138,34 +145,50 @@ Closure evidence:
 
 No advanced/learned ranking, provenance-root inference, entity resolution, API or frontend was introduced.
 
-### 4. PUBLIC_READ_PLANE_V0 — NEXT PRODUCT PHASE
+### 4. PUBLIC_READ_PLANE_V0 — CLOSED
 
 Goal: expose derived intelligence read models without allowing the public API to mutate canonical intelligence state.
 
-Planned stack:
-- FastAPI transport only;
-- generated OpenAPI TypeScript client contract;
-- read-only materialized/read-model access to source/system health and baseline intelligence;
-- API-ready RADAR/NOW/TRENDING substrate derived from the frozen baseline without inventing new ranking authority;
-- evidence/provenance drill-down endpoints;
-- explicit snapshot/receipt/version/as-of fields so public responses remain auditable;
-- p95 read target evaluated against P03 candidate requirements.
+Delivered:
+- FastAPI GET-only public transport over retained COMPLETE `baseline-intelligence-v0` snapshots;
+- deterministic OpenAPI and generated TypeScript client contract;
+- RADAR = all baseline episodes, NOW = `mentions_1h > 0`, TRENDING = `velocity_6h_delta > 0`, always preserving frozen baseline rank;
+- snapshot/receipt/version/`as_of` identity on every intelligence response;
+- strict public PostgreSQL read-only session enforcement;
+- exact episode-membership drill-down and historical observation filtering;
+- point-in-time-safe collection occurrence and relation metadata, including masking collection completion learned after the selected horizon;
+- explicit aggregate and per-source health visibility;
+- fail-closed COMPLETE snapshot, receipt, version and canonical payload integrity checks;
+- deterministic receipt schema and receipt-ID reconstruction at the public trust boundary;
+- healthy local/CI p95 read target below the P03 `<250ms` candidate bound.
 
-Required invariants:
-- public API has no canonical evidence/projection mutation authority;
-- only COMPLETE retained snapshots are publishable;
-- responses remain bound to snapshot/receipt/version/`as_of` identity;
-- missing/degraded coverage remains visible;
-- API labels must not promote source diversity into independent confirmation;
-- no hidden ranking changes in transport/read-model code.
+Closure evidence:
+- exact final repaired/re-reviewed head `4af2ba90310e6a66ff559be62c2ad501385dde96`;
+- one hostile closure review found H-001 HIGH: receipt schema and deterministic receipt identity were not fully verified;
+- one bounded H-001 repair added frozen receipt-schema enforcement, deterministic receipt-ID reconstruction and corruption coverage;
+- one targeted re-review PASS with Critical 0 / High 0;
+- exact-head `verify`, `preflight-fixtures` and `preflight-contracts` PASS;
+- squash merge `main@1783c6b10ef92caab72c6e340f0e6bd8562a0ac5`;
+- post-merge push-triggered `verify`, `preflight-fixtures` and `preflight-contracts` PASS.
 
-### 5. TERMINAL_V0
+No advanced/learned ranking, provenance-root inference, entity resolution, factual confirmation authority or canonical mutation path was introduced.
+
+### 5. TERMINAL_V0 — NEXT PRODUCT PHASE
 
 Goal: implement the first dense operator terminal against real read models.
 
 Primary operator tasks remain those in P02: what changed, what strange thing is moving, why, where it originated, whether evidence is independent, what is missing, and how the state evolved.
 
 Planned presentation stack remains TypeScript strict + React 19 + Vite with keyboard-first interaction and explicit provenance/uncertainty/source-health display.
+
+Required invariants:
+- the terminal is a disposable read client, never an intelligence authority;
+- all displayed intelligence remains traceable to the public read response snapshot/receipt/version/`as_of` binding;
+- UI filtering, sorting and emphasis must not silently create a new authoritative rank;
+- confirmation/provenance-root/entity claims unavailable from the read plane remain unavailable in the terminal;
+- missing/degraded source health and coverage stay visible rather than being cosmetically normalized away;
+- evidence drill-down preserves public-read membership and point-in-time semantics;
+- keyboard-first dense workflows must not hide auditability behind hover-only or decorative interactions.
 
 ### 6. ADVANCED_INTELLIGENCE_EXPERIMENTS
 
