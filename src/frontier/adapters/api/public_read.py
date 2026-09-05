@@ -252,7 +252,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
     )
 
     @app.exception_handler(PublicReadFailure)
-    async def public_read_failure_handler(
+    async def _public_read_failure_handler(
         _request: Request, exc: PublicReadFailure
     ) -> JSONResponse:
         return JSONResponse(
@@ -261,7 +261,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         )
 
     @app.get("/v0/meta", response_model=MetaResponse, operation_id="getPublicReadMeta")
-    def meta() -> MetaResponse:
+    def _meta() -> MetaResponse:
         return MetaResponse(
             api_version=PUBLIC_READ_API_VERSION,
             response_schema_family=PUBLIC_READ_RESPONSE_SCHEMA,
@@ -285,7 +285,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         return _view_response(page)
 
     @app.get("/v0/radar", response_model=ViewResponse, operation_id="getRadar")
-    def radar(
+    def _radar(
         snapshot_id: SnapshotQuery = None,
         limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,
         offset: OffsetQuery = 0,
@@ -293,7 +293,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         return view_endpoint(PublicViewKind.RADAR, snapshot_id, limit, offset)
 
     @app.get("/v0/now", response_model=ViewResponse, operation_id="getNow")
-    def now(
+    def _now(
         snapshot_id: SnapshotQuery = None,
         limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,
         offset: OffsetQuery = 0,
@@ -301,7 +301,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         return view_endpoint(PublicViewKind.NOW, snapshot_id, limit, offset)
 
     @app.get("/v0/trending", response_model=ViewResponse, operation_id="getTrending")
-    def trending(
+    def _trending(
         snapshot_id: SnapshotQuery = None,
         limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,
         offset: OffsetQuery = 0,
@@ -313,7 +313,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         response_model=EpisodeEvidenceResponse,
         operation_id="getEpisode",
     )
-    def episode(episode_id: str, snapshot_id: SnapshotQuery = None) -> EpisodeEvidenceResponse:
+    def _episode(episode_id: str, snapshot_id: SnapshotQuery = None) -> EpisodeEvidenceResponse:
         value = service.get_episode(episode_id, snapshot_id=snapshot_id)
         return EpisodeEvidenceResponse.model_validate(asdict(value))
 
@@ -322,7 +322,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         response_model=ObservationResponse,
         operation_id="getObservation",
     )
-    def observation(
+    def _observation(
         observation_id: str,
         snapshot_id: SnapshotQuery = None,
     ) -> ObservationResponse:
@@ -330,7 +330,7 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         return ObservationResponse.model_validate(asdict(value))
 
     @app.get("/v0/health", response_model=HealthResponse, operation_id="getHealth")
-    def health(snapshot_id: SnapshotQuery = None) -> HealthResponse:
+    def _health(snapshot_id: SnapshotQuery = None) -> HealthResponse:
         value = service.get_health(snapshot_id=snapshot_id)
         return HealthResponse.model_validate(asdict(value))
 
