@@ -35,6 +35,12 @@ from frontier.domain.evaluation import (
     EVALUATION_SCHEMA_VERSION,
     EvaluationReceipt,
 )
+from frontier.domain.features import (
+    ADVANCED_FEATURES_CONFIGURATION_DIGEST,
+    FEATURE_ALGORITHM_VERSION,
+    FEATURE_SCHEMA_VERSION,
+    FeatureVectorBatch,
+)
 from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 
 
@@ -529,3 +535,109 @@ class PostgresEvaluationRepository:
         if row is None:
             return None
         return cast(dict[str, object], row[0])
+
+
+class PostgresFeatureVectorRepository:
+    """Append-only persistence for EXPERIMENTAL advanced feature vectors (R8)."""
+
+    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
+        self._connection = connection
+
+    def publish_batch(self, batch: FeatureVectorBatch) -> None:
+        if batch.schema_version != FEATURE_SCHEMA_VERSION:
+            raise ValueError("feature batch schema version mismatch")
+        if batch.algorithm_version != FEATURE_ALGORITHM_VERSION:
+            raise ValueError("feature batch algorithm version mismatch")
+        if batch.configuration_digest != ADVANCED_FEATURES_CONFIGURATION_DIGEST:
+            raise ValueError("feature batch configuration digest mismatch")
+        if batch.batch_digest != sha256_digest(canonical_json_bytes(batch.to_canonical())):
+            raise ValueError("feature batch digest does not bind its canonical payload")
+        if batch.status.value == "RAN" and not batch.vectors:
+            raise ValueError("RAN feature batch requires at least one episode vector")
+
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            for vector in batch.vectors:
+                if vector.vector_digest != sha256_digest(
+                    canonical_json_bytes(vector.to_canonical())
+                ):
+                    raise ValueError("feature vector digest does not bind its payload")
+                cur.execute(
+                    """
+                    INSERT INTO feature_vectors (
+                        feature_vector_id, batch_id, batch_digest, episode_id,
+                        control_snapshot_id, control_receipt_id,
+                        episode_universe_digest, as_of, generated_at,
+                        feature_schema_version, algorithm_version,
+                        configuration_digest, authority_state, status,
+                        vector_digest, vector_json
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (feature_vector_id) DO NOTHING
+                    RETURNING feature_vector_id
+                    """,
+                    (
+                        vector.vector_id,
+                        batch.batch_id,
+                        str(batch.batch_digest),
+                        vector.episode_id,
+                        batch.control_snapshot_id,
+                        batch.control_receipt_id,
+                        str(batch.episode_universe_digest),
+                        batch.as_of,
+                        batch.generated_at,
+                        vector.schema_version,
+                        vector.algorithm_version,
+                        str(vector.configuration_digest),
+                        vector.authority_state,
+                        batch.status.value,
+                        str(vector.vector_digest),
+                        Jsonb(vector.to_canonical()),
+                    ),
+                )
+                inserted = cur.fetchone()
+                if inserted is None:
+                    cur.execute(
+                        "SELECT vector_digest, status FROM feature_vectors "
+                        "WHERE feature_vector_id = %s",
+                        (vector.vector_id,),
+                    )
+                    existing = cur.fetchone()
+                    if existing is None:
+                        raise RuntimeError("feature vector conflict without existing row")
+                    if (
+                        cast(str, existing[0]) != str(vector.vector_digest)
+                        or cast(str, existing[1]) != batch.status.value
+                    ):
+                        raise RuntimeError("feature vector conflict with different digest")
+
+    def latest_vector_id(self) -> str | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT feature_vector_id
+                FROM feature_vectors
+                ORDER BY as_of DESC, feature_vector_id DESC
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+        return None if row is None else cast(str, row[0])
+
+    def get_vector_json(self, feature_vector_id: str) -> dict[str, object] | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                "SELECT vector_json FROM feature_vectors WHERE feature_vector_id = %s",
+                (feature_vector_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return cast(dict[str, object], row[0])
+
+    def count_for_batch(self, batch_id: str) -> int:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM feature_vectors WHERE batch_id = %s",
+                (batch_id,),
+            )
+            row = cur.fetchone()
+        return int(cast(int, row[0])) if row is not None else 0
