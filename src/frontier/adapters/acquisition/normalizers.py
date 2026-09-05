@@ -750,4 +750,6 @@ def normalize_source(
         return normalize_arxiv_cs_ai(body, retrieved_at=retrieved_at, fetch_digest=fetch_digest)
     if source_id == "github.ml-repos":
         return normalize_github_ml_repos(body, retrieved_at=retrieved_at, fetch_digest=fetch_digest)
-    raise NormalizationError("SOURCE_NORMALIZER_MISSING", f"no normalizer for {source_id}")
+    raise NormalizationError(
+        "SOURCE_NORMALIZER_MISSING", f"no normalizer for {source_id}"
+    )
