@@ -140,7 +140,9 @@ def reset_fetch_state(conn: object, source_id: str) -> None:
     conn.commit()  # type: ignore[attr-defined]
 
 
-def service_for(store: PostgresEvidenceStore, fetcher: object, clock: datetime) -> AcquisitionService:
+def service_for(
+    store: PostgresEvidenceStore, fetcher: object, clock: datetime
+) -> AcquisitionService:
     policy = load_fetch_policy(ROOT)
     registry = load_source_registry(ROOT)
     return AcquisitionService(
@@ -245,9 +247,7 @@ def test_cisa_same_authority_mirror_is_fallback_not_second_source() -> None:
         reset_fetch_state(conn, "cisa.kev")
         store = PostgresEvidenceStore(conn)
         result = asyncio.run(
-            service_for(store, fetcher, datetime(2026, 9, 5, 3, 1, tzinfo=UTC)).acquire(
-                "cisa.kev"
-            )
+            service_for(store, fetcher, datetime(2026, 9, 5, 3, 1, tzinfo=UTC)).acquire("cisa.kev")
         )
         assert result.status is CollectionRunStatus.SUCCESS
         assert result.inserted == 1
