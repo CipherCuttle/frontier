@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Annotated, Any
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from frontier.application.public_read import PublicReadService
 from frontier.domain.public_read import (
@@ -18,6 +18,7 @@ from frontier.domain.public_read import (
     PUBLIC_READ_RESPONSE_SCHEMA,
     PublicReadFailure,
     PublicViewKind,
+    PublicViewPage,
     SnapshotIntegrityError,
     SnapshotNotFoundError,
 )
@@ -213,7 +214,7 @@ def _failure_detail(exc: PublicReadFailure) -> str:
     return "The public read request failed."
 
 
-def _view_response(page: Any) -> ViewResponse:
+def _view_response(page: PublicViewPage) -> ViewResponse:
     return ViewResponse.model_validate(
         {
             "snapshot": asdict(page.snapshot),
@@ -239,7 +240,9 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
     )
 
     @app.exception_handler(PublicReadFailure)
-    async def public_read_failure_handler(_request: Any, exc: PublicReadFailure) -> JSONResponse:
+    async def public_read_failure_handler(
+        _request: Request, exc: PublicReadFailure
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=_failure_status(exc),
             content={"error": exc.code, "detail": _failure_detail(exc)},
@@ -269,12 +272,9 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         )
         return _view_response(page)
 
-    SnapshotQuery = Annotated[str | None, Query(default=None)]
-    LimitQuery = Annotated[
-        int,
-        Query(default=PUBLIC_READ_DEFAULT_LIMIT, ge=1, le=PUBLIC_READ_MAX_LIMIT),
-    ]
-    OffsetQuery = Annotated[int, Query(default=0, ge=0)]
+    SnapshotQuery = Annotated[str | None, Query()]
+    LimitQuery = Annotated[int, Query(ge=1, le=PUBLIC_READ_MAX_LIMIT)]
+    OffsetQuery = Annotated[int, Query(ge=0)]
 
     @app.get("/v0/radar", response_model=ViewResponse, operation_id="getRadar")
     def radar(
