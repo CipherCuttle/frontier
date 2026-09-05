@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -16,6 +17,7 @@ from .digests import Digest, sha256_digest, sha256_hex
 
 OBSERVATION_SCHEMA_VERSION = "observation-v1"
 CANONICALIZATION_VERSION = "frontier-canonical-json-v1"
+_SOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 
 
 class ObservationKind(StrEnum):
@@ -40,6 +42,11 @@ def _bounded_text(value: str | None, *, name: str, maximum: int) -> None:
 def _bounded_metadata(value: dict[str, CanonicalValue]) -> None:
     if len(canonical_json_bytes(value)) > 32768:
         raise ValueError("source_metadata exceeds 32768 canonical bytes")
+
+
+def _require_aware(value: datetime | None, *, name: str) -> None:
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        raise ValueError(f"{name} must be timezone-aware")
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +118,7 @@ class MetricPayload:
         _bounded_text(self.metric_name, name="metric_name", maximum=256)
         _bounded_text(self.value, name="value", maximum=256)
         _bounded_text(self.unit, name="unit", maximum=128)
+        _require_aware(self.measurement_at, name="measurement_at")
         _bounded_metadata(self.dimensions)
         _bounded_metadata(self.source_metadata)
 
@@ -159,10 +167,20 @@ class ObservationCandidate:
     canonicalization_version: str = CANONICALIZATION_VERSION
 
     def __post_init__(self) -> None:
+        if not _SOURCE_ID_RE.fullmatch(self.source_id):
+            raise ValueError("invalid source_id")
         if not self.source_item_key or len(self.source_item_key.encode("utf-8")) > 4096:
             raise ValueError("source_item_key must be 1..4096 bytes")
-        if self.retrieved_at.tzinfo is None or self.retrieved_at.utcoffset() is None:
-            raise ValueError("retrieved_at must be timezone-aware")
+        _require_aware(self.retrieved_at, name="retrieved_at")
+        _require_aware(self.source_published_at, name="source_published_at")
+        _require_aware(self.effective_at, name="effective_at")
+        expected_payload = {
+            ObservationKind.DOCUMENT: DocumentPayload,
+            ObservationKind.ARTIFACT: ArtifactPayload,
+            ObservationKind.METRIC: MetricPayload,
+        }[self.kind]
+        if not isinstance(self.payload, expected_payload):
+            raise ValueError(f"{self.kind.value} observation requires {expected_payload.__name__}")
 
     def identity_material(self) -> dict[str, CanonicalValue]:
         return {
@@ -201,8 +219,7 @@ class Observation:
     observed_at: datetime
 
     def __post_init__(self) -> None:
-        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
-            raise ValueError("observed_at must be timezone-aware")
+        _require_aware(self.observed_at, name="observed_at")
 
     @property
     def observation_id(self) -> str:
