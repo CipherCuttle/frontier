@@ -8,6 +8,9 @@ COMMANDS = [
     ["ruff", "check", "--exclude", "scripts/preflight", "."],
     ["pyright"],
     [sys.executable, "scripts/check_architecture_boundaries.py"],
+    [sys.executable, "scripts/preflight/validate_pr02_contracts.py"],
+    [sys.executable, "scripts/preflight/validate_acquisition_corpus.py"],
+    [sys.executable, "scripts/preflight/validate_normalization_provenance_corpus.py"],
     ["pytest", "-q"],
 ]
 
