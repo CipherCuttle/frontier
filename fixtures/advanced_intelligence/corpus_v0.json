@@ -10,8 +10,16 @@
   },
   "promotion_contract": {
     "shadow_authority_state": "EXPERIMENTAL_SHADOW",
+    "qualifying_domain_ids": [
+      "AI_MODELS",
+      "SECURITY_VULNERABILITIES",
+      "SOFTWARE_PACKAGES"
+    ],
     "minimum_qualifying_domains": 2,
+    "point_precision_floor": "candidate_gte_control_each_qualifying_domain",
+    "lead_time_floor": "median_positive_each_qualifying_domain_and_pooled",
     "requires_preregistration_before_confirmatory_window": true,
+    "requires_hostile_preregistration_review": true,
     "historical_development_counts_as_confirmatory": false,
     "public_promotion_requires_separate_authority_change": true
   },
@@ -31,7 +39,7 @@
     {
       "id": "A003",
       "category": "retrospective-tuning",
-      "requirement": "Confirmatory evidence starts only after immutable candidate preregistration.",
+      "requirement": "Confirmatory evidence starts only after immutable candidate preregistration and its bounded hostile review.",
       "forbidden": "historical outcomes used to tune a candidate are then counted as confirmatory evidence"
     },
     {
@@ -61,8 +69,8 @@
     {
       "id": "A008",
       "category": "domain-cherry-picking",
-      "requirement": "Qualifying domains are frozen before confirmatory outcomes and at least two must pass.",
-      "forbidden": "failed domains are dropped or successful domains are invented after results are visible"
+      "requirement": "Promotion uses at least two frozen V0 strata from AI_MODELS, SECURITY_VULNERABILITIES, and SOFTWARE_PACKAGES.",
+      "forbidden": "failed domains are dropped or arbitrary domain IDs are invented after results are visible"
     },
     {
       "id": "A009",
@@ -79,8 +87,8 @@
     {
       "id": "A011",
       "category": "operating-point-mismatch",
-      "requirement": "Lead-time and precision comparison uses preregistered matched operating points.",
-      "forbidden": "candidate gains lead time by using an unbounded noisier alert surface than the control"
+      "requirement": "At matched preregistered operating points candidate point precision is at least control precision in every qualifying promotion domain.",
+      "forbidden": "candidate gains lead time by using a noisier surface or a weaker post-hoc precision definition"
     },
     {
       "id": "A012",
@@ -109,8 +117,8 @@
     {
       "id": "A016",
       "category": "posthoc-threshold-selection",
-      "requirement": "Candidate/control operating points and statistical comparison rules are frozen before the confirmatory window.",
-      "forbidden": "threshold is selected after inspecting confirmatory precision or lead-time curves"
+      "requirement": "The candidate must satisfy the global precision and positive-median lead-time floors in addition to stricter preregistered rules.",
+      "forbidden": "threshold or comparison rule is weakened after inspecting confirmatory outcomes"
     },
     {
       "id": "A017",
@@ -121,8 +129,8 @@
     {
       "id": "A018",
       "category": "nonindependent-domains",
-      "requirement": "Multiple-domain qualification uses distinct preregistered domain IDs with non-overlapping outcome-label populations.",
-      "forbidden": "the same event population is relabeled as multiple domains to satisfy the gate"
+      "requirement": "V0 domain qualification is assigned by frozen primary-emission authority mapping; ATTENTION and DISCOVERY feeds do not manufacture domain count.",
+      "forbidden": "the same event population or cross-cutting feed is relabeled as multiple domains to satisfy the gate"
     },
     {
       "id": "A019",
