@@ -251,9 +251,9 @@ def create_public_read_app(service: PublicReadService) -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    async def public_read_failure_handler(
-        _request: Request, exc: PublicReadFailure
-    ) -> JSONResponse:
+    async def public_read_failure_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, PublicReadFailure):
+            raise exc
         return JSONResponse(
             status_code=_failure_status(exc),
             content={"error": exc.code, "detail": _failure_detail(exc)},
