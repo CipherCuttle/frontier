@@ -130,10 +130,13 @@ def test_postgres_baseline_retains_complete_snapshot_and_rolls_back_conflict() -
             )
             assert cur.fetchone() == (0,)
 
-        with pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState):
-            with conn.transaction(), conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE baseline_intelligence_snapshots SET as_of = as_of "
-                    "WHERE snapshot_id = %s",
-                    (result.snapshot.snapshot_id,),
-                )
+        with (
+            pytest.raises(psycopg.errors.ObjectNotInPrerequisiteState),
+            conn.transaction(),
+            conn.cursor() as cur,
+        ):
+            cur.execute(
+                "UPDATE baseline_intelligence_snapshots SET as_of = as_of "
+                "WHERE snapshot_id = %s",
+                (result.snapshot.snapshot_id,),
+            )
