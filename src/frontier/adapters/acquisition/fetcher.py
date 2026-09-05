@@ -69,6 +69,9 @@ class Exchange(Protocol):
 
 
 class Decompressor(Protocol):
+    @property
+    def eof(self) -> bool: ...
+
     def decompress(self, data: bytes) -> bytes: ...
     def flush(self) -> bytes: ...
 
@@ -437,11 +440,34 @@ class SecureHttpFetcher:
         started: float,
     ) -> BoundedFetchResult:
         declared = headers.get("Content-Length")
+        declared_bytes: int | None = None
         if declared is not None:
             try:
                 declared_bytes = int(declared)
             except ValueError:
-                declared_bytes = -1
+                return self._failure(
+                    request,
+                    current_url,
+                    redirects,
+                    FetchOutcome.REJECTED,
+                    "BODY_REJECTED",
+                    "Content-Length is not a valid non-negative integer",
+                    False,
+                    http_status=response.status,
+                    response_headers=headers,
+                )
+            if declared_bytes < 0:
+                return self._failure(
+                    request,
+                    current_url,
+                    redirects,
+                    FetchOutcome.REJECTED,
+                    "BODY_REJECTED",
+                    "Content-Length is not a valid non-negative integer",
+                    False,
+                    http_status=response.status,
+                    response_headers=headers,
+                )
             if declared_bytes > request.max_response_bytes:
                 return self._failure(
                     request,
@@ -482,6 +508,8 @@ class SecureHttpFetcher:
                     raise ValueError("expanded response exceeds max_expanded_bytes")
                 if output:
                     chunks.append(output)
+            if declared_bytes is not None and compressed != declared_bytes:
+                raise ValueError("wire response length does not match Content-Length")
             if decoder is not None:
                 tail = decoder.flush()
                 expanded += len(tail)
@@ -489,6 +517,8 @@ class SecureHttpFetcher:
                     raise ValueError("expanded response exceeds max_expanded_bytes")
                 if tail:
                     chunks.append(tail)
+                if not decoder.eof:
+                    raise ValueError("compressed response did not terminate cleanly")
         except (OSError, TimeoutError) as exc:
             return self._failure(
                 request,
