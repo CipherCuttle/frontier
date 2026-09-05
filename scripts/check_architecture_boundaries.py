@@ -109,11 +109,14 @@ def check_public_read_boundary() -> list[str]:
         filename=str(PUBLIC_POSTGRES),
     )
     for node in ast.walk(tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if PUBLIC_POSTGRES_MUTATION_SQL.search(node.value):
-                failures.append(
-                    f"{PUBLIC_POSTGRES}: public read SQL contains mutation verb in string literal"
-                )
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and PUBLIC_POSTGRES_MUTATION_SQL.search(node.value)
+        ):
+            failures.append(
+                f"{PUBLIC_POSTGRES}: public read SQL contains mutation verb in string literal"
+            )
     return failures
 
 
