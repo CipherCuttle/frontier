@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from fastapi.testclient import TestClient
-from httpx import Client
+from httpx import Response
 
 from frontier.adapters.api.public_read import create_public_read_app
 from frontier.application.public_read import PublicReadService
@@ -16,6 +17,15 @@ from frontier.domain.public_read import (
     SnapshotBinding,
     SourceHealthRead,
 )
+
+
+class _GetClient(Protocol):
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str] | None = None,
+    ) -> Response: ...
 
 
 def _snapshot() -> ResolvedPublicSnapshot:
@@ -98,7 +108,7 @@ class _FakeRepository:
 
 def test_openapi_exposes_only_get_operations() -> None:
     app = create_public_read_app(PublicReadService(_FakeRepository()))
-    document = cast(dict[str, Any], app.openapi())
+    document = app.openapi()
     paths = cast(dict[str, dict[str, Any]], document["paths"])
     methods = {method.upper() for path_item in paths.values() for method in path_item}
     assert methods == {"GET"}
@@ -114,7 +124,10 @@ def test_openapi_exposes_only_get_operations() -> None:
 
 
 def test_view_exposes_binding_health_and_baseline_semantic_scope() -> None:
-    client: Client = TestClient(create_public_read_app(PublicReadService(_FakeRepository())))
+    client = cast(
+        _GetClient,
+        TestClient(create_public_read_app(PublicReadService(_FakeRepository()))),
+    )
     response = client.get("/v0/now")
     assert response.status_code == 200
     body = cast(dict[str, Any], response.json())
@@ -130,12 +143,15 @@ def test_view_exposes_binding_health_and_baseline_semantic_scope() -> None:
 
 
 def test_no_complete_snapshot_is_explicit_503_without_internal_detail() -> None:
-    client: Client = TestClient(
-        create_public_read_app(PublicReadService(_FakeRepository(available=False)))
+    client = cast(
+        _GetClient,
+        TestClient(
+            create_public_read_app(PublicReadService(_FakeRepository(available=False)))
+        ),
     )
     response = client.get("/v0/radar")
     assert response.status_code == 503
-    assert response.json() == {
+    assert cast(dict[str, Any], response.json()) == {
         "error": "NO_COMPLETE_SNAPSHOT",
         "detail": "No publishable COMPLETE baseline snapshot is available.",
     }
