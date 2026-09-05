@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,7 +12,7 @@ from frontier.adapters.acquisition.config import load_fetch_policy, load_source_
 from frontier.adapters.acquisition.fetcher import SecureHttpFetcher
 from frontier.adapters.fixture.normalizer import load_fixture_candidate
 from frontier.application.acquisition import AcquisitionService
-from frontier.application.worker import AcquisitionWorker
+from frontier.application.worker import AcquisitionWorker, PollCycleResult
 from frontier.domain.canonical_json import canonical_json_text
 from frontier.domain.collection import CollectionReason, CollectionRun, CollectionRunStatus
 from frontier.domain.observation import Observation
@@ -97,6 +98,41 @@ def acquire_source(source_id: str, database_url: str, config_root: Path) -> int:
     return 0 if result.status in (CollectionRunStatus.SUCCESS, CollectionRunStatus.PARTIAL) else 2
 
 
+def _timestamp(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _cycle_payload(cycle: PollCycleResult) -> dict[str, object]:
+    return {
+        "acquired": [
+            {
+                "failure_code": result.failure_code,
+                "inserted": result.inserted,
+                "source_id": result.source_id,
+                "status": result.status.value,
+            }
+            for result in cycle.acquired
+        ],
+        "completed_at": _timestamp(cycle.completed_at),
+        "duration_ms": round(cycle.duration_seconds * 1000, 3),
+        "schedule": [
+            {
+                "cadence_slo": schedule.cadence_slo.value,
+                "consecutive_failures": schedule.consecutive_failures,
+                "due": schedule.due,
+                "due_at": _timestamp(schedule.due_at),
+                "last_success_at": _timestamp(schedule.last_success_at),
+                "lateness_seconds": schedule.lateness_seconds,
+                "next_retry_at": _timestamp(schedule.next_retry_at),
+                "source_id": schedule.source_id,
+            }
+            for schedule in cycle.schedules
+        ],
+        "skipped_not_due": list(cycle.skipped_not_due),
+        "started_at": _timestamp(cycle.started_at),
+    }
+
+
 def run_worker(database_url: str, config_root: Path, *, once: bool, idle_seconds: float) -> int:
     import psycopg
 
@@ -121,26 +157,18 @@ def run_worker(database_url: str, config_root: Path, *, once: bool, idle_seconds
         )
         if once:
             cycle = asyncio.run(worker.run_once())
-            print(
-                json.dumps(
-                    {
-                        "acquired": [
-                            {
-                                "failure_code": result.failure_code,
-                                "inserted": result.inserted,
-                                "source_id": result.source_id,
-                                "status": result.status.value,
-                            }
-                            for result in cycle.acquired
-                        ],
-                        "skipped_not_due": list(cycle.skipped_not_due),
-                    },
-                    sort_keys=True,
+            print(json.dumps(_cycle_payload(cycle), sort_keys=True))
+            return (
+                2
+                if any(result.status is CollectionRunStatus.FAILED for result in cycle.acquired)
+                else 0
+            )
+        try:
+            asyncio.run(
+                worker.run_forever(
+                    observer=lambda cycle: print(json.dumps(_cycle_payload(cycle), sort_keys=True))
                 )
             )
-            return 0
-        try:
-            asyncio.run(worker.run_forever())
         except KeyboardInterrupt:
             return 0
     return 0
