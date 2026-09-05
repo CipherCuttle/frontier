@@ -12,9 +12,7 @@ FETCH_REQUEST_SCHEMA_VERSION = "fetch-request-v0"
 FETCH_RESULT_SCHEMA_VERSION = "bounded-fetch-result-v0"
 _SOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 _FAILURE_CODE_RE = re.compile(r"^[A-Z0-9_]{1,64}$")
-_ALLOWED_REQUEST_HEADERS = frozenset(
-    {"Accept", "If-Modified-Since", "If-None-Match", "User-Agent"}
-)
+_ALLOWED_REQUEST_HEADERS = frozenset({"Accept", "If-Modified-Since", "If-None-Match", "User-Agent"})
 _ALLOWED_RESPONSE_HEADERS = frozenset(
     {
         "Cache-Control",
