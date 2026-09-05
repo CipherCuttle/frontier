@@ -19,5 +19,5 @@ def create_app() -> FastAPI:
     repository = PostgresPublicReadRepository.connect(dsn)
     app = create_public_read_app(PublicReadService(repository))
     app.state.public_read_repository = repository
-    app.add_event_handler("shutdown", repository.close)
+    app.router.add_event_handler("shutdown", repository.close)
     return app
