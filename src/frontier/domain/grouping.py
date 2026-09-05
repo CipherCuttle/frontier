@@ -261,8 +261,10 @@ def assess_pair(
                 GroupingDecision.AMBIGUOUS,
                 ("same-url", "punctuation-sensitive-title-conflict"),
             )
-        if exact_text or (title_substantive and title_equal) or (
-            title_substantive and title_jaccard >= TITLE_GROUP_JACCARD
+        if (
+            exact_text
+            or (title_substantive and title_equal)
+            or (title_substantive and title_jaccard >= TITLE_GROUP_JACCARD)
         ):
             return PairAssessment(
                 left_id, right_id, GroupingDecision.GROUP, ("same-url", "semantic-match")
@@ -286,11 +288,7 @@ def assess_pair(
         return PairAssessment(
             left_id, right_id, GroupingDecision.GROUP, ("normalized-title", "near-time")
         )
-    if (
-        title_substantive
-        and title_jaccard >= TITLE_GROUP_JACCARD
-        and distance <= NEAR_WINDOW
-    ):
+    if title_substantive and title_jaccard >= TITLE_GROUP_JACCARD and distance <= NEAR_WINDOW:
         return PairAssessment(
             left_id, right_id, GroupingDecision.GROUP, ("high-title-overlap", "near-time")
         )
@@ -301,9 +299,7 @@ def assess_pair(
             GroupingDecision.AMBIGUOUS,
             ("low-title-overlap", "no-negative-evidence"),
         )
-    return PairAssessment(
-        left_id, right_id, GroupingDecision.AMBIGUOUS, ("insufficient-evidence",)
-    )
+    return PairAssessment(left_id, right_id, GroupingDecision.AMBIGUOUS, ("insufficient-evidence",))
 
 
 def _explicit_pairs(
@@ -367,9 +363,7 @@ def build_grouping_projection(
     explicit_pairs = _explicit_pairs(relations, as_of=as_of, allowed_ids=frozenset(ids))
     ambiguous: list[PairAssessment] = []
     for left, right in combinations(eligible, 2):
-        assessment = assess_pair(
-            left, right, explicit_episode_relations=explicit_pairs
-        )
+        assessment = assess_pair(left, right, explicit_episode_relations=explicit_pairs)
         if assessment.decision is GroupingDecision.GROUP:
             union(left.observation_id, right.observation_id)
         elif assessment.decision is GroupingDecision.AMBIGUOUS:
@@ -456,9 +450,7 @@ def build_grouping_receipt(
         source_registry_version=source_registry_version,
         as_of=projection.as_of,
         generated_at=generated_at,
-        input_digest=grouping_input_digest(
-            input_values, relation_values, as_of=projection.as_of
-        ),
+        input_digest=grouping_input_digest(input_values, relation_values, as_of=projection.as_of),
         output_digest=sha256_digest(canonical_json_bytes(projection.to_canonical())),
         status=ProjectionStatus.COMPLETE,
     )
