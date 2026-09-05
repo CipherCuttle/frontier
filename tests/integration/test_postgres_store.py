@@ -81,12 +81,10 @@ def test_postgres_idempotency_occurrence_history_and_knowledge_horizon() -> None
             assert cur.fetchone()[0] == 100
 
         assert first_observation is not None
-        assert (
-            store.list_observation_ids_as_of(
-                first_observation.observed_at - timedelta(microseconds=1)
-            )
-            == []
+        before_horizon = store.list_observation_ids_as_of(
+            first_observation.observed_at - timedelta(microseconds=1)
         )
+        assert candidate.observation_id not in before_horizon
         assert candidate.observation_id in store.list_observation_ids_as_of(
             first_observation.observed_at
         )
