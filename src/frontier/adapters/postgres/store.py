@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from typing import cast
 from uuid import UUID
@@ -8,6 +9,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from frontier.domain.collection import CollectionRun, OccurrenceStatus
+from frontier.domain.digests import Digest
 from frontier.domain.health import SourceHealthObservation
 from frontier.domain.observation import Observation, ObservationCandidate
 from frontier.domain.relation import ObservationRelation
@@ -84,7 +86,7 @@ class PostgresEvidenceStore:
                     %s,%s,%s,%s,%s,%s,%s,%s,%s,clock_timestamp(),%s,%s,%s
                 )
                 ON CONFLICT (observation_id) DO NOTHING
-                RETURNING observed_at
+                RETURNING observed_at, retrieved_at, fetch_digest
                 """,
                 (
                     candidate.observation_id,
@@ -105,12 +107,21 @@ class PostgresEvidenceStore:
             inserted = row is not None
             if row is None:
                 cur.execute(
-                    "SELECT observed_at FROM observations WHERE observation_id = %s",
+                    """
+                    SELECT observed_at, retrieved_at, fetch_digest
+                    FROM observations
+                    WHERE observation_id = %s
+                    """,
                     (candidate.observation_id,),
                 )
                 row = cur.fetchone()
             assert row is not None
             observed_at = cast(datetime, row[0])
+            durable_candidate = replace(
+                candidate,
+                retrieved_at=cast(datetime, row[1]),
+                fetch_digest=Digest(cast(str, row[2])),
+            )
             status = OccurrenceStatus.INSERTED if inserted else OccurrenceStatus.DUPLICATE
             cur.execute(
                 """
@@ -121,7 +132,7 @@ class PostgresEvidenceStore:
                 """,
                 (run_id, candidate.observation_id, status.value),
             )
-        return Observation(candidate=candidate, observed_at=observed_at), inserted
+        return Observation(candidate=durable_candidate, observed_at=observed_at), inserted
 
     def list_observation_ids_as_of(self, as_of: datetime) -> list[str]:
         with self._connection.cursor() as cur:

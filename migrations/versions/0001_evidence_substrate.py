@@ -121,6 +121,36 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
         );
 
+        CREATE OR REPLACE FUNCTION frontier_reject_canonical_mutation()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RAISE EXCEPTION 'append-only canonical table % rejects %', TG_TABLE_NAME, TG_OP
+                USING ERRCODE = '55000';
+        END;
+        $$;
+
+        CREATE TRIGGER frontier_append_only_observations
+        BEFORE UPDATE OR DELETE ON observations
+        FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+
+        CREATE TRIGGER frontier_append_only_collection_occurrences
+        BEFORE UPDATE OR DELETE ON collection_run_observations
+        FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+
+        CREATE TRIGGER frontier_append_only_relations
+        BEFORE UPDATE OR DELETE ON observation_relations
+        FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+
+        CREATE TRIGGER frontier_append_only_source_health
+        BEFORE UPDATE OR DELETE ON source_health_observations
+        FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+
+        CREATE TRIGGER frontier_append_only_projection_receipts
+        BEFORE UPDATE OR DELETE ON projection_receipts
+        FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+
         CREATE INDEX observations_source_observed_idx ON observations(source_id, observed_at);
         CREATE INDEX observations_observed_idx ON observations(observed_at);
         CREATE INDEX observations_source_item_idx ON observations(source_id, source_item_key);
@@ -141,5 +171,6 @@ def downgrade() -> None:
         DROP TABLE IF EXISTS observations;
         DROP TABLE IF EXISTS collection_runs;
         DROP TABLE IF EXISTS sources;
+        DROP FUNCTION IF EXISTS frontier_reject_canonical_mutation();
         """
     )
