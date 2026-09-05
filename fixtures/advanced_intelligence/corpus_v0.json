@@ -1,0 +1,140 @@
+{
+  "schema_version": "advanced-intelligence-hostile-corpus-v0",
+  "authority": "docs/ADVANCED_INTELLIGENCE_EXPERIMENTS.md",
+  "parent": "e54c36f538e0f28535b853c49d62d2d6c35f5e2c",
+  "runtime_implementation_authorized": false,
+  "control": {
+    "projection_name": "baseline-intelligence",
+    "projection_version": "baseline-intelligence-v0",
+    "ranking_policy_version": "naive-episode-activity-v0"
+  },
+  "promotion_contract": {
+    "shadow_authority_state": "EXPERIMENTAL_SHADOW",
+    "minimum_qualifying_domains": 2,
+    "requires_preregistration_before_confirmatory_window": true,
+    "historical_development_counts_as_confirmatory": false,
+    "public_promotion_requires_separate_authority_change": true
+  },
+  "scenarios": [
+    {
+      "id": "A001",
+      "category": "future-observation-leakage",
+      "requirement": "Candidate features at as_of T use only FRONTIER knowledge available by T.",
+      "forbidden": "observation first known after T influences candidate rank at T"
+    },
+    {
+      "id": "A002",
+      "category": "future-operational-metadata",
+      "requirement": "Collection and operational metadata are point-in-time reconstructed before use.",
+      "forbidden": "later completion or status metadata leaks into an earlier candidate artifact"
+    },
+    {
+      "id": "A003",
+      "category": "retrospective-tuning",
+      "requirement": "Confirmatory evidence starts only after immutable candidate preregistration.",
+      "forbidden": "historical outcomes used to tune a candidate are then counted as confirmatory evidence"
+    },
+    {
+      "id": "A004",
+      "category": "universe-mismatch",
+      "requirement": "Candidate and naive control use the same eligible episode universe and as_of horizon.",
+      "forbidden": "candidate removes hard episodes or receives a richer future-aware universe"
+    },
+    {
+      "id": "A005",
+      "category": "backfill-recovered-contamination",
+      "requirement": "BACKFILL and recovered backlog remain non-organic prospective activity unless a separately frozen feature explicitly treats them as retained evidence only.",
+      "forbidden": "backfill or outage recovery manufactures early organic momentum"
+    },
+    {
+      "id": "A006",
+      "category": "coverage-coercion",
+      "requirement": "Missing or degraded source coverage remains explicit in both experiment arms.",
+      "forbidden": "missing input is converted into observed absence or healthy zero activity"
+    },
+    {
+      "id": "A007",
+      "category": "source-count-confirmation",
+      "requirement": "Source count and source-role diversity remain propagation or coverage descriptors unless separate provenance authority exists.",
+      "forbidden": "more feeds are interpreted as independent factual confirmation"
+    },
+    {
+      "id": "A008",
+      "category": "domain-cherry-picking",
+      "requirement": "Qualifying domains are frozen before confirmatory outcomes and at least two must pass.",
+      "forbidden": "failed domains are dropped or successful domains are invented after results are visible"
+    },
+    {
+      "id": "A009",
+      "category": "denominator-gaming",
+      "requirement": "Candidate and control precision use the same eligible opportunity population and exclusion rules.",
+      "forbidden": "candidate excludes difficult opportunities from its precision denominator"
+    },
+    {
+      "id": "A010",
+      "category": "emit-nothing-precision",
+      "requirement": "A candidate must emit according to its preregistered operating point and cannot pass by abstaining from all opportunities.",
+      "forbidden": "undefined or vacuous precision is reported as superior precision"
+    },
+    {
+      "id": "A011",
+      "category": "operating-point-mismatch",
+      "requirement": "Lead-time and precision comparison uses preregistered matched operating points.",
+      "forbidden": "candidate gains lead time by using an unbounded noisier alert surface than the control"
+    },
+    {
+      "id": "A012",
+      "category": "label-leakage",
+      "requirement": "Outcome labels may be assigned later for evaluation but never enter ranking inputs for the same confirmatory window.",
+      "forbidden": "future evaluator labels or adjudication features feed candidate rank"
+    },
+    {
+      "id": "A013",
+      "category": "configuration-drift",
+      "requirement": "Any change to frozen candidate configuration creates a new candidate and confirmatory window.",
+      "forbidden": "weights thresholds features or exclusions change in place after outcomes are visible"
+    },
+    {
+      "id": "A014",
+      "category": "failed-artifact-as-signal",
+      "requirement": "Only COMPLETE candidate and control artifacts participate in evaluation.",
+      "forbidden": "FAILED or partial output is interpreted as an empty ranking or successful no-signal decision"
+    },
+    {
+      "id": "A015",
+      "category": "stochastic-replay-drift",
+      "requirement": "Stochastic candidates preregister randomness semantics and reproduce evaluation artifacts deterministically from frozen seeds/inputs.",
+      "forbidden": "unseeded reruns select whichever stochastic result looks best"
+    },
+    {
+      "id": "A016",
+      "category": "posthoc-threshold-selection",
+      "requirement": "Candidate/control operating points and statistical comparison rules are frozen before the confirmatory window.",
+      "forbidden": "threshold is selected after inspecting confirmatory precision or lead-time curves"
+    },
+    {
+      "id": "A017",
+      "category": "multiple-comparison-selection",
+      "requirement": "Preregistration defines multiplicity handling when multiple candidates are evaluated.",
+      "forbidden": "many candidates are tried and only the luckiest winner is reported without correction or restart"
+    },
+    {
+      "id": "A018",
+      "category": "nonindependent-domains",
+      "requirement": "Multiple-domain qualification uses distinct preregistered domain IDs with non-overlapping outcome-label populations.",
+      "forbidden": "the same event population is relabeled as multiple domains to satisfy the gate"
+    },
+    {
+      "id": "A019",
+      "category": "semantic-escalation",
+      "requirement": "Ranking output does not silently create confirmation provenance-root entity lifecycle truth or importance authority.",
+      "forbidden": "model score is displayed or stored as truth probability confidence completeness confirmation or causal ancestry"
+    },
+    {
+      "id": "A020",
+      "category": "merge-is-not-promotion",
+      "requirement": "Merged experiment code remains EXPERIMENTAL_SHADOW until a separate promotion authority names the winning candidate/version.",
+      "forbidden": "candidate replaces RADAR NOW TRENDING or canonical ranking merely because implementation merged"
+    }
+  ]
+}
