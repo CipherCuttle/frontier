@@ -1,0 +1,235 @@
+{
+  "schema_version": "frontier-transport-security-fixtures-v0",
+  "authority": {
+    "parent_preflight_head": "be258e18a27d2966c8296734c12be13f5e56750a",
+    "runtime_implementation_authorized": false,
+    "purpose": "Transport/security hostile fixture authority for PR-02 frontier-fetch implementation."
+  },
+  "cases": [
+    {
+      "id": "TS-001",
+      "name": "dns_rebind_public_to_private",
+      "expected": "REJECT",
+      "fixture": {
+        "hostname": "rebind.example.invalid",
+        "policy_resolution": ["203.0.113.10"],
+        "connect_resolution": ["10.0.0.9"]
+      },
+      "assertions": {
+        "connect_target_revalidated": true,
+        "forbidden_connections": 0,
+        "canonical_observations": 0
+      }
+    },
+    {
+      "id": "TS-002",
+      "name": "ipv6_loopback",
+      "expected": "REJECT",
+      "fixture": {"url": "http://[::1]/admin"},
+      "assertions": {"forbidden_connections": 0}
+    },
+    {
+      "id": "TS-003",
+      "name": "ipv6_link_local",
+      "expected": "REJECT",
+      "fixture": {"url": "http://[fe80::1]/"},
+      "assertions": {"forbidden_connections": 0}
+    },
+    {
+      "id": "TS-004",
+      "name": "cloud_metadata_ipv4",
+      "expected": "REJECT",
+      "fixture": {"url": "http://169.254.169.254/latest/meta-data/"},
+      "assertions": {"forbidden_connections": 0}
+    },
+    {
+      "id": "TS-005",
+      "name": "ipv4_mapped_ipv6_private",
+      "expected": "REJECT",
+      "fixture": {"url": "http://[::ffff:10.0.0.7]/"},
+      "assertions": {"forbidden_connections": 0}
+    },
+    {
+      "id": "TS-006",
+      "name": "unsupported_scheme",
+      "expected": "REJECT",
+      "fixture": {"url": "file:///etc/passwd"},
+      "assertions": {"network_requests": 0, "canonical_observations": 0}
+    },
+    {
+      "id": "TS-007",
+      "name": "redirect_loop",
+      "expected": "REJECT",
+      "fixture": {
+        "max_redirects": 5,
+        "chain": [
+          "https://a.example.invalid/1",
+          "https://b.example.invalid/2",
+          "https://a.example.invalid/1"
+        ]
+      },
+      "assertions": {"redirect_budget_bounded": true, "canonical_observations": 0}
+    },
+    {
+      "id": "TS-008",
+      "name": "cross_origin_redirect_drops_credentials",
+      "expected": "ACCEPT",
+      "fixture": {
+        "request_url": "https://source.example.invalid/feed",
+        "request_headers": {"Authorization": "Bearer fixture-secret"},
+        "redirect": "https://cdn.example.invalid/feed"
+      },
+      "assertions": {
+        "forward_authorization_cross_origin": false,
+        "secret_leaks": 0
+      }
+    },
+    {
+      "id": "TS-009",
+      "name": "gzip_expansion_bomb",
+      "expected": "REJECT",
+      "fixture": {
+        "generator": "compressed_body",
+        "compressed_bytes": 1024,
+        "expanded_bytes": 33554432,
+        "max_expanded_bytes": 1048576
+      },
+      "assertions": {
+        "expanded_limit_enforced": true,
+        "full_body_buffered": false,
+        "canonical_observations": 0
+      }
+    },
+    {
+      "id": "TS-010",
+      "name": "content_length_lie_stream_overflow",
+      "expected": "REJECT",
+      "fixture": {
+        "declared_content_length": 512,
+        "streamed_bytes": 4194304,
+        "max_response_bytes": 1048576
+      },
+      "assertions": {
+        "stream_limit_enforced_independent_of_header": true,
+        "canonical_observations": 0
+      }
+    },
+    {
+      "id": "TS-011",
+      "name": "mime_lie_html_as_rss",
+      "expected": "DEGRADE",
+      "fixture": {
+        "content_type": "application/rss+xml",
+        "body": "<!doctype html><html><body>login page</body></html>"
+      },
+      "assertions": {
+        "transport_health": "OK",
+        "schema_health": "DEGRADED",
+        "canonical_observations": 0
+      }
+    },
+    {
+      "id": "TS-012",
+      "name": "slow_body_deadline",
+      "expected": "RETRY_LATER",
+      "fixture": {
+        "headers_after_ms": 50,
+        "body_chunk_intervals_ms": [100, 100, 100, 10000],
+        "deadline_ms": 3000
+      },
+      "assertions": {
+        "deadline_enforced": true,
+        "partial_body_not_canonical": true
+      }
+    },
+    {
+      "id": "TS-013",
+      "name": "truncated_body",
+      "expected": "DEGRADE",
+      "fixture": {
+        "declared_content_length": 4096,
+        "received_bytes": 1337,
+        "connection_closed": true
+      },
+      "assertions": {
+        "transport_health": "DEGRADED",
+        "canonical_observations": 0
+      }
+    },
+    {
+      "id": "TS-014",
+      "name": "rate_limit_retry_after",
+      "expected": "RETRY_LATER",
+      "fixture": {
+        "status": 429,
+        "retry_after": "120"
+      },
+      "assertions": {
+        "retry_after_respected": true,
+        "retry_budget_bounded": true,
+        "immediate_retry": false
+      }
+    },
+    {
+      "id": "TS-015",
+      "name": "absurd_retry_after_clamped",
+      "expected": "RETRY_LATER",
+      "fixture": {
+        "status": 429,
+        "retry_after": "315360000"
+      },
+      "assertions": {
+        "provider_delay_not_trusted_unbounded": true,
+        "source_health_visible": true,
+        "retry_budget_bounded": true
+      }
+    },
+    {
+      "id": "TS-016",
+      "name": "not_modified_without_cache",
+      "expected": "FAIL_CLOSED",
+      "fixture": {
+        "status": 304,
+        "etag": "\"fixture-etag\"",
+        "local_cached_entity_present": false
+      },
+      "assertions": {
+        "invent_content_from_304": false,
+        "canonical_observations": 0,
+        "completeness_health": "DEGRADED"
+      }
+    },
+    {
+      "id": "TS-017",
+      "name": "stale_etag_same_tag_changed_body",
+      "expected": "DEGRADE",
+      "fixture": {
+        "previous_etag": "\"same\"",
+        "current_etag": "\"same\"",
+        "previous_body_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "current_body_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "assertions": {
+        "validator_inconsistency_detected": true,
+        "provider_metadata_not_absolute_truth": true
+      }
+    },
+    {
+      "id": "TS-018",
+      "name": "recovery_backlog_burst",
+      "expected": "ACCEPT",
+      "fixture": {
+        "outage_minutes": 120,
+        "recovered_items": 500,
+        "source_times_span_minutes": 120,
+        "delivery_span_seconds": 20
+      },
+      "assertions": {
+        "recovered_after_gap": true,
+        "delivery_burst_is_not_world_burst": true,
+        "live_breakout_due_only_to_recovery": false,
+        "completeness_health_after_recovery_reassessed": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,317 @@
+{
+  "schema_version": "frontier-hostile-acquisition-corpus-v0",
+  "authority": {
+    "parent_main": "8a5eb774bb462e41ce558de99ed3de53f62da499",
+    "runtime_implementation_authorized": false,
+    "purpose": "Preflight fixture authority for PR-02 and later acquisition lanes."
+  },
+  "source_shape_provenance": [
+    {
+      "source_id": "pypi.updates",
+      "reference": "https://docs.pypi.org/api/feeds/",
+      "reviewed_at": "2026-09-05"
+    },
+    {
+      "source_id": "cisa.kev",
+      "reference": "https://github.com/cisagov/kev-data",
+      "schema_blob_sha": "3d49b7270847e6088d8e49f5087ef5562e7917c9",
+      "reviewed_at": "2026-09-05"
+    },
+    {
+      "source_id": "hn",
+      "reference": "https://github.com/HackerNews/API",
+      "reviewed_at": "2026-09-05"
+    },
+    {
+      "source_id": "gdelt.doc",
+      "reference": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+      "reviewed_at": "2026-09-05"
+    }
+  ],
+  "cases": [
+    {
+      "id": "PYPI-001",
+      "source_id": "pypi.updates",
+      "expected": "ACCEPT",
+      "media_type": "application/rss+xml",
+      "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\">\n  <channel>\n    <title>PyPI recent updates</title>\n    <link>https://pypi.org/</link>\n    <description>Recent package releases</description>\n    <item>\n      <title>frontier-fixture 1.2.3</title>\n      <link>https://pypi.org/project/frontier-fixture/1.2.3/</link>\n      <description>Synthetic schema-faithful release used only for FRONTIER tests.</description>\n      <pubDate>Fri, 04 Sep 2026 23:45:00 GMT</pubDate>\n    </item>\n    <item>\n      <title>signal-lab 0.4.0</title>\n      <link>https://pypi.org/project/signal-lab/0.4.0/</link>\n      <description>Second synthetic release.</description>\n      <pubDate>Fri, 04 Sep 2026 23:44:00 GMT</pubDate>\n    </item>\n  </channel>\n</rss>\n",
+      "assertions": {
+        "canonical_release_candidates": 2,
+        "transport_health": "OK",
+        "schema_health": "OK"
+      }
+    },
+    {
+      "id": "PYPI-002",
+      "source_id": "pypi.updates",
+      "expected": "ACCEPT",
+      "media_type": "application/rss+xml",
+      "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\">\n  <channel>\n    <title>PyPI recent updates</title>\n    <link>https://pypi.org/</link>\n    <description>Recent package releases</description>\n    <item>\n      <title>frontier-fixture 1.2.3</title>\n      <link>https://pypi.org/project/frontier-fixture/1.2.3/</link>\n      <description>Synthetic schema-faithful release used only for FRONTIER tests.</description>\n      <pubDate>Fri, 04 Sep 2026 23:45:00 GMT</pubDate>\n    </item>\n    <item>\n      <title>frontier-fixture 1.2.3</title>\n      <link>https://pypi.org/project/frontier-fixture/1.2.3/</link>\n      <description>Synthetic schema-faithful release used only for FRONTIER tests.</description>\n      <pubDate>Fri, 04 Sep 2026 23:45:00 GMT</pubDate>\n    </item>\n  </channel>\n</rss>\n",
+      "assertions": {
+        "canonical_release_candidates_max": 1,
+        "duplicate_items": 1
+      }
+    },
+    {
+      "id": "PYPI-003",
+      "source_id": "pypi.updates",
+      "expected": "DEGRADE",
+      "media_type": "application/rss+xml",
+      "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\"><channel><title>Broken</title>\n<item><title>frontier-fixture 1.2.3</title><link>https://pypi.org/project/frontier-fixture/1.2.3/</link>\n</channel></rss>\n",
+      "assertions": {
+        "canonical_observations": 0,
+        "schema_health": "DEGRADED"
+      }
+    },
+    {
+      "id": "PYPI-004",
+      "source_id": "pypi.updates",
+      "expected": "REJECT",
+      "media_type": "application/rss+xml",
+      "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE rss [\n  <!ENTITY xxe SYSTEM \"http://169.254.169.254/latest/meta-data/\">\n]>\n<rss version=\"2.0\"><channel><title>&xxe;</title></channel></rss>\n",
+      "assertions": {
+        "external_entity_resolutions": 0,
+        "network_side_effects": 0,
+        "canonical_observations": 0
+      }
+    },
+    {
+      "id": "PYPI-005",
+      "source_id": "pypi.updates",
+      "expected": "DEGRADE",
+      "media_type": "application/vnd.frontier.fixture-generator+json",
+      "payload": {
+        "generator": "finite_feed_window_gap",
+        "previous_oldest_seen": "2026-09-04T23:00:00Z",
+        "current_oldest_seen": "2026-09-04T23:05:00Z",
+        "synthetic_updates_between_cycles": 80,
+        "feed_capacity_assumption": 40
+      },
+      "assertions": {
+        "transport_health": "OK",
+        "completeness_health": "DEGRADED"
+      }
+    },
+    {
+      "id": "PYPI-006",
+      "source_id": "pypi.updates",
+      "expected": "ACCEPT",
+      "media_type": "application/vnd.frontier.fixture-generator+json",
+      "payload": {
+        "generator": "future_source_timestamp",
+        "claimed_pubdate": "2027-09-05T00:00:00Z",
+        "observed_at": "2026-09-05T00:00:01Z"
+      },
+      "assertions": {
+        "knowledge_time": "2026-09-05T00:00:01Z",
+        "timestamp_anomaly": true
+      }
+    },
+    {
+      "id": "CISA-001",
+      "source_id": "cisa.kev",
+      "expected": "ACCEPT",
+      "media_type": "application/json",
+      "payload": {
+        "catalogVersion": "2026.09.04",
+        "dateReleased": "2026-09-04T23:30:00.000Z",
+        "count": 1,
+        "vulnerabilities": [
+          {
+            "cveID": "CVE-2026-12345",
+            "vendorProject": "Fixture Vendor",
+            "product": "Fixture Product",
+            "vulnerabilityName": "Fixture Product Remote Code Execution Vulnerability",
+            "dateAdded": "2026-09-04",
+            "shortDescription": "Synthetic KEV-like entry for FRONTIER parser tests.",
+            "requiredAction": "Apply mitigations per vendor instructions.",
+            "dueDate": "2026-09-25",
+            "knownRansomwareCampaignUse": "Unknown",
+            "notes": "https://example.invalid/advisory/CVE-2026-12345",
+            "cwes": ["CWE-78"]
+          }
+        ]
+      },
+      "assertions": {"canonical_vulnerability_candidates": 1}
+    },
+    {
+      "id": "CISA-002",
+      "source_id": "cisa.kev",
+      "expected": "DEGRADE",
+      "media_type": "application/json",
+      "payload": {
+        "catalogVersion": "2026.09.04",
+        "dateReleased": "2026-09-04T23:30:00.000Z",
+        "count": 1,
+        "vulnerabilities": [
+          {
+            "cveID": "CVE-2026-12345",
+            "vendorProject": "Fixture Vendor",
+            "product": "Fixture Product",
+            "vulnerabilityName": "Fixture Product Remote Code Execution Vulnerability",
+            "dateAdded": "2026-09-04",
+            "shortDescription": "Synthetic KEV-like entry for FRONTIER parser tests.",
+            "dueDate": "2026-09-25",
+            "knownRansomwareCampaignUse": "Unknown",
+            "notes": "https://example.invalid/advisory/CVE-2026-12345",
+            "cwes": ["CWE-78"]
+          }
+        ]
+      },
+      "assertions": {
+        "invalid_records": 1,
+        "schema_health": "DEGRADED",
+        "canonical_vulnerability_candidates": 0
+      }
+    },
+    {
+      "id": "CISA-003",
+      "source_id": "cisa.kev",
+      "expected": "QUARANTINE",
+      "media_type": "application/json",
+      "payload": {
+        "catalogVersion": "2026.09.04",
+        "dateReleased": "2026-09-04T23:30:00.000Z",
+        "count": 1,
+        "vulnerabilities": {
+          "CVE-2026-12345": {
+            "cveID": "CVE-2026-12345",
+            "vendorProject": "Fixture Vendor",
+            "product": "Fixture Product",
+            "vulnerabilityName": "Fixture Product Remote Code Execution Vulnerability",
+            "dateAdded": "2026-09-04",
+            "shortDescription": "Synthetic KEV-like entry for FRONTIER parser tests.",
+            "requiredAction": "Apply mitigations per vendor instructions.",
+            "dueDate": "2026-09-25",
+            "knownRansomwareCampaignUse": "Unknown",
+            "notes": "https://example.invalid/advisory/CVE-2026-12345",
+            "cwes": ["CWE-78"]
+          }
+        }
+      },
+      "assertions": {"schema_health": "FAILED", "canonical_observations": 0}
+    },
+    {
+      "id": "CISA-004",
+      "source_id": "cisa.kev",
+      "expected": "DEGRADE",
+      "media_type": "application/json",
+      "payload": {
+        "catalogVersion": "2026.09.04",
+        "dateReleased": "2026-09-04T23:30:00.000Z",
+        "count": 3,
+        "vulnerabilities": [
+          {
+            "cveID": "CVE-2026-12345",
+            "vendorProject": "Fixture Vendor",
+            "product": "Fixture Product",
+            "vulnerabilityName": "Fixture Product Remote Code Execution Vulnerability",
+            "dateAdded": "2026-09-04",
+            "shortDescription": "Synthetic KEV-like entry for FRONTIER parser tests.",
+            "requiredAction": "Apply mitigations per vendor instructions.",
+            "dueDate": "2026-09-25",
+            "knownRansomwareCampaignUse": "Unknown",
+            "notes": "https://example.invalid/advisory/CVE-2026-12345",
+            "cwes": ["CWE-78"]
+          }
+        ]
+      },
+      "assertions": {
+        "transport_health": "OK",
+        "schema_health": "OK",
+        "completeness_health": "DEGRADED"
+      }
+    },
+    {
+      "id": "CISA-005",
+      "source_id": "cisa.kev",
+      "expected": "ACCEPT",
+      "media_type": "application/vnd.frontier.fixture-generator+json",
+      "payload": {
+        "generator": "backfill_catalog",
+        "source_date_added": "2026-01-01",
+        "observed_at": "2026-09-05T00:00:00Z",
+        "collection_reason": "BACKFILL"
+      },
+      "assertions": {"live_alert_eligible": false, "knowledge_time": "2026-09-05T00:00:00Z"}
+    },
+    {
+      "id": "HTTP-001",
+      "source_id": "fixture.http",
+      "expected": "REJECT",
+      "media_type": "application/json",
+      "payload": {
+        "fixture": "HTTP-001",
+        "request_url": "https://public.example.invalid/start",
+        "max_redirects": 5,
+        "responses": [{"status": 302, "location": "http://10.23.4.5/admin"}],
+        "expected_network_connections": ["public.example.invalid"],
+        "forbidden_network_connections": ["10.23.4.5"]
+      },
+      "assertions": {"forbidden_connections": 0}
+    },
+    {
+      "id": "HTTP-002",
+      "source_id": "fixture.http",
+      "expected": "RETRY_LATER",
+      "media_type": "application/vnd.frontier.fixture-generator+json",
+      "payload": {"generator": "retry_storm", "responses": [503,503,503,503,200], "retry_after_seconds": null},
+      "assertions": {"retry_budget_bounded": true, "backoff": "exponential+jitter"}
+    },
+    {
+      "id": "HTTP-003",
+      "source_id": "fixture.http",
+      "expected": "DEGRADE",
+      "media_type": "application/vnd.frontier.fixture-generator+json",
+      "payload": {"generator": "source_outage", "cycles": 4, "response": "timeout"},
+      "assertions": {"transport_health": "FAILED", "missing_data_is_not_observed_absence": true}
+    },
+    {
+      "id": "HN-001",
+      "source_id": "hn",
+      "expected": "ACCEPT",
+      "media_type": "application/json",
+      "payload": [
+        {"by":"fixture-user","descendants":7,"id":99000001,"kids":[99000002,99000003],"score":42,"time":1788565200,"title":"Show HN: Frontier Fixture","type":"story","url":"https://example.invalid/frontier-fixture"},
+        {"by":"another-user","descendants":7,"id":99000006,"kids":[99000002,99000003],"score":9,"time":1788565300,"title":"Same external source, different HN submission","type":"story","url":"https://example.invalid/frontier-fixture"}
+      ],
+      "assertions": {"attention_observations":2,"external_factual_roots_max":1}
+    },
+    {
+      "id": "HN-002",
+      "source_id": "hn",
+      "expected": "ACCEPT",
+      "media_type": "application/json",
+      "payload": {"deleted":true,"id":99000004,"type":"story","time":1788565260},
+      "assertions": {"tombstone_preserved":true,"synthetic_article_content":false}
+    },
+    {
+      "id": "GDELT-001",
+      "source_id": "gdelt.doc",
+      "expected": "ACCEPT",
+      "media_type": "application/json",
+      "payload": {
+        "articles": [
+          {"url":"https://wire.example.invalid/same-release-0","url_mobile":"","title":"Fixture Vendor Announces Frontier Engine","seendate":"20260904T234500Z","socialimage":"","domain":"wire.example.invalid","language":"English","sourcecountry":"United States"},
+          {"url":"https://portal1.example.invalid/same-release-1","url_mobile":"","title":"Fixture Vendor Announces Frontier Engine","seendate":"20260904T234600Z","socialimage":"","domain":"portal1.example.invalid","language":"English","sourcecountry":"United States"},
+          {"url":"https://portal2.example.invalid/same-release-2","url_mobile":"","title":"Fixture Vendor Announces Frontier Engine","seendate":"20260904T234700Z","socialimage":"","domain":"portal2.example.invalid","language":"English","sourcecountry":"United States"},
+          {"url":"https://portal3.example.invalid/same-release-3","url_mobile":"","title":"Fixture Vendor Announces Frontier Engine","seendate":"20260904T234800Z","socialimage":"","domain":"portal3.example.invalid","language":"English","sourcecountry":"United States"},
+          {"url":"https://blog1.example.invalid/same-release-4","url_mobile":"","title":"Fixture Vendor Announces Frontier Engine","seendate":"20260904T234900Z","socialimage":"","domain":"blog1.example.invalid","language":"English","sourcecountry":"United States"},
+          {"url":"https://blog2.example.invalid/same-release-5","url_mobile":"","title":"Fixture Vendor Announces Frontier Engine","seendate":"20260904T235000Z","socialimage":"","domain":"blog2.example.invalid","language":"English","sourcecountry":"United States"}
+        ],
+        "fixture_note":"All rows intentionally represent syndication of one primary release; downstream provenance should not count six independent roots."
+      },
+      "assertions": {"discovery_rows":6,"independent_factual_roots_max":1,"attention_propagation_preserved":true}
+    },
+    {
+      "id": "GDELT-002",
+      "source_id": "gdelt.doc",
+      "expected": "DEGRADE",
+      "media_type": "application/json",
+      "payload": {
+        "articles": [{"url":"https://publisher-a.example.invalid/releases/frontier","url_mobile":"","title":"Fixture Vendor Announces Frontier Engine","seendate":"definitely-not-a-date","socialimage":"","domain":"publisher-a.example.invalid","language":"English","sourcecountry":"United States"}]
+      },
+      "assertions": {"invalid_records":1,"default_malformed_time_to_now":false}
+    }
+  ]
+}
