@@ -5,6 +5,9 @@ from datetime import datetime
 from typing import Protocol
 
 from frontier.domain.advanced_intelligence import (
+    PEF_CANDIDATE_ID,
+    PEF_CONFIGURATION_DIGEST,
+    PEF_EXPERIMENT_ID,
     PefArtifact,
     ShadowExperimentRun,
     ShadowRunStatus,
@@ -13,6 +16,7 @@ from frontier.domain.advanced_intelligence import (
     build_shadow_experiment_run,
     failed_pef_artifact,
 )
+from frontier.domain.candidate_freeze import CandidateFreezeReceipt, FreezeStatus
 from frontier.domain.digests import Digest
 from frontier.domain.intelligence import (
     BASELINE_ALGORITHM_VERSION,
@@ -98,6 +102,7 @@ def run_shadow_experiment(
     control_receipt: ProjectionReceipt,
     generated_at: datetime,
     source_registry_version: Digest,
+    candidate_freeze_receipt: CandidateFreezeReceipt | None = None,
 ) -> ShadowExperimentRun:
     """Run the control arm and the PEF_V0 candidate arm on identical inputs.
 
@@ -107,10 +112,24 @@ def run_shadow_experiment(
     control snapshot and never regroups or re-baselines anything (R6). The
     control snapshot is only read, never written. If the candidate arm raises,
     the paired run is recorded as FAILED with an explicit failure reason (R8)
-    instead of silently presenting the control arm alone.
+    instead of silently presenting the control arm alone. When a candidate
+    freeze receipt is supplied, it must be FROZEN and bound to this candidate
+    (R8: a DRIFTED freeze invalidates confirmatory evidence and never binds).
     """
+    if candidate_freeze_receipt is not None:
+        if candidate_freeze_receipt.status is not FreezeStatus.FROZEN:
+            raise ValueError("drifted candidate freeze receipt cannot bind a shadow experiment")
+        if candidate_freeze_receipt.candidate_id != PEF_CANDIDATE_ID:
+            raise ValueError("candidate freeze receipt candidate id mismatch")
+        if candidate_freeze_receipt.experiment_id != PEF_EXPERIMENT_ID:
+            raise ValueError("candidate freeze receipt experiment id mismatch")
+        if candidate_freeze_receipt.configuration_digest != PEF_CONFIGURATION_DIGEST:
+            raise ValueError("candidate freeze receipt configuration digest mismatch")
     _require_control_identity(control_snapshot, control_receipt)
     as_of = control_snapshot.as_of
+    freeze_receipt_id = (
+        None if candidate_freeze_receipt is None else candidate_freeze_receipt.receipt_id
+    )
     try:
         candidate = run_pef_v0_ranking(
             observations,
@@ -138,6 +157,7 @@ def run_shadow_experiment(
             candidate_receipt=candidate_receipt,
             as_of=as_of,
             generated_at=generated_at,
+            candidate_freeze_receipt_id=freeze_receipt_id,
         )
         if run.status is not ShadowRunStatus.FAILED:
             raise RuntimeError("failed candidate arm must produce a FAILED shadow run") from error
@@ -149,4 +169,5 @@ def run_shadow_experiment(
         candidate_receipt=candidate.receipt,
         as_of=as_of,
         generated_at=generated_at,
+        candidate_freeze_receipt_id=freeze_receipt_id,
     )

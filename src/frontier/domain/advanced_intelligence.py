@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
@@ -34,6 +35,21 @@ PEF_PRIMARY_EMISSION_ROLE = "PRIMARY_EMISSION"
 PEF_PREREGISTERED_CONFIG_DIGEST = Digest(
     "sha256:e2627f62deac24e5f1b09960687761ebbcc61b3fd0c8fec07fec0006dcff7dc1"
 )
+
+# Bound freeze receipts use the shared candidate-freeze receipt id shape; the
+# validation is inlined here to avoid an import cycle with candidate_freeze.
+FREEZE_RECEIPT_ID_PREFIX = "freezereceipt_"
+_FREEZE_RECEIPT_ID_RE = re.compile(r"^freezereceipt_[0-9a-f]{64}$")
+
+
+def canonical_freeze_components(candidate_freeze_receipt_id: str | None) -> str | None:
+    """Normalize an optional freeze-receipt binding for shadow runs (R8)."""
+    if candidate_freeze_receipt_id is None:
+        return None
+    if not _FREEZE_RECEIPT_ID_RE.fullmatch(candidate_freeze_receipt_id):
+        raise ValueError("invalid candidate freeze receipt id binding")
+    return candidate_freeze_receipt_id
+
 
 _activity_eligibility: dict[str, CanonicalValue] = {
     "eligible_reasons": ["ACTIVE_ENRICHMENT", "DISCOVERY", "SCHEDULED"],
@@ -478,6 +494,7 @@ class ShadowExperimentRun:
     algorithm_version: str = PEF_ALGORITHM_VERSION
     configuration_digest: Digest = PEF_CONFIGURATION_DIGEST
     authority_state: str = PEF_AUTHORITY_STATE
+    candidate_freeze_receipt_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
@@ -490,6 +507,7 @@ class ShadowExperimentRun:
             raise ValueError("FAILED shadow run requires an explicit failure reason")
         if self.status is not ShadowRunStatus.RAN and self.control_ranking:
             raise ValueError("only RAN shadow runs may carry a control ranking payload")
+        canonical_freeze_components(self.candidate_freeze_receipt_id)
 
     @property
     def run_id(self) -> str:
@@ -508,6 +526,7 @@ class ShadowExperimentRun:
             "as_of": canonical_timestamp(self.as_of),
             "authority_state": self.authority_state,
             "candidate_artifact_id": self.candidate_artifact_id,
+            "candidate_freeze_receipt_id": self.candidate_freeze_receipt_id,
             "candidate_id": self.candidate_id,
             "candidate_output_digest": str(self.candidate_output_digest),
             "configuration_digest": str(self.configuration_digest),
@@ -594,6 +613,7 @@ def build_shadow_experiment_run(
     candidate_receipt: ProjectionReceipt,
     as_of: datetime,
     generated_at: datetime,
+    candidate_freeze_receipt_id: str | None = None,
 ) -> ShadowExperimentRun:
     """Pair a control arm and a PEF_V0 candidate arm over an identical universe.
 
@@ -649,6 +669,7 @@ def build_shadow_experiment_run(
             candidate_artifact_id=candidate_artifact.artifact_id,
             candidate_output_digest=candidate_artifact.output_digest,
             control_ranking=_shadow_control_ranking(control_snapshot),
+            candidate_freeze_receipt_id=canonical_freeze_components(candidate_freeze_receipt_id),
         )
     return ShadowExperimentRun(
         as_of=as_of,
@@ -664,4 +685,5 @@ def build_shadow_experiment_run(
         candidate_artifact_id=candidate_artifact.artifact_id,
         candidate_output_digest=candidate_artifact.output_digest,
         failure_reason=candidate_artifact.failure_reason,
+        candidate_freeze_receipt_id=canonical_freeze_components(candidate_freeze_receipt_id),
     )

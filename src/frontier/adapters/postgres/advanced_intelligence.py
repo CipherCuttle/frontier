@@ -20,6 +20,12 @@ from frontier.domain.advanced_intelligence import (
     PefArtifactStatus,
     ShadowExperimentRun,
 )
+from frontier.domain.candidate_freeze import (
+    FREEZE_PREREGISTRATION_PATH,
+    FREEZE_SCHEMA_VERSION,
+    CandidateFreezeReceipt,
+    FreezeStatus,
+)
 from frontier.domain.canonical_json import canonical_json_bytes
 from frontier.domain.digests import sha256_digest
 from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
@@ -280,6 +286,135 @@ class PostgresShadowRunRepository:
             cur.execute(
                 "SELECT run_json FROM shadow_experiment_runs WHERE run_id = %s",
                 (run_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return cast(dict[str, object], row[0])
+
+
+class PostgresCandidateFreezeRepository:
+    """Append-only persistence for candidate freeze receipts (R8)."""
+
+    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
+        self._connection = connection
+
+    def record_receipt(self, receipt: CandidateFreezeReceipt) -> None:
+        if receipt.candidate_id != PEF_CANDIDATE_ID:
+            raise ValueError("candidate freeze receipt candidate id mismatch")
+        if receipt.experiment_id != PEF_EXPERIMENT_ID:
+            raise ValueError("candidate freeze receipt experiment id mismatch")
+        if receipt.algorithm_version != PEF_ALGORITHM_VERSION:
+            raise ValueError("candidate freeze receipt algorithm version mismatch")
+        if receipt.configuration_digest != PEF_CONFIGURATION_DIGEST:
+            raise ValueError("candidate freeze receipt configuration digest mismatch")
+        if receipt.preregistration_path != FREEZE_PREREGISTRATION_PATH:
+            raise ValueError("candidate freeze receipt preregistration path mismatch")
+        if receipt.schema_version != FREEZE_SCHEMA_VERSION:
+            raise ValueError("candidate freeze receipt schema version mismatch")
+        if receipt.status is FreezeStatus.DRIFTED and not receipt.drift_reasons:
+            raise ValueError("DRIFTED freeze receipt requires explicit drift reasons")
+        if receipt.status is FreezeStatus.FROZEN and receipt.drift_reasons:
+            raise ValueError("FROZEN freeze receipt cannot carry drift reasons")
+        if receipt.receipt_digest != sha256_digest(canonical_json_bytes(receipt.to_canonical())):
+            raise ValueError("freeze receipt digest does not bind its canonical payload")
+
+        entry_values: list[dict[str, str]] | None = None
+        if receipt.registry_entry_digests is not None:
+            entry_values = [
+                {"digest": str(entry.digest), "path": entry.path}
+                for entry in receipt.registry_entry_digests
+            ]
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO candidate_freeze_receipts (
+                    receipt_id, schema_version, candidate_id, experiment_id,
+                    algorithm_version, configuration_digest, status,
+                    preregistration_path, preregistration_digest,
+                    preregistration_config_digest, implementation_commit,
+                    implementation_tree_digest, dependency_lock_digest,
+                    source_registry_digest, registry_entry_digests,
+                    drift_reasons, receipt_digest, frozen_at, verified_at,
+                    original_receipt_digest, receipt_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (receipt_id) DO NOTHING
+                RETURNING receipt_id
+                """,
+                (
+                    receipt.receipt_id,
+                    receipt.schema_version,
+                    receipt.candidate_id,
+                    receipt.experiment_id,
+                    receipt.algorithm_version,
+                    str(receipt.configuration_digest),
+                    receipt.status.value,
+                    receipt.preregistration_path,
+                    str(receipt.preregistration_digest),
+                    (
+                        None
+                        if receipt.preregistration_config_digest is None
+                        else str(receipt.preregistration_config_digest)
+                    ),
+                    receipt.implementation_commit,
+                    receipt.implementation_tree_digest,
+                    (
+                        None
+                        if receipt.dependency_lock_digest is None
+                        else str(receipt.dependency_lock_digest)
+                    ),
+                    (
+                        None
+                        if receipt.source_registry_digest is None
+                        else str(receipt.source_registry_digest)
+                    ),
+                    None if entry_values is None else Jsonb(entry_values),
+                    Jsonb(list(receipt.drift_reasons)),
+                    str(receipt.receipt_digest),
+                    receipt.frozen_at,
+                    receipt.verified_at,
+                    (
+                        None
+                        if receipt.original_receipt_digest is None
+                        else str(receipt.original_receipt_digest)
+                    ),
+                    Jsonb(receipt.to_canonical()),
+                ),
+            )
+            inserted = cur.fetchone()
+            if inserted is None:
+                cur.execute(
+                    "SELECT receipt_digest, status FROM candidate_freeze_receipts "
+                    "WHERE receipt_id = %s",
+                    (receipt.receipt_id,),
+                )
+                existing = cur.fetchone()
+                if existing is None:
+                    raise RuntimeError("freeze receipt conflict without existing row")
+                if (
+                    cast(str, existing[0]) != str(receipt.receipt_digest)
+                    or cast(str, existing[1]) != receipt.status.value
+                ):
+                    raise RuntimeError("freeze receipt identity conflict with different digest")
+
+    def latest_receipt_id(self) -> str | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT receipt_id
+                FROM candidate_freeze_receipts
+                ORDER BY frozen_at DESC, receipt_id DESC
+                LIMIT 1
+                """
+            )
+            row = cur.fetchone()
+        return None if row is None else cast(str, row[0])
+
+    def get_receipt_json(self, receipt_id: str) -> dict[str, object] | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                "SELECT receipt_json FROM candidate_freeze_receipts WHERE receipt_id = %s",
+                (receipt_id,),
             )
             row = cur.fetchone()
         if row is None:
