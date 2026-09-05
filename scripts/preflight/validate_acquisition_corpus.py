@@ -5,6 +5,7 @@ from pathlib import Path
 
 CORPUS = Path("fixtures/acquisition/corpus_v0.json")
 TRANSPORT = Path("fixtures/acquisition/transport_security_v0.json")
+NORMALIZATION = Path("fixtures/acquisition/normalization_provenance_v0.json")
 ALLOWED_OUTCOMES = {
     "ACCEPT",
     "REJECT",
@@ -137,10 +138,10 @@ def validate_transport_pack() -> list[dict[str, object]]:
 
     for case_id in ("TS-002", "TS-003", "TS-004", "TS-005"):
         case = by_id(cases, case_id)
-        assertions = case["assertions"]
-        require(isinstance(assertions, dict), f"{case_id} assertions must be an object")
+        case_assertions = case["assertions"]
+        require(isinstance(case_assertions, dict), f"{case_id} assertions must be an object")
         require(case.get("expected") == "REJECT", f"{case_id} must remain REJECT")
-        require(assertions.get("forbidden_connections") == 0, f"{case_id} must never connect")
+        require(case_assertions.get("forbidden_connections") == 0, f"{case_id} must never connect")
 
     credentials = by_id(cases, "TS-008")
     credentials_assertions = credentials["assertions"]
@@ -205,15 +206,34 @@ def validate_transport_pack() -> list[dict[str, object]]:
     return cases
 
 
+def normalization_case_ids() -> list[str]:
+    document = json.loads(NORMALIZATION.read_text(encoding="utf-8"))
+    require(
+        document.get("schema_version") == "frontier-normalization-provenance-corpus-v0",
+        "unexpected normalization/provenance corpus schema_version",
+    )
+    raw_cases = document.get("cases")
+    require(isinstance(raw_cases, list), "normalization/provenance cases must be a list")
+    ids: list[str] = []
+    for index, case in enumerate(raw_cases):
+        require(isinstance(case, dict), f"normalization/provenance case {index} must be an object")
+        case_id = case.get("id")
+        require(isinstance(case_id, str) and case_id, f"normalization/provenance case {index} missing id")
+        ids.append(case_id)
+    return ids
+
+
 def main() -> None:
     acquisition_cases = validate_acquisition_corpus()
     transport_cases = validate_transport_pack()
-    all_ids = [str(case["id"]) for case in acquisition_cases + transport_cases]
-    require(len(all_ids) == len(set(all_ids)), "fixture case ids must be unique across all packs")
+    normalization_ids = normalization_case_ids()
+    all_ids = [str(case["id"]) for case in acquisition_cases + transport_cases] + normalization_ids
+    require(len(all_ids) == len(set(all_ids)), "fixture case ids must be unique across all three packs")
     print(
         "validated "
         f"{len(acquisition_cases)} hostile acquisition fixtures + "
-        f"{len(transport_cases)} transport/security fixtures"
+        f"{len(transport_cases)} transport/security fixtures + "
+        f"{len(normalization_ids)} normalization/provenance fixture ids"
     )
 
 
