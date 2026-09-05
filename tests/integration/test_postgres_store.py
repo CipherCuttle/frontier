@@ -199,23 +199,32 @@ def test_canonical_tables_are_database_enforced_append_only() -> None:
                 "frontier_append_only_source_health_truncate",
             }
 
-        with pytest.raises(psycopg.Error) as update_error:
-            with conn.transaction(), conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE observations SET retrieved_at = retrieved_at WHERE observation_id = %s",
-                    (observation.observation_id,),
-                )
+        with (
+            pytest.raises(psycopg.Error) as update_error,
+            conn.transaction(),
+            conn.cursor() as cur,
+        ):
+            cur.execute(
+                "UPDATE observations SET retrieved_at = retrieved_at WHERE observation_id = %s",
+                (observation.observation_id,),
+            )
         assert update_error.value.sqlstate == "55000"
 
-        with pytest.raises(psycopg.Error) as delete_error:
-            with conn.transaction(), conn.cursor() as cur:
-                cur.execute(
-                    "DELETE FROM observations WHERE observation_id = %s",
-                    (observation.observation_id,),
-                )
+        with (
+            pytest.raises(psycopg.Error) as delete_error,
+            conn.transaction(),
+            conn.cursor() as cur,
+        ):
+            cur.execute(
+                "DELETE FROM observations WHERE observation_id = %s",
+                (observation.observation_id,),
+            )
         assert delete_error.value.sqlstate == "55000"
 
-        with pytest.raises(psycopg.Error) as truncate_error:
-            with conn.transaction(), conn.cursor() as cur:
-                cur.execute("TRUNCATE projection_receipts")
+        with (
+            pytest.raises(psycopg.Error) as truncate_error,
+            conn.transaction(),
+            conn.cursor() as cur,
+        ):
+            cur.execute("TRUNCATE projection_receipts")
         assert truncate_error.value.sqlstate == "55000"
