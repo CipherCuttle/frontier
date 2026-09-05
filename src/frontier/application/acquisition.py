@@ -249,7 +249,7 @@ class AcquisitionService:
         schema_health = batch.schema_health
         if validator_inconsistency:
             schema_health = HealthValue.DEGRADED
-        completeness = HealthValue.OK
+        completeness = batch.completeness_health
         if source.finite_window and recovered_after_gap:
             completeness = HealthValue.DEGRADED
         if batch.records_rejected:
@@ -417,9 +417,7 @@ class AcquisitionService:
             if candidate.source_published_at is not None
         ]
         if not timestamps:
-            return (
-                HealthValue.UNKNOWN if source.contract.source_id == "cisa.kev" else HealthValue.OK
-            )
+            return HealthValue.UNKNOWN
         newest = max(timestamps)
         age = max(0.0, (retrieved_at - newest).total_seconds())
         return HealthValue.OK if age <= source.poll_interval_seconds * 2 else HealthValue.DEGRADED
