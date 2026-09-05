@@ -226,5 +226,5 @@ def test_canonical_tables_are_database_enforced_append_only() -> None:
             conn.transaction(),
             conn.cursor() as cur,
         ):
-            cur.execute("TRUNCATE projection_receipts")
+            cur.execute("TRUNCATE projection_receipts, baseline_intelligence_snapshots")
         assert truncate_error.value.sqlstate == "55000"
