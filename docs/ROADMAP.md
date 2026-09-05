@@ -2,9 +2,9 @@
 
 Status: CURRENT_IMPLEMENTATION_STATE_V0
 
-Snapshot parent: `main@4c70e92c6ceb42a009a63d6f71c0d2eba90ddd77`.
+Snapshot parent: `main@458e0c5e2284eb221c6d92785082ce1c6359c1a0`.
 
-Promotion rule for this file: merge of PR #8 promotes `GROUPING_BASELINE_V0` to CLOSED and makes `BASELINE_INTELLIGENCE_V0` the next product phase. The exact merged tree `main@4c70e92c6ceb42a009a63d6f71c0d2eba90ddd77` is the parent authority for that transition.
+Promotion rule for this file: merge of the roadmap promotion following PR #10 records `BASELINE_INTELLIGENCE_V0` as CLOSED and makes `PUBLIC_READ_PLANE_V0` the next product phase. The exact merged tree `main@458e0c5e2284eb221c6d92785082ce1c6359c1a0` is the parent authority for that transition.
 
 This file records implementation state and next-phase priority. It does not override the Constitution or accepted ADRs. If this roadmap conflicts with higher authority, implementation fails closed until governance is repaired.
 
@@ -22,8 +22,9 @@ Do not infer implementation phase from GitHub pull-request number. Preflight and
 | Roadmap / implementation-state authority | #6 | CLOSED | living roadmap, stale bootstrap repair, D007 unprotected-main debt |
 | Source diversity V0 | #7 | CLOSED | HN ATTENTION, GDELT DISCOVERY, Hugging Face PRIMARY_EMISSION; five-source registry |
 | Grouping baseline V0 | #8 | CLOSED | frozen 22-case grouping authority, guarded-hybrid-v0, explicit ambiguity, PIT-safe receipts, pairwise-safe episode groups |
+| Baseline intelligence V0 | #10 | CLOSED | frozen naive episode-activity baseline, PIT-safe windows, explicit health/coverage, deterministic ranking, retained COMPLETE snapshots + receipts |
 
-## Current system capability after PR #8 promotion
+## Current system capability after PR #10 promotion
 
 FRONTIER can:
 - acquire five zero-paid / no-mandatory-key live source lanes;
@@ -38,18 +39,24 @@ FRONTIER can:
 - replay and verify canonical evidence deterministically;
 - group observations into deterministic, versioned episode projections with explicit `GROUP`, `NO_GROUP`, and `AMBIGUOUS` semantics;
 - prevent a direct `NO_GROUP` or `AMBIGUOUS` pair from entering one episode through transitive bridge merging;
-- keep observation identity, episode interpretation, provenance-root independence, and entity identity separate.
+- keep observation identity, episode interpretation, provenance-root independence, and entity identity separate;
+- compute the permanent naive prospective episode-activity baseline using fixed 1h/6h/24h windows, velocity and acceleration;
+- exclude BACKFILL and recovered backlog from live activity while retaining them as evidence;
+- retain explicit aggregate transport/freshness/coverage/schema state without converting missing coverage into zero activity;
+- keep evidence-root diversity and confirmation unavailable rather than fabricating independence;
+- publish deterministic COMPLETE baseline snapshots and projection receipts atomically and append-only;
+- retain prospective baseline snapshots for future advanced-model comparison.
 
 FRONTIER still cannot:
 - infer cross-source factual-root independence or true syndication ancestry;
-- compute a prospective naive trend baseline;
-- publish immutable public intelligence snapshots;
 - serve a public read API;
-- render the operator terminal.
+- expose stable API-ready RADAR/NOW/TRENDING read models;
+- render the operator terminal;
+- authorize advanced ranking beyond the frozen naive comparator.
 
 ## Immediate repository-control gap
 
-GitHub still reports `main` unprotected after PR #8. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
+GitHub still reports `main` unprotected after PR #10. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
 
 ## Priority sequence
 
@@ -106,37 +113,51 @@ Closure evidence:
 
 No embeddings, provenance-root inference, entity resolution, trend scoring, public API or frontend were introduced.
 
-### 3. BASELINE_INTELLIGENCE_V0 — NEXT PRODUCT PHASE
+### 3. BASELINE_INTELLIGENCE_V0 — CLOSED
 
 Goal: run the permanent naive prospective baseline before sophisticated ranking.
 
-Initial outputs may include:
-- chronological recency;
-- mention/event count;
-- rate of change / velocity;
-- simple acceleration where numerically meaningful;
-- source-role diversity;
-- origin/evidence-root diversity where available;
-- coverage state;
-- freshness.
+Delivered:
+- deterministic episode activity projection at a fixed `as_of`;
+- half-open 1h, 6h, 24h, previous-6h and preprevious-6h windows using only `observed_at`;
+- integer mention count, velocity and acceleration metrics;
+- BACKFILL and recovered-after-gap observations retained but excluded from live activity windows;
+- deterministic ranking policy `naive-episode-activity-v0`;
+- explicit source-role diversity without false provenance-root or confirmation claims;
+- aggregate transport, freshness, coverage and schema state;
+- immutable retained COMPLETE snapshots plus projection receipts in PostgreSQL;
+- atomic candidate publication with conflict/failure preserving the prior COMPLETE snapshot;
+- prospective retained outputs for later advanced-model comparison.
 
-Requirements:
-- deterministic, versioned projection;
-- point-in-time `as_of` correctness;
-- immutable COMPLETE snapshot receipt;
-- failed candidate snapshot leaves prior complete snapshot current;
-- prospectively retained results for later comparison against advanced models.
+Closure evidence:
+- exact final reviewed head `cecb69b5877e8470a62b61054cd4760a1fea4de0`;
+- one hostile review: Critical 0 / High 0;
+- exact-head `verify` and hostile-fixture workflows PASS;
+- squash merge `main@458e0c5e2284eb221c6d92785082ce1c6359c1a0`;
+- post-merge `verify` and hostile-fixture workflows PASS.
 
-### 4. PUBLIC_READ_PLANE_V0
+No advanced/learned ranking, provenance-root inference, entity resolution, API or frontend was introduced.
+
+### 4. PUBLIC_READ_PLANE_V0 — NEXT PRODUCT PHASE
 
 Goal: expose derived intelligence read models without allowing the public API to mutate canonical intelligence state.
 
 Planned stack:
 - FastAPI transport only;
-- generated OpenAPI TypeScript client;
-- materialized read models for source/system health and baseline RADAR/NOW/TRENDING substrate;
+- generated OpenAPI TypeScript client contract;
+- read-only materialized/read-model access to source/system health and baseline intelligence;
+- API-ready RADAR/NOW/TRENDING substrate derived from the frozen baseline without inventing new ranking authority;
 - evidence/provenance drill-down endpoints;
+- explicit snapshot/receipt/version/as-of fields so public responses remain auditable;
 - p95 read target evaluated against P03 candidate requirements.
+
+Required invariants:
+- public API has no canonical evidence/projection mutation authority;
+- only COMPLETE retained snapshots are publishable;
+- responses remain bound to snapshot/receipt/version/`as_of` identity;
+- missing/degraded coverage remains visible;
+- API labels must not promote source diversity into independent confirmation;
+- no hidden ranking changes in transport/read-model code.
 
 ### 5. TERMINAL_V0
 
@@ -148,7 +169,7 @@ Planned presentation stack remains TypeScript strict + React 19 + Vite with keyb
 
 ### 6. ADVANCED_INTELLIGENCE_EXPERIMENTS
 
-Only after the prospective baseline exists:
+Only after the prospective baseline exists and the read plane can expose it without semantic mutation:
 - emergence vs confirmation models;
 - manipulation/reflexivity features;
 - persistence/novelty models;
