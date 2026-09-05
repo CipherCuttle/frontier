@@ -69,7 +69,7 @@ def main() -> int:
             "SOFTWARE_PACKAGES",
         ],
         "minimum_qualifying_domains": 2,
-        "operating_point_contract": "same_preregistered_positive_rank_cutoff_k_per_domain_both_arms",
+        "operating_point_contract": "same_preregistered_positive_global_rank_cutoff_k_both_arms",
         "point_precision_floor": "candidate_gte_control_each_qualifying_domain",
         "lead_time_floor": "median_positive_each_qualifying_domain_and_pooled",
         "requires_preregistration_before_confirmatory_window": True,
