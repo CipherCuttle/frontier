@@ -97,7 +97,10 @@ def typescript_text(document: dict[str, Any]) -> str:
         "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0.",
         "",
         "export interface FrontierPublicReadTransport {",
-        "  get<T>(path: string, query?: Record<string, string | number | boolean | null | undefined>): Promise<T>;",
+        (
+            "  get<T>(path: string, query?: Record<string, string | number | boolean | null | "
+            "undefined>): Promise<T>;"
+        ),
         "}",
         "",
     ]
@@ -145,9 +148,11 @@ def typescript_text(document: dict[str, Any]) -> str:
         if path_parameters:
             rendered_path = "`" + json.loads(rendered_path).replace("`", "\\`") + "`"
 
-        lines.append(
-            f"export async function {operation_id}({', '.join(required_args)}): Promise<{response_type}> {{"
+        signature = (
+            f"export async function {operation_id}({', '.join(required_args)}): "
+            f"Promise<{response_type}> {{"
         )
+        lines.append(signature)
         query_arg = ", query" if query_parameters else ""
         lines.append(f"  return transport.get<{response_type}>({rendered_path}{query_arg});")
         lines.append("}")
