@@ -6,6 +6,8 @@ Parent authority: `main@7aafe82eb8630188b659666e597febdd17e69ed4`.
 
 This phase establishes the permanent naive prospective intelligence baseline required before any advanced ranking experiment. This authority and `fixtures/baseline_intelligence/corpus_v0.json` must exist before runtime implementation.
 
+Pre-evaluation consistency note: before any test/evaluation result was consulted, the BACKFILL/recovered wording was narrowed so it matches the already-frozen ranking tuple. These observations are excluded from live activity windows; they remain retained evidence and may participate only in later non-activity tie-break metadata. They must never manufacture current-window activity.
+
 ## Objective
 
 Produce a deterministic, versioned, point-in-time-safe ranking of episode activity: which episode candidates are moving now according to the simplest transparent activity baseline FRONTIER can compute from evidence it actually knew by `as_of`.
@@ -34,10 +36,12 @@ Source/effective/retrieval/provider timestamps and `generated_at` never grant ea
 All canonical evidence remains in episode membership, but live activity windows include only observations whose first durable INSERTED collection occurrence is prospectively eligible.
 
 - `SCHEDULED`, `DISCOVERY`, `ACTIVE_ENRICHMENT`: eligible;
-- `BACKFILL`: excluded from live activity/rank movement;
-- `recovered_after_gap=true`: excluded from live activity/rank movement and counted separately as recovered backlog;
+- `BACKFILL`: excluded from live activity windows and counted separately as retained backfill evidence;
+- `recovered_after_gap=true`: excluded from live activity windows and counted separately as recovered backlog evidence;
 - missing/contradictory insertion causality: fail closed;
 - duplicate/repeated collection never creates additional mentions.
+
+Backfill/recovered evidence may affect only later non-activity tie-break metadata already frozen below (`source_role_diversity`, `last_observed_at`, `evidence_count_total`); it cannot improve current-window count, velocity, or acceleration fields 1-5.
 
 ## Fixed windows and metrics
 
@@ -127,8 +131,8 @@ The corpus covers at least:
 - syndication/source visibility without provenance-root claims;
 - positive/negative velocity and acceleration;
 - deterministic tie breaking;
-- BACKFILL exclusion;
-- recovered backlog exclusion;
+- BACKFILL exclusion from live activity;
+- recovered backlog exclusion from live activity;
 - degraded/missing source health remaining explicit;
 - old source timestamp first observed now using `observed_at`;
 - correction/retraction remaining activity-visible;
