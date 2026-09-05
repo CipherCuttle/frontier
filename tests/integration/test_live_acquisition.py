@@ -177,6 +177,20 @@ def test_pypi_200_then_304_uses_trusted_state_and_does_not_manufacture_evidence(
         assert state is not None
         assert state.last_body_digest == sha256_digest(body)
         assert state.consecutive_failures == 0
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT transport_health, freshness_health, completeness_health, schema_health
+                FROM source_health_observations
+                WHERE collection_run_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (second.run_id,),
+            )
+            health = cur.fetchone()
+        assert health is not None
+        assert health == ("OK", "UNKNOWN", "OK", "OK")
 
 
 def test_304_without_prior_trusted_entity_fails_closed() -> None:
