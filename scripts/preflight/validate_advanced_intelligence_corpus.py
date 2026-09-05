@@ -74,6 +74,9 @@ def main() -> int:
         "lead_time_floor": "median_positive_each_qualifying_domain_and_pooled",
         "requires_preregistration_before_confirmatory_window": True,
         "requires_hostile_preregistration_review": True,
+        "requires_candidate_freeze_before_confirmatory_window": True,
+        "candidate_freeze_identity_required_in_artifacts": True,
+        "outcome_labels_model_independent": True,
         "historical_development_counts_as_confirmatory": False,
         "public_promotion_requires_separate_authority_change": True,
     }
