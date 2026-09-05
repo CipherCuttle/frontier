@@ -181,3 +181,105 @@ def test_duplicate_grouping_input_fails_closed() -> None:
     first, _, _ = corpus_cases()[0]
     with pytest.raises(ValueError, match="duplicate observation_id"):
         build_grouping_projection((first, first), as_of=NOW + timedelta(minutes=10))
+
+
+def test_projection_does_not_bridge_no_group_or_ambiguous_pairs() -> None:
+    artifact_v1 = GroupingInput(
+        observation_id="obs_" + "1" * 64,
+        source_id="pypi.fixture",
+        source_item_key="atlas/1.0",
+        kind="ARTIFACT",
+        observed_at=NOW,
+        canonical_url="https://pypi.example/atlas/1.0",
+        title=None,
+        text=None,
+        artifact_type="python-package-release",
+        artifact_name="Atlas Runtime Package",
+        artifact_version="1.0",
+    )
+    artifact_bridge = GroupingInput(
+        observation_id="obs_" + "2" * 64,
+        source_id="publisher.fixture",
+        source_item_key="atlas-release",
+        kind="DOCUMENT",
+        observed_at=NOW + timedelta(minutes=1),
+        canonical_url="https://publisher.example/atlas",
+        title="Atlas Runtime Package",
+        text=None,
+    )
+    artifact_v2 = GroupingInput(
+        observation_id="obs_" + "3" * 64,
+        source_id="pypi.fixture",
+        source_item_key="atlas/2.0",
+        kind="ARTIFACT",
+        observed_at=NOW + timedelta(minutes=2),
+        canonical_url="https://pypi.example/atlas/2.0",
+        title=None,
+        text=None,
+        artifact_type="python-package-release",
+        artifact_name="Atlas Runtime Package",
+        artifact_version="2.0",
+    )
+    assert assess_pair(artifact_v1, artifact_bridge).decision is GroupingDecision.GROUP
+    assert assess_pair(artifact_bridge, artifact_v2).decision is GroupingDecision.GROUP
+    assert assess_pair(artifact_v1, artifact_v2).decision is GroupingDecision.NO_GROUP
+
+    artifact_projection = build_grouping_projection(
+        (artifact_v1, artifact_bridge, artifact_v2),
+        as_of=NOW + timedelta(minutes=10),
+    )
+    assert not any(
+        {artifact_v1.observation_id, artifact_v2.observation_id}
+        <= set(group.observation_ids)
+        for group in artifact_projection.groups
+    )
+
+    first = GroupingInput(
+        observation_id="obs_" + "4" * 64,
+        source_id="publisher.alpha",
+        source_item_key="atlas-a",
+        kind="DOCUMENT",
+        observed_at=NOW,
+        canonical_url="https://alpha.example/atlas",
+        title="Atlas runtime launches for local agents",
+        text=None,
+    )
+    bridge = GroupingInput(
+        observation_id="obs_" + "5" * 64,
+        source_id="hn.frontpage",
+        source_item_key="hn:500",
+        kind="DOCUMENT",
+        observed_at=NOW + timedelta(minutes=1),
+        canonical_url="https://shared.example/atlas",
+        title="Atlas runtime launches for local agents",
+        text=None,
+        signal_roles=("ATTENTION",),
+    )
+    ambiguous = GroupingInput(
+        observation_id="obs_" + "6" * 64,
+        source_id="hn.frontpage",
+        source_item_key="hn:501",
+        kind="DOCUMENT",
+        observed_at=NOW + timedelta(minutes=2),
+        canonical_url="https://shared.example/atlas",
+        title="Different discussion headline entirely",
+        text=None,
+        signal_roles=("ATTENTION",),
+    )
+    assert assess_pair(first, bridge).decision is GroupingDecision.GROUP
+    assert assess_pair(bridge, ambiguous).decision is GroupingDecision.GROUP
+    assert assess_pair(first, ambiguous).decision is GroupingDecision.AMBIGUOUS
+
+    ambiguous_projection = build_grouping_projection(
+        (first, bridge, ambiguous),
+        as_of=NOW + timedelta(minutes=10),
+    )
+    assert not any(
+        {first.observation_id, ambiguous.observation_id} <= set(group.observation_ids)
+        for group in ambiguous_projection.groups
+    )
+    assert any(
+        pair.left_observation_id == first.observation_id
+        and pair.right_observation_id == ambiguous.observation_id
+        for pair in ambiguous_projection.ambiguous_pairs
+    )
