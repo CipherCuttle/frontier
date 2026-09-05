@@ -184,7 +184,7 @@ def test_hf_volatile_counters_and_tag_order_do_not_manufacture_observation_ident
 def test_hf_tag_canonicalization_is_order_invariant_before_retention_cap() -> None:
     tags = [f"tag-{index:02d}" for index in range(40)]
     first_body = json.dumps([hf_model(tags=tags)]).encode()
-    second_body = json.dumps([hf_model(tags=list(reversed(tags))) ]).encode()
+    second_body = json.dumps([hf_model(tags=list(reversed(tags)))]).encode()
 
     first = normalize_hf_models(
         first_body,
