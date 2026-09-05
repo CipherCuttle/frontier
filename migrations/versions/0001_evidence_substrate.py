@@ -134,22 +134,37 @@ def upgrade() -> None:
         CREATE TRIGGER frontier_append_only_observations
         BEFORE UPDATE OR DELETE ON observations
         FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+        CREATE TRIGGER frontier_append_only_observations_truncate
+        BEFORE TRUNCATE ON observations
+        FOR EACH STATEMENT EXECUTE FUNCTION frontier_reject_canonical_mutation();
 
         CREATE TRIGGER frontier_append_only_collection_occurrences
         BEFORE UPDATE OR DELETE ON collection_run_observations
         FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+        CREATE TRIGGER frontier_append_only_collection_occurrences_truncate
+        BEFORE TRUNCATE ON collection_run_observations
+        FOR EACH STATEMENT EXECUTE FUNCTION frontier_reject_canonical_mutation();
 
         CREATE TRIGGER frontier_append_only_relations
         BEFORE UPDATE OR DELETE ON observation_relations
         FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+        CREATE TRIGGER frontier_append_only_relations_truncate
+        BEFORE TRUNCATE ON observation_relations
+        FOR EACH STATEMENT EXECUTE FUNCTION frontier_reject_canonical_mutation();
 
         CREATE TRIGGER frontier_append_only_source_health
         BEFORE UPDATE OR DELETE ON source_health_observations
         FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+        CREATE TRIGGER frontier_append_only_source_health_truncate
+        BEFORE TRUNCATE ON source_health_observations
+        FOR EACH STATEMENT EXECUTE FUNCTION frontier_reject_canonical_mutation();
 
         CREATE TRIGGER frontier_append_only_projection_receipts
         BEFORE UPDATE OR DELETE ON projection_receipts
         FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+        CREATE TRIGGER frontier_append_only_projection_receipts_truncate
+        BEFORE TRUNCATE ON projection_receipts
+        FOR EACH STATEMENT EXECUTE FUNCTION frontier_reject_canonical_mutation();
 
         CREATE INDEX observations_source_observed_idx ON observations(source_id, observed_at);
         CREATE INDEX observations_observed_idx ON observations(observed_at);
