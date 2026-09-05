@@ -63,7 +63,9 @@ def check_fetch_boundary() -> list[str]:
     text = FETCH_BOUNDARY.read_text(encoding="utf-8").lower()
     for forbidden in ("database_url", "postgres://", "postgresql://", "frontier_database_url"):
         if forbidden in text:
-            failures.append(f"{FETCH_BOUNDARY}: fetch role contains DB coordinate token: {forbidden}")
+            failures.append(
+                f"{FETCH_BOUNDARY}: fetch role contains DB coordinate token: {forbidden}"
+            )
     return failures
 
 
