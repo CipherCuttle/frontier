@@ -23,7 +23,7 @@ Do not start collection against an unknown or stale database schema.
 1. Apply migrations:
 
    ```bash
-   FRONTIER_DATABASE_URL='postgresql://...' uv run alembic upgrade head
+   FRONTIER_DATABASE_URL='postgresql+psycopg://...' uv run alembic upgrade head
    ```
 
 2. Verify database and configuration readiness:
