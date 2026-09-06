@@ -77,8 +77,10 @@ def _case_map(document: dict[str, object]) -> dict[str, dict[str, object]]:
     result: dict[str, dict[str, object]] = {}
     for value in _array(document["cases"], "cases"):
         case = _object(value, "case")
-        case_id = _string(case["id"], "case.id") if "id" in case else _string(
-            case["case_id"], "case.case_id"
+        case_id = (
+            _string(case["id"], "case.id")
+            if "id" in case
+            else _string(case["case_id"], "case.case_id")
         )
         assert case_id not in result
         result[case_id] = case
@@ -90,15 +92,23 @@ def _expand_coverage(
     report_case: dict[str, object],
 ) -> dict[str, dict[str, int]]:
     expansion = _object(report_document["coverage_expansion"], "coverage_expansion")
-    fields = [_string(value, "tuple field") for value in _array(expansion["tuple_fields"], "tuple_fields")]
-    absent = [_integer(value, "absent tuple value") for value in _array(expansion["absent_source_tuple"], "absent_source_tuple")]
+    fields = [
+        _string(value, "tuple field") for value in _array(expansion["tuple_fields"], "tuple_fields")
+    ]
+    absent = [
+        _integer(value, "absent tuple value")
+        for value in _array(expansion["absent_source_tuple"], "absent_source_tuple")
+    ]
     assert len(fields) == len(absent)
 
     profiles = _object(report_document["coverage_profiles"], "coverage_profiles")
     profile_name = _string(report_case["source_coverage_profile"], "source_coverage_profile")
     profile = _object(profiles[profile_name], f"coverage profile {profile_name}")
 
-    source_order = [_string(value, "source") for value in _array(report_document["source_order"], "source_order")]
+    source_order = [
+        _string(value, "source")
+        for value in _array(report_document["source_order"], "source_order")
+    ]
     assert source_order == EXPECTED_SOURCES
 
     result: dict[str, dict[str, int]] = {}
@@ -137,8 +147,7 @@ def _project_report_body(
     coverage = _expand_coverage(report_document, report_case)
     report["source_coverage"] = coverage
     report["ignored_future_observation_by_source"] = {
-        source: values["ignored_future_observation_count"]
-        for source, values in coverage.items()
+        source: values["ignored_future_observation_count"] for source, values in coverage.items()
     }
     report["drift_reasons"] = expected.get("drift_reasons", [])
     return report
@@ -192,11 +201,15 @@ def test_all_24_cases_resolve_to_concrete_seven_source_coverage_and_exact_digest
             for source in EXPECTED_SOURCES
         )
         malformed = sum(
-            _integer(_object(coverage[source], source)["malformed_identity_field_count"], "malformed")
+            _integer(
+                _object(coverage[source], source)["malformed_identity_field_count"], "malformed"
+            )
             for source in EXPECTED_SOURCES
         )
         ignored_future = sum(
-            _integer(_object(coverage[source], source)["ignored_future_observation_count"], "future")
+            _integer(
+                _object(coverage[source], source)["ignored_future_observation_count"], "future"
+            )
             for source in EXPECTED_SOURCES
         )
 
@@ -218,13 +231,19 @@ def test_report_digest_rule_is_non_circular_and_replay_case_is_exact() -> None:
 
     corpus_cases = _case_map(_load(CORPUS_PATH))
     report_cases = _case_map(expected_reports)
-    replay_body = _project_report_body(corpus_cases["EPSE-020"], expected_reports, report_cases["EPSE-020"])
-    original_body = _project_report_body(corpus_cases["EPSE-001"], expected_reports, report_cases["EPSE-001"])
+    replay_body = _project_report_body(
+        corpus_cases["EPSE-020"], expected_reports, report_cases["EPSE-020"]
+    )
+    original_body = _project_report_body(
+        corpus_cases["EPSE-001"], expected_reports, report_cases["EPSE-001"]
+    )
     assert replay_body == original_body
     assert report_cases["EPSE-020"]["report_digest"] == report_cases["EPSE-001"]["report_digest"]
 
 
-def test_source_multiplicity_and_zero_derivation_coverage_are_explicitly_non_authoritative() -> None:
+def test_source_multiplicity_and_zero_derivation_coverage_are_explicitly_non_authoritative() -> (
+    None
+):
     corpus_cases = _case_map(_load(CORPUS_PATH))
     expected_reports = _load(EXPECTED_REPORTS_PATH)
     report_cases = _case_map(expected_reports)
@@ -244,7 +263,8 @@ def test_source_multiplicity_and_zero_derivation_coverage_are_explicitly_non_aut
     represented_sources = [
         source
         for source in EXPECTED_SOURCES
-        if _integer(_object(coverage[source], source)["total_pit_eligible_observations"], "total") > 0
+        if _integer(_object(coverage[source], source)["total_pit_eligible_observations"], "total")
+        > 0
     ]
     assert represented_sources == ["hf.models", "pypi.updates"]
     assert body["direct_derivation_evidence_count"] == 0
