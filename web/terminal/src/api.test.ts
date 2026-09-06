@@ -3,9 +3,12 @@ import {
   BrowserPublicReadTransport,
   experimentalAvailability,
   StaleSnapshotResponseError,
+  StaleExperimentResponseError,
   createTerminalPublicReadApi,
   type EpisodeEvidenceResponse,
+  type ExperimentalEpisodeComparisonResponse,
   type ExperimentalOverviewResponse,
+  type ExperimentalStatusResponse,
   type FrontierPublicReadTransport,
   type HealthResponse,
   type ViewResponse,
@@ -149,5 +152,131 @@ describe("TerminalPublicReadApi experimental surfaces (slice H)", () => {
     expect(experimentalAvailability("RAN")).toBe("UNKNOWN");
     expect(experimentalAvailability(null)).toBe("UNKNOWN");
     expect(experimentalAvailability(undefined)).toBe("UNKNOWN");
+  });
+});
+
+describe("TerminalPublicReadApi experiment identity races (WP8)", () => {
+  function comparisonPayload(overrides: Partial<ExperimentalEpisodeComparisonResponse> = {}): ExperimentalEpisodeComparisonResponse {
+    return {
+      as_of: "2026-09-05T12:00:00.000000Z",
+      availability: "AVAILABLE",
+      baseline_rank: 7,
+      baseline_rank_state: "AVAILABLE",
+      candidate_components: null,
+      candidate_components_state: "UNAVAILABLE",
+      candidate_freeze_receipt_id: "freeze_a",
+      candidate_rank: 1,
+      candidate_rank_state: "AVAILABLE",
+      control_snapshot_id: "snapshot_control",
+      episode_id: "episode_fixture",
+      evaluation_receipt_id: "eval_a",
+      evaluation_receipt_status: "COMPLETE",
+      evaluation_state: "AVAILABLE",
+      feature_availability: "NO_DATA",
+      feature_interpretation: null,
+      feature_interpretation_state: "UNAVAILABLE",
+      feature_values: [],
+      rank_delta: -6,
+      rank_delta_state: "AVAILABLE",
+      run_failure_reason: null,
+      run_id: "run_a",
+      run_status: "RAN",
+      ...overrides,
+    };
+  }
+
+  it("discards episode comparison responses superseded by a new experiment binding mid-flight", async () => {
+    const comparisonResponse = deferred<ExperimentalEpisodeComparisonResponse>();
+    const paths: string[] = [];
+    const transport: FrontierPublicReadTransport = {
+      async get<T>(path: string): Promise<T> {
+        paths.push(path);
+        if (path.startsWith("/v0/experimental/episodes/")) {
+          return (await comparisonResponse.promise) as T;
+        }
+        throw new Error(`Unexpected path: ${path}`);
+      },
+    };
+    const api = createTerminalPublicReadApi(transport);
+    api.setExperimentalBinding({ runId: "run_a", freezeReceiptId: "freeze_a", evaluationReceiptId: "eval_a" });
+
+    const pending = api.experimentalEpisodeComparison("episode_old", { asOf: "2026-09-05T12:00:00.000000Z" });
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: "StaleExperimentResponseError",
+      context: "episode comparison",
+    });
+
+    // The binding moves to a new run/freeze/evaluation identity while the
+    // fetch is in flight: the response belongs to a superseded experiment.
+    api.setExperimentalBinding({ runId: "run_b", freezeReceiptId: "freeze_b", evaluationReceiptId: "eval_b" });
+    comparisonResponse.resolve(comparisonPayload({ run_id: "run_a", candidate_freeze_receipt_id: "freeze_a" }));
+
+    await rejected;
+    expect(paths).toEqual(["/v0/experimental/episodes/episode_old/comparison"]);
+  });
+
+  it("discards comparison responses whose own run identity contradicts the binding", async () => {
+    const transport: FrontierPublicReadTransport = {
+      async get<T>(path: string): Promise<T> {
+        if (path.startsWith("/v0/experimental/episodes/")) {
+          // Response belongs to an older run than the bound identity.
+          return comparisonPayload({ run_id: "run_superseded", candidate_freeze_receipt_id: "freeze_a" }) as T;
+        }
+        throw new Error(`Unexpected path: ${path}`);
+      },
+    };
+    const api = createTerminalPublicReadApi(transport);
+    api.setExperimentalBinding({ runId: "run_a", freezeReceiptId: "freeze_a", evaluationReceiptId: null });
+    await expect(api.experimentalEpisodeComparison("episode_old")).rejects.toBeInstanceOf(
+      StaleExperimentResponseError,
+    );
+  });
+
+  it("passes comparison responses through when unbound or identity-null (NO_DATA)", async () => {
+    const payload = comparisonPayload({
+      run_id: null,
+      candidate_freeze_receipt_id: null,
+      evaluation_receipt_id: null,
+      availability: "NO_DATA",
+      baseline_rank: null,
+      baseline_rank_state: "UNAVAILABLE",
+      candidate_rank: null,
+      candidate_rank_state: "UNAVAILABLE",
+      rank_delta: null,
+      rank_delta_state: "UNAVAILABLE",
+    });
+    const transport: FrontierPublicReadTransport = {
+      async get<T>(path: string): Promise<T> {
+        if (path.startsWith("/v0/experimental/episodes/")) return payload as T;
+        throw new Error(`Unexpected path: ${path}`);
+      },
+    };
+    const unboundApi = createTerminalPublicReadApi(transport);
+    await expect(unboundApi.experimentalEpisodeComparison("episode_old")).resolves.toBe(payload);
+
+    const boundApi = createTerminalPublicReadApi(transport);
+    boundApi.setExperimentalBinding({ runId: "run_a", freezeReceiptId: "freeze_a", evaluationReceiptId: "eval_a" });
+    // NO_DATA responses carry null identity: nothing contradicts the binding.
+    await expect(boundApi.experimentalEpisodeComparison("episode_old")).resolves.toBe(payload);
+  });
+
+  it("guards status and history fetches against a superseded binding mid-flight", async () => {
+    const statusResponse = deferred<ExperimentalStatusResponse>();
+    const transport: FrontierPublicReadTransport = {
+      async get<T>(path: string): Promise<T> {
+        if (path === "/v0/experimental/status") return (await statusResponse.promise) as T;
+        throw new Error(`Unexpected path: ${path}`);
+      },
+    };
+    const api = createTerminalPublicReadApi(transport);
+    api.setExperimentalBinding({ runId: "run_a", freezeReceiptId: null, evaluationReceiptId: null });
+    const pending = api.experimentalStatus();
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: "StaleExperimentResponseError",
+      context: "experiment status",
+    });
+    api.setExperimentalBinding({ runId: "run_b", freezeReceiptId: null, evaluationReceiptId: null });
+    statusResponse.resolve({ availability: "AVAILABLE", status: {} } as ExperimentalStatusResponse);
+    await rejected;
   });
 });

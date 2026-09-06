@@ -1,16 +1,26 @@
 import {
   getEpisode,
+  getExperimentalEpisodeComparison,
+  getExperimentalEvaluationDetail,
   getExperimentalFeatureBatches,
+  getExperimentalHistory,
   getExperimentalOverview,
+  getExperimentalRunDetail,
   getExperimentalShadowRuns,
+  getExperimentalStatus,
   getHealth,
   getNow,
   getRadar,
   getTrending,
   type EpisodeEvidenceResponse,
+  type ExperimentalEpisodeComparisonResponse,
+  type ExperimentalEvaluationDetailSectionResponse,
   type ExperimentalFeatureBatchSectionResponse,
+  type ExperimentalHistoryResponse,
   type ExperimentalOverviewResponse,
+  type ExperimentalRunDetailSectionResponse,
   type ExperimentalShadowRunSectionResponse,
+  type ExperimentalStatusResponse,
   type FrontierPublicReadTransport,
   type HealthResponse,
   type PublicViewKind,
@@ -21,13 +31,20 @@ export type {
   EpisodeEvidenceResponse,
   EpisodeResponse,
   ExperimentalAnalysisArtifactResponse,
+  ExperimentalEpisodeComparisonResponse,
+  ExperimentalEvaluationDetailResponse,
+  ExperimentalEvaluationDetailSectionResponse,
   ExperimentalEvaluationReceiptResponse,
   ExperimentalFeatureBatchResponse,
   ExperimentalFeatureBatchSectionResponse,
+  ExperimentalHistoryResponse,
   ExperimentalOverviewResponse,
   ExperimentalPefArtifactResponse,
+  ExperimentalRunDetailResponse,
+  ExperimentalRunDetailSectionResponse,
   ExperimentalShadowRunResponse,
   ExperimentalShadowRunSectionResponse,
+  ExperimentalStatusResponse,
   FrontierPublicReadTransport,
   HealthResponse,
   ObservationEvidenceResponse,
@@ -92,6 +109,78 @@ export class StaleSnapshotResponseError extends Error {
   }
 }
 
+/**
+ * Experiment identity binding (WP8): the run / freeze / evaluation identity
+ * the EXPERIMENTAL surfaces are currently bound to. Not just a snapshot id —
+ * experimental responses are only valid against the bound experiment identity.
+ */
+export interface ExperimentalIdentityBinding {
+  runId: string | null;
+  freezeReceiptId: string | null;
+  evaluationReceiptId: string | null;
+}
+
+export class StaleExperimentResponseError extends Error {
+  readonly context: string;
+  readonly requested: ExperimentalIdentityBinding | null;
+  readonly active: ExperimentalIdentityBinding | null;
+
+  constructor(
+    context: string,
+    requested: ExperimentalIdentityBinding | null,
+    active: ExperimentalIdentityBinding | null,
+  ) {
+    super(
+      `Discarded stale ${context} response; the experiment identity moved from ` +
+        `${describeBinding(requested)} to ${describeBinding(active)} mid-flight.`,
+    );
+    this.name = "StaleExperimentResponseError";
+    this.context = context;
+    this.requested = requested;
+    this.active = active;
+  }
+}
+
+function describeBinding(binding: ExperimentalIdentityBinding | null): string {
+  if (!binding) return "UNBOUND";
+  return (
+    `run=${binding.runId ?? "UNKNOWN"}` +
+    ` freeze=${binding.freezeReceiptId ?? "UNKNOWN"}` +
+    ` evaluation=${binding.evaluationReceiptId ?? "UNKNOWN"}`
+  );
+}
+
+function bindingChanged(
+  requested: ExperimentalIdentityBinding | null,
+  active: ExperimentalIdentityBinding | null,
+): boolean {
+  if (requested === null || active === null) return requested !== active;
+  return (
+    requested.runId !== active.runId ||
+    requested.freezeReceiptId !== active.freezeReceiptId ||
+    requested.evaluationReceiptId !== active.evaluationReceiptId
+  );
+}
+
+/**
+ * A non-null response identity that contradicts the bound identity means the
+ * response belongs to a superseded run/freeze/evaluation — discard it (R4).
+ */
+function identityMismatch(
+  binding: ExperimentalIdentityBinding,
+  response: ExperimentalIdentityBinding,
+): boolean {
+  return (
+    (binding.runId !== null && response.runId !== null && binding.runId !== response.runId) ||
+    (binding.freezeReceiptId !== null &&
+      response.freezeReceiptId !== null &&
+      binding.freezeReceiptId !== response.freezeReceiptId) ||
+    (binding.evaluationReceiptId !== null &&
+      response.evaluationReceiptId !== null &&
+      binding.evaluationReceiptId !== response.evaluationReceiptId)
+  );
+}
+
 export class BrowserPublicReadTransport implements FrontierPublicReadTransport {
   private readonly baseUrl: string;
 
@@ -142,12 +231,38 @@ export interface TerminalPublicReadApi {
   experimentalShadowRuns(asOf?: string): Promise<ExperimentalShadowRunSectionResponse>;
   /** Labelled EXPERIMENTAL_SHADOW latest-feature-batch section (GET only). */
   experimentalFeatureBatches(asOf?: string): Promise<ExperimentalFeatureBatchSectionResponse>;
+  /**
+   * Labelled EXPERIMENTAL_SHADOW per-episode baseline-vs-candidate comparison
+   * (WP7). Guarded by the experiment identity binding: responses from a
+   * superseded run/freeze/evaluation are discarded, never rendered.
+   */
+  experimentalEpisodeComparison(
+    episodeId: string,
+    options?: { asOf?: string; runId?: string },
+  ): Promise<ExperimentalEpisodeComparisonResponse>;
+  /** Labelled EXPERIMENTAL_SHADOW full run detail (GET only). */
+  experimentalRunDetail(runId: string): Promise<ExperimentalRunDetailSectionResponse>;
+  /** Labelled EXPERIMENTAL_SHADOW full evaluation detail (GET only). */
+  experimentalEvaluationDetail(
+    evaluationId: string,
+  ): Promise<ExperimentalEvaluationDetailSectionResponse>;
+  /** Labelled EXPERIMENTAL_SHADOW coherent experiment status surface (WP7). */
+  experimentalStatus(): Promise<ExperimentalStatusResponse>;
+  /** Labelled EXPERIMENTAL_SHADOW bounded newest-first experiment history (WP7). */
+  experimentalHistory(limit?: number): Promise<ExperimentalHistoryResponse>;
+  /**
+   * Bind the active experiment identity (run/freeze/evaluation). Experimental
+   * fetches issued afterwards discard responses that belong to a superseded
+   * identity — the war-room analogue of the snapshot stale-response guard.
+   */
+  setExperimentalBinding(binding: ExperimentalIdentityBinding | null): void;
 }
 
 export function createTerminalPublicReadApi(
   transport: FrontierPublicReadTransport,
 ): TerminalPublicReadApi {
   let activeSnapshotId: string | null = null;
+  let experimentalBinding: ExperimentalIdentityBinding | null = null;
 
   const requireActiveSnapshot = (
     context: "episode" | "health",
@@ -155,6 +270,23 @@ export function createTerminalPublicReadApi(
   ): void => {
     if (activeSnapshotId !== requestedSnapshotId) {
       throw new StaleSnapshotResponseError(context, requestedSnapshotId, activeSnapshotId);
+    }
+  };
+
+  const requireFreshIdentity = (
+    context: string,
+    bindingAtRequest: ExperimentalIdentityBinding | null,
+    responseIdentity: ExperimentalIdentityBinding | null,
+  ): void => {
+    if (bindingChanged(bindingAtRequest, experimentalBinding)) {
+      throw new StaleExperimentResponseError(context, bindingAtRequest, experimentalBinding);
+    }
+    if (
+      bindingAtRequest !== null &&
+      responseIdentity !== null &&
+      identityMismatch(bindingAtRequest, responseIdentity)
+    ) {
+      throw new StaleExperimentResponseError(context, bindingAtRequest, experimentalBinding);
     }
   };
 
@@ -198,6 +330,48 @@ export function createTerminalPublicReadApi(
     async experimentalFeatureBatches(asOf) {
       const query = asOf ? { as_of: asOf } : {};
       return await getExperimentalFeatureBatches(transport, query);
+    },
+    async experimentalEpisodeComparison(episodeId, options = {}) {
+      const bindingAtRequest = experimentalBinding;
+      const query = {
+        ...(options.asOf ? { as_of: options.asOf } : {}),
+        ...(options.runId ? { run_id: options.runId } : {}),
+      };
+      const response = await getExperimentalEpisodeComparison(transport, episodeId, query);
+      requireFreshIdentity("episode comparison", bindingAtRequest, {
+        runId: response.run_id,
+        freezeReceiptId: response.candidate_freeze_receipt_id,
+        evaluationReceiptId: response.evaluation_receipt_id,
+      });
+      return response;
+    },
+    async experimentalRunDetail(runId) {
+      const bindingAtRequest = experimentalBinding;
+      const response = await getExperimentalRunDetail(transport, runId, {});
+      requireFreshIdentity("run detail", bindingAtRequest, null);
+      return response;
+    },
+    async experimentalEvaluationDetail(evaluationId) {
+      const bindingAtRequest = experimentalBinding;
+      const response = await getExperimentalEvaluationDetail(transport, evaluationId, {});
+      requireFreshIdentity("evaluation detail", bindingAtRequest, null);
+      return response;
+    },
+    async experimentalStatus() {
+      const bindingAtRequest = experimentalBinding;
+      const response = await getExperimentalStatus(transport);
+      requireFreshIdentity("experiment status", bindingAtRequest, null);
+      return response;
+    },
+    async experimentalHistory(limit) {
+      const bindingAtRequest = experimentalBinding;
+      const query = limit ? { limit } : {};
+      const response = await getExperimentalHistory(transport, query);
+      requireFreshIdentity("experiment history", bindingAtRequest, null);
+      return response;
+    },
+    setExperimentalBinding(binding) {
+      experimentalBinding = binding;
     },
   };
 }
