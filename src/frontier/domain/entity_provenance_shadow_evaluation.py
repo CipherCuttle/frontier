@@ -166,8 +166,26 @@ def _pair_decisions(
     if not (0 <= left_index < len(observations) and 0 <= right_index < len(observations)):
         raise ValueError("evaluation pair index is outside observation input")
 
-    left_record = bridge_records_by_observation_id.get(observations[left_index].observation_id)
-    right_record = bridge_records_by_observation_id.get(observations[right_index].observation_id)
+    left_observation = observations[left_index]
+    right_observation = observations[right_index]
+    if left_observation.observed_at > as_of or right_observation.observed_at > as_of:
+        return "NOT_EVALUABLE", "NOT_EVALUABLE"
+
+    seen_ids: set[str] = set()
+    duplicate_ids: set[str] = set()
+    for observation in observations:
+        if observation.observation_id in seen_ids:
+            duplicate_ids.add(observation.observation_id)
+        else:
+            seen_ids.add(observation.observation_id)
+    if (
+        left_observation.observation_id in duplicate_ids
+        or right_observation.observation_id in duplicate_ids
+    ):
+        return "NOT_EVALUABLE", "NOT_EVALUABLE"
+
+    left_record = bridge_records_by_observation_id.get(left_observation.observation_id)
+    right_record = bridge_records_by_observation_id.get(right_observation.observation_id)
     if left_record is None or right_record is None:
         return "NOT_EVALUABLE", "NOT_EVALUABLE"
 
