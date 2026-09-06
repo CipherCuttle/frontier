@@ -89,9 +89,7 @@ def test_durable_timestamp_cannot_precede_receipt_creation() -> None:
 
 
 def test_unbound_development_run_cannot_be_confirmatory() -> None:
-    failure = _binding_failure(
-        run=_run(as_of=DURABLE_AT + timedelta(seconds=300), freeze_id=None)
-    )
+    failure = _binding_failure(run=_run(as_of=DURABLE_AT + timedelta(seconds=300), freeze_id=None))
     assert failure is not None
     assert "does not bind" in failure
 
