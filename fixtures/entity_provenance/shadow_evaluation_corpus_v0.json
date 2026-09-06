@@ -1,0 +1,175 @@
+{
+  "schema_version": "frontier-entity-provenance-shadow-evaluation-corpus-v0",
+  "phase_id": "ENTITY_PROVENANCE_SHADOW_EVALUATION_V0",
+  "authority": {
+    "runtime_authority": false,
+    "persistence_authority": false,
+    "public_authority": false,
+    "canonical_entity_authority": false,
+    "canonical_provenance_authority": false,
+    "promotion_authority": false
+  },
+  "cases": [
+    {
+      "id": "EPSE-001",
+      "category": "entity_supported_same_pypi",
+      "scenario": "Two PIT-eligible PyPI release observations share the same frozen native package identity.",
+      "required": [
+        "candidate_may_emit_SAME_ENTITY",
+        "entity_quality_verdict_must_remain_INSUFFICIENT_INDEPENDENT_GROUND_TRUTH"
+      ]
+    },
+    {
+      "id": "EPSE-002",
+      "category": "entity_supported_different_pypi",
+      "scenario": "Two PIT-eligible PyPI observations have different frozen package identities.",
+      "required": [
+        "candidate_must_not_emit_SAME_ENTITY_from_name_or_url_fallback"
+      ]
+    },
+    {
+      "id": "EPSE-003",
+      "category": "github_rename_same_numeric_id",
+      "scenario": "Repository slug/title changes while positive numeric github_repository_id remains the same.",
+      "required": [
+        "candidate_may_emit_SAME_ENTITY",
+        "slug_change_must_not_break_native_identity"
+      ]
+    },
+    {
+      "id": "EPSE-004",
+      "category": "github_same_surface_different_numeric_id",
+      "scenario": "Repository observations share confusing surface metadata but have distinct numeric repository IDs.",
+      "required": [
+        "candidate_must_not_emit_SAME_ENTITY"
+      ]
+    },
+    {
+      "id": "EPSE-005",
+      "category": "cisa_valid_same_cve",
+      "scenario": "Two CISA observations expose the same valid CVE coordinate with matching metadata.",
+      "required": [
+        "candidate_may_emit_SAME_ENTITY",
+        "quality_verdict_stays_nonpromotional"
+      ]
+    },
+    {
+      "id": "EPSE-006",
+      "category": "cisa_explicit_null_metadata",
+      "scenario": "CISA source_metadata contains explicit null cve_id.",
+      "required": [
+        "identity_signal_degraded",
+        "no_native_identity_fabricated"
+      ]
+    },
+    {
+      "id": "EPSE-007",
+      "category": "hf_same_provider_key",
+      "scenario": "Two Hugging Face observations share the exact source_item_key.",
+      "required": [
+        "candidate_may_emit_SAME_ENTITY",
+        "rename_continuity_beyond_provider_key_not_inferred"
+      ]
+    },
+    {
+      "id": "EPSE-008",
+      "category": "unsupported_arxiv",
+      "scenario": "arXiv observations share title/URL-like surface evidence.",
+      "required": [
+        "no_entity_native_identity",
+        "no_SAME_ENTITY_upgrade_from_surface_similarity"
+      ]
+    },
+    {
+      "id": "EPSE-009",
+      "category": "unsupported_gdelt",
+      "scenario": "GDELT discovery records point at the same URL.",
+      "required": [
+        "no_entity_native_identity",
+        "same_url_not_entity_truth"
+      ]
+    },
+    {
+      "id": "EPSE-010",
+      "category": "unsupported_hn",
+      "scenario": "HN observations share title/link surface evidence.",
+      "required": [
+        "no_entity_native_identity",
+        "source_multiplicity_not_independence"
+      ]
+    },
+    {
+      "id": "EPSE-011",
+      "category": "future_observation_pit",
+      "scenario": "One observation is observed strictly after as_of.",
+      "required": [
+        "future_observation_excluded",
+        "ignored_future_observation_count_attributed_per_source"
+      ]
+    },
+    {
+      "id": "EPSE-012",
+      "category": "future_relation_pit",
+      "scenario": "A canonical relation becomes durably known strictly after as_of.",
+      "required": [
+        "future_relation_excluded",
+        "earlier_evaluation_unchanged"
+      ]
+    },
+    {
+      "id": "EPSE-013",
+      "category": "registry_drift",
+      "scenario": "Evaluation input declares a source registry digest different from the frozen seven-source digest.",
+      "required": [
+        "evaluation_status_INVALID_DRIFT",
+        "no_quality_metrics_counted_as_valid"
+      ]
+    },
+    {
+      "id": "EPSE-014",
+      "category": "deterministic_replay",
+      "scenario": "Equivalent frozen inputs are presented in different iteration order.",
+      "required": [
+        "byte_identical_canonical_report",
+        "same_report_digest"
+      ]
+    },
+    {
+      "id": "EPSE-015",
+      "category": "references_not_derivation",
+      "scenario": "Canonical REFERENCES relation exists between two observations.",
+      "required": [
+        "DIRECT_DERIVATIVE_count_remains_zero",
+        "provenance_quality_status_BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE"
+      ]
+    },
+    {
+      "id": "EPSE-016",
+      "category": "corrects_retracts_not_derivation",
+      "scenario": "Canonical CORRECTS or RETRACTS relation exists.",
+      "required": [
+        "must_not_upgrade_to_DIRECT_DERIVATIVE",
+        "true_origin_not_inferred"
+      ]
+    },
+    {
+      "id": "EPSE-017",
+      "category": "zero_provenance_coverage",
+      "scenario": "No separately authorized explicit derivation evidence is present.",
+      "required": [
+        "provenance_quality_status_BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE",
+        "zero_coverage_not_independence"
+      ]
+    },
+    {
+      "id": "EPSE-018",
+      "category": "no_independent_ground_truth",
+      "scenario": "Entity candidate behavior is evaluated only against bridge/native-ID-derived signals.",
+      "required": [
+        "entity_quality_verdict_INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+        "promotion_verdict_UNAVAILABLE",
+        "no_PASS_or_FAIL_quality_claim"
+      ]
+    }
+  ]
+}
