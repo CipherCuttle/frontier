@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import cast
 
 from frontier.domain.relation import RelationType
 
@@ -40,10 +41,27 @@ PERMITTED_IMPLEMENTATION_AUTHORITY = {
 }
 
 
-def _load(path: Path) -> dict[str, object]:
-    value = json.loads(path.read_text(encoding="utf-8"))
-    assert isinstance(value, dict)
+def _as_object(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise AssertionError(f"{name} must be object")
+    return cast(dict[str, object], value)
+
+
+def _as_list(value: object, name: str) -> list[object]:
+    if not isinstance(value, list):
+        raise AssertionError(f"{name} must be list")
+    return cast(list[object], value)
+
+
+def _as_string(value: object, name: str) -> str:
+    if not isinstance(value, str):
+        raise AssertionError(f"{name} must be string")
     return value
+
+
+def _load(path: Path) -> dict[str, object]:
+    raw: object = json.loads(path.read_text(encoding="utf-8"))
+    return _as_object(raw, path.name)
 
 
 def _digest(value: object) -> str:
@@ -58,8 +76,7 @@ def test_bridge_authority_binds_exact_lab_and_main_lineage() -> None:
     assert authority["authority_state"] == "FROZEN_BRIDGE_AUTHORITY_CANDIDATE"
     assert authority["parent_main_commit"] == EXPECTED_PARENT
 
-    lineage = authority["lab_lineage"]
-    assert isinstance(lineage, dict)
+    lineage = _as_object(authority["lab_lineage"], "lab_lineage")
     assert lineage == {
         "lab_corpus_digest": EXPECTED_LAB_CORPUS,
         "lab_id": "ENTITY_PROVENANCE_LAB_V0",
@@ -73,18 +90,18 @@ def test_bridge_corpus_is_exact_frozen_18_case_authority() -> None:
     authority = _load(AUTHORITY_PATH)
     corpus = _load(CORPUS_PATH)
 
-    bridge_corpus = authority["bridge_corpus"]
-    assert isinstance(bridge_corpus, dict)
+    bridge_corpus = _as_object(authority["bridge_corpus"], "bridge_corpus")
     assert bridge_corpus == {
         "case_count": 18,
         "digest": EXPECTED_BRIDGE_CORPUS,
         "path": "fixtures/entity_provenance/bridge_corpus_v0.json",
     }
     assert corpus["schema_version"] == "frontier-entity-provenance-bridge-corpus-v0"
-    cases = corpus["cases"]
-    assert isinstance(cases, list)
+    cases = _as_list(corpus["cases"], "cases")
     assert len(cases) == 18
-    case_ids = {case["id"] for case in cases if isinstance(case, dict)}
+    case_ids = {
+        _as_string(_as_object(case, "case")["id"], "case.id") for case in cases
+    }
     assert case_ids == EXPECTED_CASE_IDS
     assert len(case_ids) == len(cases)
     assert _digest(corpus) == EXPECTED_BRIDGE_CORPUS
@@ -92,19 +109,15 @@ def test_bridge_corpus_is_exact_frozen_18_case_authority() -> None:
 
 def test_entity_mapping_partitions_exact_seven_source_registry() -> None:
     authority = _load(AUTHORITY_PATH)
-    input_authority = authority["input_authority"]
-    assert isinstance(input_authority, dict)
+    input_authority = _as_object(authority["input_authority"], "input_authority")
     assert input_authority["source_registry_digest"] == EXPECTED_REGISTRY
 
-    entity_mapping = authority["entity_mapping"]
-    assert isinstance(entity_mapping, dict)
-    supported = entity_mapping["supported_sources"]
-    unsupported = entity_mapping["unsupported_sources"]
-    assert isinstance(supported, dict)
-    assert isinstance(unsupported, list)
+    entity_mapping = _as_object(authority["entity_mapping"], "entity_mapping")
+    supported = _as_object(entity_mapping["supported_sources"], "supported_sources")
+    unsupported = _as_list(entity_mapping["unsupported_sources"], "unsupported_sources")
 
     supported_ids = set(supported)
-    unsupported_ids = set(unsupported)
+    unsupported_ids = {_as_string(value, "unsupported source") for value in unsupported}
     assert supported_ids == SUPPORTED
     assert unsupported_ids == UNSUPPORTED
     assert supported_ids.isdisjoint(unsupported_ids)
@@ -113,26 +126,28 @@ def test_entity_mapping_partitions_exact_seven_source_registry() -> None:
 
 def test_provenance_mapping_cannot_upgrade_canonical_relations() -> None:
     authority = _load(AUTHORITY_PATH)
-    mapping = authority["provenance_mapping"]
-    assert isinstance(mapping, dict)
+    mapping = _as_object(authority["provenance_mapping"], "provenance_mapping")
     assert mapping["direct_derivation_available"] is False
 
-    canonical = mapping["canonical_relation_types"]
-    assert isinstance(canonical, list)
-    assert set(canonical) == {item.value for item in RelationType}
-    assert set(canonical) == {"CORRECTS", "RETRACTS", "REFERENCES"}
+    canonical = _as_list(mapping["canonical_relation_types"], "canonical_relation_types")
+    canonical_values = {_as_string(value, "canonical relation") for value in canonical}
+    assert canonical_values == {item.value for item in RelationType}
+    assert canonical_values == {"CORRECTS", "RETRACTS", "REFERENCES"}
 
-    forbidden = mapping["forbidden_upgrades"]
-    assert isinstance(forbidden, list)
-    assert set(forbidden) == FORBIDDEN_UPGRADES
-    assert "never factual independence" in str(mapping["zero_coverage_semantics"])
+    forbidden = _as_list(mapping["forbidden_upgrades"], "forbidden_upgrades")
+    forbidden_values = {_as_string(value, "forbidden upgrade") for value in forbidden}
+    assert forbidden_values == FORBIDDEN_UPGRADES
+    zero_semantics = _as_string(mapping["zero_coverage_semantics"], "zero_coverage_semantics")
+    assert "never factual independence" in zero_semantics
 
 
 def test_authority_grants_only_offline_bridge_implementation() -> None:
     authority = _load(AUTHORITY_PATH)
 
-    implementation = authority["implementation_authority_on_merge"]
-    assert isinstance(implementation, dict)
+    implementation = _as_object(
+        authority["implementation_authority_on_merge"],
+        "implementation_authority_on_merge",
+    )
     true_keys = {key for key, value in implementation.items() if value is True}
     false_keys = {key for key, value in implementation.items() if value is False}
     assert true_keys == PERMITTED_IMPLEMENTATION_AUTHORITY
@@ -146,8 +161,7 @@ def test_authority_grants_only_offline_bridge_implementation() -> None:
         "worker_scheduling",
     }
 
-    output = authority["output_authority"]
-    assert isinstance(output, dict)
+    output = _as_object(authority["output_authority"], "output_authority")
     for key in (
         "api_authority",
         "canonical_entity_authority",
@@ -164,8 +178,7 @@ def test_authority_grants_only_offline_bridge_implementation() -> None:
 
 def test_bridge_corpus_itself_grants_no_runtime_or_truth_authority() -> None:
     corpus = _load(CORPUS_PATH)
-    corpus_authority = corpus["authority"]
-    assert isinstance(corpus_authority, dict)
+    corpus_authority = _as_object(corpus["authority"], "authority")
     assert corpus_authority["runtime_authority"] is False
     assert corpus_authority["persistence_authority"] is False
     assert corpus_authority["public_authority"] is False
