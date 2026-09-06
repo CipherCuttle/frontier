@@ -7,7 +7,9 @@ from pathlib import Path
 from frontier.domain.relation import RelationType
 
 ROOT = Path(__file__).resolve().parents[2]
-AUTHORITY_PATH = ROOT / "experiments/advanced_intelligence/entity_provenance_v0/bridge_authority.json"
+AUTHORITY_PATH = (
+    ROOT / "experiments/advanced_intelligence/entity_provenance_v0/bridge_authority.json"
+)
 CORPUS_PATH = ROOT / "fixtures/entity_provenance/bridge_corpus_v0.json"
 
 EXPECTED_PARENT = "23cf10e0d65883c7b82356cf1bd18d9c56215604"
