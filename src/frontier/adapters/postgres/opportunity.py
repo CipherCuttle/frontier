@@ -1,9 +1,12 @@
-"""Append-only PostgreSQL persistence for opportunity/outcome state (WP1).
+"""Append-only PostgreSQL persistence for opportunity/outcome state (WP1 + WP3).
 
 Projection choice: the current opportunity state is always folded from the
 append-only ``opportunity_transitions`` log (no maintained columns), so the
 log is the single authority and a rewrite or deletion is detectable at read
 time instead of silently accepted.
+
+WP3 adds append-only membership-history persistence: one content-derived
+membership fact per (anchor, experiment, boundary, arm), never a mutable flag.
 """
 
 from __future__ import annotations
@@ -14,6 +17,11 @@ from typing import cast
 import psycopg
 from psycopg.types.json import Jsonb
 
+from frontier.application.opportunity_outcome import (
+    OPPORTUNITY_MEMBERSHIP_SCHEMA_VERSION,
+    MembershipArm,
+    OpportunityMembershipRecord,
+)
 from frontier.domain.opportunity import (
     OPPORTUNITY_SCHEMA_VERSION,
     OpportunityAnchor,
@@ -214,5 +222,94 @@ class PostgresOpportunityRepository:
     def count_anchors(self) -> int:
         with self._connection.cursor() as cur:
             cur.execute("SELECT count(*) FROM opportunity_anchors")
+            row = cur.fetchone()
+        return int(cast(int, row[0])) if row is not None else 0
+
+    # ------------------------------------------------------------------
+    # Membership history (WP3): append-only evidence per (anchor, run, arm).
+    # ------------------------------------------------------------------
+
+    def record_membership(self, membership: OpportunityMembershipRecord) -> None:
+        """Append one membership fact; re-inserting the identical fact is a
+        no-op and a digest-different fact at the same identity is a conflict."""
+        if membership.schema_version != OPPORTUNITY_MEMBERSHIP_SCHEMA_VERSION:
+            raise ValueError("opportunity membership schema version mismatch")
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO opportunity_memberships (
+                    membership_id, anchor_id, schema_version, experiment_id,
+                    as_of, arm, present, episode_id, rank_position,
+                    membership_digest, membership_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (anchor_id, experiment_id, as_of, arm) DO NOTHING
+                RETURNING membership_id
+                """,
+                (
+                    membership.membership_id,
+                    membership.anchor_id,
+                    membership.schema_version,
+                    membership.experiment_id,
+                    membership.as_of,
+                    membership.arm.value,
+                    membership.present,
+                    membership.episode_id,
+                    membership.rank_position,
+                    "sha256:" + membership.membership_digest_hex,
+                    Jsonb(membership.to_canonical()),
+                ),
+            )
+            inserted = cur.fetchone()
+            if inserted is None:
+                cur.execute(
+                    """
+                    SELECT membership_id, membership_digest FROM opportunity_memberships
+                    WHERE anchor_id = %s AND experiment_id = %s
+                      AND as_of = %s AND arm = %s
+                    """,
+                    (
+                        membership.anchor_id,
+                        membership.experiment_id,
+                        membership.as_of,
+                        membership.arm.value,
+                    ),
+                )
+                existing = cur.fetchone()
+                if existing is None:
+                    raise RuntimeError("opportunity membership conflict without existing row")
+                if cast(str, existing[0]) != membership.membership_id or cast(str, existing[1]) != (
+                    "sha256:" + membership.membership_digest_hex
+                ):
+                    raise RuntimeError("opportunity membership conflict with different digest")
+
+    def list_memberships(self, anchor_id: str) -> tuple[OpportunityMembershipRecord, ...]:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT membership_id, anchor_id, experiment_id, as_of, arm,
+                       present, episode_id, rank_position
+                FROM opportunity_memberships
+                WHERE anchor_id = %s
+                ORDER BY as_of, membership_id
+                """,
+                (anchor_id,),
+            )
+            rows = cur.fetchall()
+        return tuple(
+            OpportunityMembershipRecord(
+                anchor_id=cast(str, row[1]),
+                experiment_id=cast(str, row[2]),
+                as_of=cast(datetime, row[3]),
+                arm=MembershipArm(cast(str, row[4])),
+                present=bool(row[5]),
+                episode_id=cast("str | None", row[6]),
+                rank_position=cast("int | None", row[7]),
+            )
+            for row in rows
+        )
+
+    def count_memberships(self) -> int:
+        with self._connection.cursor() as cur:
+            cur.execute("SELECT count(*) FROM opportunity_memberships")
             row = cur.fetchone()
         return int(cast(int, row[0])) if row is not None else 0
