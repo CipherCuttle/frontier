@@ -334,9 +334,114 @@ def transition_log_is_sound(transitions: tuple[OpportunityTransition, ...]) -> b
     return True
 
 
+EXPERIMENT_ATTEMPT_SCHEMA_VERSION = "experiment-run-attempt-v0"
+
+
+class ExperimentAttemptStatus(StrEnum):
+    """Mutable attempt lifecycle states (WP2).
+
+    ``PENDING`` → ``RUNNING`` → ``DONE``/``FAILED``/``SKIPPED``; a stale
+    ``RUNNING`` attempt (lease expired) becomes ``EXPIRED`` and the boundary
+    may be retried with an incremented ``attempt_no``. History is never lost
+    and a ``DONE`` boundary is never re-executed.
+    """
+
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    DONE = "DONE"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
+    SKIPPED = "SKIPPED"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in (
+            ExperimentAttemptStatus.DONE,
+            ExperimentAttemptStatus.FAILED,
+            ExperimentAttemptStatus.EXPIRED,
+            ExperimentAttemptStatus.SKIPPED,
+        )
+
+    @property
+    def is_retryable(self) -> bool:
+        return self in (
+            ExperimentAttemptStatus.FAILED,
+            ExperimentAttemptStatus.EXPIRED,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentRunAttempt:
+    """One attempt of an experiment boundary (experiment_id, as_of).
+
+    Content-derived identity: ``attempt_id`` is the sha256 of the attempt's
+    canonical payload, so (experiment_id, as_of, attempt_no) always yields one
+    identity. ``attempt_digest`` binds the lifecycle state and outcome detail;
+    it changes with every recorded transition and never collapses two states.
+    """
+
+    experiment_id: str
+    as_of: datetime
+    attempt_no: int
+    status: ExperimentAttemptStatus
+    detail: str | None = None
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
+    heartbeat_at: datetime | None = None
+    schema_version: str = EXPERIMENT_ATTEMPT_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
+            raise ValueError("attempt as_of must be timezone-aware")
+        if self.lease_expires_at is not None and (
+            self.lease_expires_at.tzinfo is None or self.lease_expires_at.utcoffset() is None
+        ):
+            raise ValueError("attempt lease_expires_at must be timezone-aware")
+        if self.heartbeat_at is not None and (
+            self.heartbeat_at.tzinfo is None or self.heartbeat_at.utcoffset() is None
+        ):
+            raise ValueError("attempt heartbeat_at must be timezone-aware")
+        if self.attempt_no < 1:
+            raise ValueError("attempt_no must be at least 1")
+        if not self.experiment_id:
+            raise ValueError("attempt experiment_id must be non-empty")
+        if self.status is ExperimentAttemptStatus.RUNNING:
+            if self.lease_owner is None or self.lease_expires_at is None:
+                raise ValueError("RUNNING attempt requires a lease owner and expiry")
+        elif self.lease_owner is not None:
+            raise ValueError("non-RUNNING attempt cannot hold a lease owner")
+
+    @property
+    def _identity_payload(self) -> dict[str, CanonicalValue]:
+        return {
+            "as_of": canonical_timestamp(self.as_of),
+            "attempt_no": self.attempt_no,
+            "experiment_id": self.experiment_id,
+            "schema_version": self.schema_version,
+        }
+
+    @property
+    def attempt_id(self) -> str:
+        return RUN_ATTEMPT_ID_PREFIX + sha256_hex(canonical_json_bytes(self._identity_payload))
+
+    @property
+    def attempt_digest_hex(self) -> str:
+        payload: dict[str, CanonicalValue] = {
+            "attempt_id": self.attempt_id,
+            "detail": self.detail,
+            "status": self.status.value,
+        }
+        return sha256_hex(canonical_json_bytes(payload))
+
+    @property
+    def attempt_digest(self) -> str:
+        return "sha256:" + self.attempt_digest_hex
+
+
 __all__ = [
     "ALLOWED_TRANSITIONS",
     "BLINDING_GUARD_MESSAGE",
+    "EXPERIMENT_ATTEMPT_SCHEMA_VERSION",
     "LABEL_MATURATION_SECONDS",
     "OPPORTUNITY_ANCHOR_ID_PREFIX",
     "OPPORTUNITY_SCHEMA_VERSION",
@@ -344,6 +449,8 @@ __all__ = [
     "RUN_ATTEMPT_ID_PREFIX",
     "BlindingState",
     "DomainStratum",
+    "ExperimentAttemptStatus",
+    "ExperimentRunAttempt",
     "OpportunityAnchor",
     "OpportunityState",
     "OpportunityTransition",

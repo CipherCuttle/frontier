@@ -10,6 +10,10 @@ from typing import Protocol
 from frontier.adapters.acquisition.config import RegisteredSource, SourceRegistry
 from frontier.application.acquisition import AcquisitionResult
 from frontier.application.acquisition_state import SourceFetchState
+from frontier.application.experiment_orchestration import (
+    ExperimentCycleResult,
+    ExperimentOrchestrator,
+)
 from frontier.domain.source import SourceContract
 
 Clock = Callable[[], datetime]
@@ -51,6 +55,7 @@ class PollCycleResult:
     acquired: tuple[AcquisitionResult, ...]
     skipped_not_due: tuple[str, ...]
     schedules: tuple[SourceSchedule, ...]
+    experiment: ExperimentCycleResult | None = None
 
     @property
     def duration_seconds(self) -> float:
@@ -70,6 +75,7 @@ class AcquisitionWorker:
         clock: Clock | None = None,
         sleep: Sleep | None = None,
         idle_seconds: float = 30.0,
+        experiment_orchestrator: ExperimentOrchestrator | None = None,
     ) -> None:
         if idle_seconds <= 0:
             raise ValueError("idle_seconds must be positive")
@@ -79,6 +85,7 @@ class AcquisitionWorker:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._sleep = sleep or asyncio.sleep
         self._idle_seconds = idle_seconds
+        self._experiment_orchestrator = experiment_orchestrator
 
     @staticmethod
     def _cadence_slo(
@@ -144,12 +151,22 @@ class AcquisitionWorker:
         )
         for schedule in due:
             acquired.append(await self._service.acquire(schedule.source_id))
+        experiment: ExperimentCycleResult | None = None
+        if self._experiment_orchestrator is not None:
+            # Single-process model: the acquisition worker also drives the
+            # prospective experiment orchestrator once per cycle. The
+            # orchestrator is synchronous (DB-bound) and runs off the event
+            # loop; no heartbeat/signal handling is added here (WP9).
+            experiment = await asyncio.to_thread(
+                self._experiment_orchestrator.run_cycle, now=started_at
+            )
         return PollCycleResult(
             started_at=started_at,
             completed_at=self._clock(),
             acquired=tuple(acquired),
             skipped_not_due=tuple(skipped),
             schedules=schedules,
+            experiment=experiment,
         )
 
     def seconds_until_next_cycle(self) -> float:

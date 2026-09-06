@@ -5,7 +5,7 @@ from typing import cast
 
 import psycopg
 
-EXPECTED_DATABASE_REVISION = "0010_experiment_outcome_state"
+EXPECTED_DATABASE_REVISION = "0011_experiment_attempt_detail"
 REQUIRED_RELATIONS = (
     "sources",
     "collection_runs",
