@@ -294,6 +294,44 @@ def test_malformed_native_identity_cannot_fall_back_to_canonical_url() -> None:
     assert record.lab_observation.native_ids == ()
 
 
+def test_explicit_null_cisa_metadata_id_fails_closed() -> None:
+    observation = _observation(
+        {
+            "source_id": "cisa.kev",
+            "source_item_key": "CVE-2026-9999",
+            "observed_at": "2026-09-06T10:00:00Z",
+            "kind": "DOCUMENT",
+            "payload": {
+                "canonical_url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+                "title": "Null metadata identity",
+                "source_metadata": {"cve_id": None},
+            },
+        },
+        fixture_key="cisa-null-cve",
+    )
+    as_of = datetime.fromisoformat("2026-09-06T12:00:00+00:00")
+    run = build_entity_provenance_bridge((observation,), as_of=as_of)
+    record = run.observations[0]
+    assert record.state is EntityBridgeState.DEGRADED
+    assert record.native_id is None
+    assert record.malformed_identity_fields == 1
+    assert run.coverage.by_source["cisa.kev"].malformed_identity_field_count == 1
+
+
+def test_future_observation_coverage_is_attributed_per_source() -> None:
+    cases = {_string(case["id"], "case.id"): case for case in _load_corpus()}
+
+    pypi_run, _, _ = _run_case(cases["BRV-013"])
+    assert pypi_run.coverage.ignored_future_observation_count == 1
+    assert pypi_run.coverage.by_source["pypi.updates"].ignored_future_observation_count == 1
+    assert pypi_run.coverage.by_source["arxiv.cs-ai"].ignored_future_observation_count == 0
+
+    backfill_run, _, _ = _run_case(cases["BRV-014"])
+    assert backfill_run.coverage.ignored_future_observation_count == 1
+    assert backfill_run.coverage.by_source["arxiv.cs-ai"].ignored_future_observation_count == 1
+    assert backfill_run.coverage.by_source["pypi.updates"].ignored_future_observation_count == 0
+
+
 def test_bridge_replay_is_byte_identical_independent_of_input_order() -> None:
     cases = {_string(case["id"], "case.id"): case for case in _load_corpus()}
     raw_case = cases["BRV-009"]
