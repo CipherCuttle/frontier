@@ -58,8 +58,7 @@ def _digest(value: object) -> str:
 def test_shadow_evaluation_authority_binds_exact_lineage() -> None:
     authority = _load(AUTHORITY_PATH)
     assert (
-        authority["schema_version"]
-        == "frontier-entity-provenance-shadow-evaluation-authority-v0"
+        authority["schema_version"] == "frontier-entity-provenance-shadow-evaluation-authority-v0"
     )
     assert authority["phase_id"] == "ENTITY_PROVENANCE_SHADOW_EVALUATION_V0"
     assert authority["authority_state"] == "FROZEN_SHADOW_EVALUATION_AUTHORITY_CANDIDATE"
