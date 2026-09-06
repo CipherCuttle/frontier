@@ -423,9 +423,7 @@ def _observation(document: dict[str, object]) -> LabObservation:
         artifact_version=None
         if document.get("artifact_version") is None
         else str(document["artifact_version"]),
-        relations=tuple(
-            _relation(_as_object(value, "relation")) for value in relation_values
-        ),
+        relations=tuple(_relation(_as_object(value, "relation")) for value in relation_values),
     )
 
 
