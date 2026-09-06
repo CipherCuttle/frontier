@@ -5,7 +5,7 @@ from typing import cast
 
 import psycopg
 
-EXPECTED_DATABASE_REVISION = "0003_baseline_snapshots"
+EXPECTED_DATABASE_REVISION = "0009_experimental_analysis"
 REQUIRED_RELATIONS = (
     "sources",
     "collection_runs",
@@ -14,6 +14,12 @@ REQUIRED_RELATIONS = (
     "source_fetch_state",
     "projection_receipts",
     "baseline_intelligence_snapshots",
+    "pef_ranking_artifacts",
+    "shadow_experiment_runs",
+    "candidate_freeze_receipts",
+    "evaluation_receipts",
+    "feature_vectors",
+    "experimental_analysis_artifacts",
 )
 
 

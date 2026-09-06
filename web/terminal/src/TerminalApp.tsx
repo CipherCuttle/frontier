@@ -8,8 +8,12 @@ import {
 } from "react";
 import {
   createTerminalPublicReadApi,
+  experimentalAvailability,
   type EpisodeEvidenceResponse,
   type EpisodeResponse,
+  type ExperimentalFeatureBatchSectionResponse,
+  type ExperimentalOverviewResponse,
+  type ExperimentalShadowRunSectionResponse,
   type FrontierPublicReadTransport,
   type HealthResponse,
   type PublicViewKind,
@@ -17,12 +21,22 @@ import {
 } from "./api";
 import {
   assertSnapshotBinding,
+  buildExperimentHistory,
+  buildFeatureExplanations,
+  computeRankDeltas,
+  displayRankDelta,
   displayUnavailable,
+  EXPERIMENTAL_LENS,
+  EXPERIMENTAL_LENS_LABEL,
+  EXPERIMENTAL_LENS_NOTE,
   filterEpisodes,
   isEditableTarget,
   resolveKeyboardCommand,
+  resolveSectionAvailability,
   shortId,
+  type ExperimentalRankDelta,
   type PanelKind,
+  type TerminalLens,
 } from "./model";
 
 interface TerminalAppProps {
@@ -260,7 +274,8 @@ function AuditPanel({ view }: { view: ViewResponse }) {
 
 function HelpPanel() {
   const commands = [
-    ["1 / 2 / 3", "RADAR / NOW / TRENDING"],
+    ["1 / 2 / 3", "RADAR / NOW / TRENDING baseline lenses"],
+    ["x", "EXPERIMENTAL shadow comparison lens (toggle)"],
     ["j / ↓", "next visible episode"],
     ["k / ↑", "previous visible episode"],
     ["Enter", "inspect selected episode"],
@@ -281,11 +296,226 @@ function HelpPanel() {
   );
 }
 
+/**
+ * EXPERIMENTAL_SHADOW panel state. Experimental data lives entirely outside
+ * the baseline view state: entering/leaving the EXPERIMENTAL lens never
+ * mutates or replaces baseline lenses, rows, filter, inspector, or panels.
+ */
+type ExperimentalState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | {
+      status: "ready";
+      asOf: string;
+      snapshotId: string;
+      overview: ExperimentalOverviewResponse | null;
+      runsSection: ExperimentalShadowRunSectionResponse | null;
+      batchesSection: ExperimentalFeatureBatchSectionResponse | null;
+      radarItems: EpisodeResponse[] | null;
+      failures: readonly string[];
+    }
+  | { status: "error"; message: string };
+
+function AvailabilityBadge({ label, value }: { label: string; value: string }) {
+  return <StateBadge label={label} value={value} />;
+}
+
+function RankDeltaTable({ deltas }: { deltas: readonly ExperimentalRankDelta[] }) {
+  return (
+    <div className="table-shell experimental-table-shell">
+      <table className="episode-table experimental-table">
+        <thead>
+          <tr>
+            <th scope="col">Episode</th>
+            <th scope="col">Baseline rank</th>
+            <th scope="col">Experimental rank</th>
+            <th scope="col">Δ rank (experimental − baseline)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {deltas.map((delta) => (
+            <tr key={delta.episodeId}>
+              <td><code>{shortId(delta.episodeId, 18)}</code></td>
+              <td className="rank-cell">#{delta.baselineRank}</td>
+              <td>
+                <span className="unavailable">
+                  {delta.experimentalRank === null ? "UNKNOWN" : `#${delta.experimentalRank}`}
+                </span>
+              </td>
+              <td className="numeric signed">{displayRankDelta(delta.delta)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ExperimentalPanel({
+  state,
+  onBack,
+  backLens,
+}: {
+  state: ExperimentalState;
+  onBack: () => void;
+  backLens: TerminalLens;
+}) {
+  if (state.status === "idle") {
+    return (
+      <div className="experimental-empty">
+        <strong>EXPERIMENTAL panel not loaded for this snapshot.</strong>
+        <span>Press <kbd>x</kbd> again or refresh (<kbd>r</kbd>) to request the EXPERIMENTAL_SHADOW surfaces.</span>
+      </div>
+    );
+  }
+  if (state.status === "loading") {
+    return <div role="status" className="loading-banner">Loading EXPERIMENTAL_SHADOW surfaces…</div>;
+  }
+  if (state.status === "error") {
+    return (
+      <div role="alert" className="error-banner experimental-error">
+        <strong>EXPERIMENTAL SHADOW UNAVAILABLE</strong>
+        <span>{state.message}</span>
+        <span>Baseline lenses remain available and unchanged.</span>
+      </div>
+    );
+  }
+
+  const overviewAvailability = state.overview?.availability ?? null;
+  const runStatus = state.runsSection?.latest ?? state.overview?.latest_shadow_run ?? null;
+  const shadowRunAvailability =
+    state.runsSection?.availability ??
+    resolveSectionAvailability(overviewAvailability, "shadow_run");
+  const batchSection = state.batchesSection;
+  const batchAvailability =
+    batchSection?.availability ??
+    resolveSectionAvailability(overviewAvailability, "feature_batch");
+  const history = buildExperimentHistory(state.overview);
+  const featureBatch = batchSection?.latest ?? state.overview?.latest_feature_batch ?? null;
+  const featureExplanations = buildFeatureExplanations(featureBatch);
+  const deltas = state.radarItems ? computeRankDeltas(state.radarItems, null) : null;
+  const allEmpty =
+    history.length > 0 && history.every((entry) => entry.availability === "NO_DATA");
+
+  return (
+    <div className="experimental-panel">
+      <div className="binding-line">
+        <span>experiment <code>{state.overview?.experiment_id ?? "UNKNOWN"}</code></span>
+        <span>candidate <code>{state.overview?.candidate_id ?? "UNKNOWN"}</code></span>
+        <span>config <code>{state.overview ? shortId(state.overview.configuration_digest, 24) : "UNKNOWN"}</code></span>
+        <span>as_of {state.asOf}</span>
+        <span>bound snapshot <code>{shortId(state.snapshotId, 14)}</code></span>
+      </div>
+      <p className="epistemic-warning">
+        <strong>{EXPERIMENTAL_LENS_LABEL}</strong>
+        <span>{EXPERIMENTAL_LENS_NOTE}</span>
+      </p>
+
+      {state.failures.length > 0 ? (
+        <div role="alert" className="experimental-failures">
+          <strong>EXPERIMENTAL sections unavailable (UNKNOWN):</strong>
+          <span>{state.failures.join(" · ")}</span>
+        </div>
+      ) : null}
+
+      <section aria-labelledby="experimental-runs-title" className="experimental-section">
+        <h2 id="experimental-runs-title">Shadow run status</h2>
+        <div className="experimental-run-card">
+          <AvailabilityBadge label="Shadow run" value={experimentalAvailability(shadowRunAvailability)} />
+          {runStatus ? (
+            <dl className="audit-definition-list">
+              <div><dt>Run</dt><dd><code>{shortId(runStatus.run_id, 20)}</code></dd></div>
+              <div><dt>Status</dt><dd>{runStatus.status}</dd></div>
+              <div><dt>As of</dt><dd>{runStatus.as_of}</dd></div>
+              <div><dt>Candidate artifact</dt><dd><code>{shortId(runStatus.candidate_artifact_id, 20)}</code></dd></div>
+              <div><dt>Control snapshot</dt><dd><code>{shortId(runStatus.control_snapshot_id, 20)}</code></dd></div>
+              <div><dt>Failure reason</dt><dd>{runStatus.failure_reason ?? "NONE"}</dd></div>
+            </dl>
+          ) : (
+            <span className="unavailable">NO SHADOW RUN DATA for this as_of (not observed absence of experiments).</span>
+          )}
+        </div>
+      </section>
+
+      <section aria-labelledby="experimental-deltas-title" className="experimental-section">
+        <h2 id="experimental-deltas-title">Rank deltas (baseline RADAR vs candidate)</h2>
+        {deltas === null ? (
+          <div className="empty-state">
+            <strong>Baseline RADAR view unavailable for this snapshot (UNKNOWN).</strong>
+            <span>No rank deltas can be shown without the baseline rows; nothing is fabricated.</span>
+          </div>
+        ) : deltas.length === 0 ? (
+          <div className="empty-state">
+            <strong>0 baseline rows returned by RADAR for this snapshot.</strong>
+            <span>This is not a claim that nothing is happening.</span>
+          </div>
+        ) : (
+          <>
+            <RankDeltaTable deltas={deltas} />
+            <p className="experimental-note">
+              The EXPERIMENTAL_SHADOW summary read plane exposes run/artifact identity and
+              status only — per-episode candidate ranks are UNKNOWN here, so no delta is invented.
+            </p>
+          </>
+        )}
+      </section>
+
+      <section aria-labelledby="experimental-features-title" className="experimental-section">
+        <h2 id="experimental-features-title">Feature explanations</h2>
+        <div className="experimental-feature-head">
+          <AvailabilityBadge label="Feature batch" value={batchAvailability} />
+          {featureBatch ? <span className="muted">batch <code>{shortId(featureBatch.batch_id, 18)}</code> · status {featureBatch.status}</span> : <span className="unavailable">NO BATCH DATA</span>}
+        </div>
+        <ul className="experimental-feature-list">
+          {featureExplanations.map((feature) => (
+            <li key={feature.name}>
+              <strong>{feature.name}</strong>
+              <span className="unavailable">{feature.value}</span>
+              <small>{feature.definition}</small>
+              <small>unit {feature.unit}</small>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="experimental-history-title" className="experimental-section">
+        <h2 id="experimental-history-title">Experiment history</h2>
+        {history.length === 0 || allEmpty ? (
+          <div className="empty-state">
+            <strong>NO EXPERIMENTAL DATA for this as_of.</strong>
+            <span>No stored shadow runs, artifacts, receipts, batches, or analysis artifacts. This is not observed absence of experiments in the world.</span>
+          </div>
+        ) : (
+          <dl className="experimental-history-list">
+            {history.map((entry) => (
+              <div key={entry.section}>
+                <dt>{entry.section}</dt>
+                <dd>
+                  <AvailabilityBadge label={entry.section} value={entry.availability} />
+                  {entry.id ? <span> · <code>{shortId(entry.id, 16)}</code></span> : null}
+                  {entry.status ? <span> · status {entry.status}</span> : null}
+                  {entry.asOf ? <span> · as_of {entry.asOf}</span> : null}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </section>
+
+      <footer className="workspace-footer">
+        <span>EXPERIMENTAL lens · <button type="button" className="episode-button" onClick={onBack}>back to {backLens} [x]</button></span>
+      </footer>
+    </div>
+  );
+}
+
 export function TerminalApp({ transport }: TerminalAppProps) {
   const api = useMemo(() => createTerminalPublicReadApi(transport), [transport]);
   const filterRef = useRef<HTMLInputElement>(null);
   const snapshotRef = useRef<string | null>(null);
-  const [lens, setLens] = useState<PublicViewKind>("RADAR");
+  const lastBaselineLensRef = useRef<PublicViewKind>("RADAR");
+  const experimentalRequestRef = useRef(0);
+  const [lens, setLens] = useState<TerminalLens>("RADAR");
   const [view, setView] = useState<ViewResponse | null>(null);
   const [filter, setFilter] = useState("");
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
@@ -294,6 +524,9 @@ export function TerminalApp({ transport }: TerminalAppProps) {
   const [panels, setPanels] = useState<PanelKind[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [experimental, setExperimental] = useState<ExperimentalState>({ status: "idle" });
+  const lensRef = useRef<TerminalLens>("RADAR");
+  lensRef.current = lens;
 
   const visibleItems = useMemo(() => filterEpisodes(view?.items ?? [], filter), [view, filter]);
   const selectedIndex = visibleItems.findIndex((item) => item.episode_id === selectedEpisodeId);
@@ -406,6 +639,85 @@ export function TerminalApp({ transport }: TerminalAppProps) {
     setPanels((current) => current.slice(0, -1));
   }, []);
 
+  /**
+   * Enter the EXPERIMENTAL lens. Snapshot safety: baseline view state
+   * (view rows, filter, selection, inspector, panels) is never mutated; the
+   * experimental fetch is bound to the currently selected snapshot as_of and
+   * stale completions are discarded.
+   */
+  const enterExperimental = useCallback(async () => {
+    const requestId = ++experimentalRequestRef.current;
+    const currentView = view;
+    const snapshotId = currentView?.snapshot.snapshot_id ?? null;
+    setLens(EXPERIMENTAL_LENS);
+    if (!currentView || !snapshotId) {
+      setExperimental({
+        status: "error",
+        message:
+          "No baseline snapshot is bound; the EXPERIMENTAL comparison needs the selected snapshot as_of.",
+      });
+      return;
+    }
+    const asOf = currentView.snapshot.as_of;
+    setExperimental({ status: "loading" });
+    const results = await Promise.allSettled([
+      api.view("RADAR", { snapshotId }),
+      api.experimentalOverview(asOf),
+      api.experimentalShadowRuns(asOf),
+      api.experimentalFeatureBatches(asOf),
+    ]);
+    if (experimentalRequestRef.current !== requestId || lensRef.current !== EXPERIMENTAL_LENS) {
+      return; // superseded: the operator moved on; discard, never render stale shadow data
+    }
+    const [radarResult, overviewResult, runsResult, batchesResult] = results;
+    const failures: string[] = [];
+    let radarItems: EpisodeResponse[] | null = null;
+    if (radarResult.status === "fulfilled") {
+      try {
+        assertSnapshotBinding(snapshotId, radarResult.value.snapshot.snapshot_id, "experimental radar baseline");
+        radarItems = radarResult.value.items;
+      } catch {
+        failures.push("baseline RADAR view snapshot binding");
+      }
+    } else {
+      failures.push("baseline RADAR view request");
+    }
+    if (overviewResult.status === "rejected") failures.push("experimental overview");
+    if (runsResult.status === "rejected") failures.push("shadow-runs section");
+    if (batchesResult.status === "rejected") failures.push("feature-batches section");
+    if (
+      overviewResult.status === "rejected" &&
+      runsResult.status === "rejected" &&
+      batchesResult.status === "rejected"
+    ) {
+      setExperimental({
+        status: "error",
+        message: `EXPERIMENTAL_SHADOW surfaces failed (${failures.join(" · ")}); baseline lenses remain unchanged.`,
+      });
+      return;
+    }
+    setExperimental({
+      status: "ready",
+      asOf,
+      snapshotId,
+      overview: overviewResult.status === "fulfilled" ? overviewResult.value : null,
+      runsSection: runsResult.status === "fulfilled" ? runsResult.value : null,
+      batchesSection: batchesResult.status === "fulfilled" ? batchesResult.value : null,
+      radarItems,
+      failures,
+    });
+  }, [api, view]);
+
+  /** Keyboard/pointer toggle: enter EXPERIMENTAL, or leave back to the last baseline lens. */
+  const toggleExperimental = useCallback(() => {
+    if (lensRef.current === EXPERIMENTAL_LENS) {
+      setLens(lastBaselineLensRef.current);
+    } else {
+      lastBaselineLensRef.current = lensRef.current;
+      void enterExperimental();
+    }
+  }, [enterExperimental]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const command = resolveKeyboardCommand(event.key, event.target);
@@ -416,9 +728,14 @@ export function TerminalApp({ transport }: TerminalAppProps) {
       }
       event.preventDefault();
       if (command.kind === "lens") {
-        setInspector(null);
-        closePanel("inspector");
-        void loadView(command.lens, snapshotRef.current ?? undefined);
+        if (command.lens === EXPERIMENTAL_LENS) {
+          // EXPERIMENTAL never replaces baseline state: no inspector/panel reset.
+          toggleExperimental();
+        } else {
+          setInspector(null);
+          closePanel("inspector");
+          void loadView(command.lens, snapshotRef.current ?? undefined);
+        }
       } else if (command.kind === "next") {
         moveSelection(1);
       } else if (command.kind === "previous") {
@@ -433,18 +750,25 @@ export function TerminalApp({ transport }: TerminalAppProps) {
         if (command.panel === "health") void toggleHealth();
         else togglePanel(command.panel);
       } else if (command.kind === "refresh") {
-        void loadView(lens, snapshotRef.current ?? undefined);
+        if (lens === EXPERIMENTAL_LENS) void enterExperimental();
+        else void loadView(lens, snapshotRef.current ?? undefined);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closePanel, closeTopPanel, inspectEpisode, lens, loadView, moveSelection, selectedEpisodeId, toggleHealth, togglePanel]);
+  }, [closePanel, closeTopPanel, inspectEpisode, lens, loadView, moveSelection, selectedEpisodeId, toggleExperimental, toggleHealth, togglePanel]);
 
   const loadLatest = async () => {
     snapshotRef.current = null;
     setInspector(null);
     setHealth(null);
     setPanels([]);
+    if (lens === EXPERIMENTAL_LENS) {
+      const backLens = lastBaselineLensRef.current;
+      setExperimental({ status: "idle" });
+      await loadView(backLens);
+      return;
+    }
     await loadView(lens);
   };
 
@@ -463,7 +787,9 @@ export function TerminalApp({ transport }: TerminalAppProps) {
           <span className="version-mark">TERMINAL V0</span>
         </div>
         <div className="system-binding" aria-label="Selected snapshot binding">
-          <span className="lens-indicator">{lens}</span>
+          <span className={lens === EXPERIMENTAL_LENS ? "lens-indicator experimental-indicator" : "lens-indicator"}>
+            {lens === EXPERIMENTAL_LENS ? EXPERIMENTAL_LENS_LABEL : lens}
+          </span>
           <span>as_of <code>{view?.snapshot.as_of ?? "UNBOUND"}</code></span>
           <span>snapshot <code>{view ? shortId(view.snapshot.snapshot_id, 14) : "—"}</code></span>
         </div>
@@ -500,19 +826,44 @@ export function TerminalApp({ transport }: TerminalAppProps) {
               <small>{item === "RADAR" ? "all baseline episodes" : item === "NOW" ? "mentions_1h > 0" : "velocity_6h_delta > 0"}</small>
             </button>
           ))}
+          <button
+            type="button"
+            className={lens === EXPERIMENTAL_LENS ? "experimental-lens active-lens" : "experimental-lens"}
+            aria-pressed={lens === EXPERIMENTAL_LENS}
+            onClick={toggleExperimental}
+          >
+            <span className="keycap">x</span>
+            <strong>EXPERIMENTAL</strong>
+            <small>EXPERIMENTAL_SHADOW comparison</small>
+          </button>
           <div className="semantic-guard">
             <strong>BASELINE SUBSTRATE</strong>
             <span>No client rerank.</span>
             <span>No confirmation inference.</span>
+            <span className="experimental-guard-line">EXPERIMENTAL lens = shadow, never authority.</span>
           </div>
         </nav>
 
-        <section className="episode-workspace" aria-labelledby="episode-table-title">
+        <section
+          className={lens === EXPERIMENTAL_LENS ? "episode-workspace experimental-workspace" : "episode-workspace"}
+          aria-labelledby={lens === EXPERIMENTAL_LENS ? "experimental-title" : "episode-table-title"}
+        >
           <div className="workspace-toolbar">
-            <div>
-              <p className="eyebrow">Server order · baseline rank is not objective truth</p>
-              <h1 id="episode-table-title">{lens} / episode activity</h1>
-            </div>
+            {lens === EXPERIMENTAL_LENS ? (
+              <div>
+                <p className="eyebrow">EXPERIMENTAL_SHADOW read surface · not baseline authority</p>
+                <h1 id="experimental-title">
+                  EXPERIMENTAL / baseline vs shadow candidate
+                  <span className="experimental-badge">{EXPERIMENTAL_LENS_LABEL}</span>
+                </h1>
+              </div>
+            ) : (
+              <div>
+                <p className="eyebrow">Server order · baseline rank is not objective truth</p>
+                <h1 id="episode-table-title">{lens} / episode activity</h1>
+              </div>
+            )}
+            {lens === EXPERIMENTAL_LENS ? null : (
             <div className="filter-block">
               <label htmlFor="local-filter">Local filter <kbd>/</kbd></label>
               <input
@@ -527,27 +878,38 @@ export function TerminalApp({ transport }: TerminalAppProps) {
                 {filter ? "LOCAL FILTER" : "NO LOCAL FILTER"} · {visibleItems.length}/{view?.total ?? 0}
               </span>
             </div>
+            )}
           </div>
 
-          {error ? <div role="alert" className="error-banner"><strong>PUBLIC INTELLIGENCE UNAVAILABLE</strong><span>{error}</span></div> : null}
-          {loading ? <div role="status" className="loading-banner">Loading public read snapshot…</div> : null}
-          {!loading && view && visibleItems.length === 0 ? (
-            <div className="empty-state">
-              <strong>0 rows returned by {lens} for this snapshot.</strong>
-              <span>This is not a claim that nothing is happening or that evidence is absent.</span>
-            </div>
-          ) : null}
-          {view && visibleItems.length > 0 ? (
-            <EpisodeTable
-              items={visibleItems}
-              selectedEpisodeId={selectedEpisodeId}
-              onSelect={setSelectedEpisodeId}
-              onInspect={(episodeId) => void inspectEpisode(episodeId)}
+          {lens === EXPERIMENTAL_LENS ? (
+            <ExperimentalPanel
+              state={experimental}
+              onBack={toggleExperimental}
+              backLens={lastBaselineLensRef.current}
             />
-          ) : null}
+          ) : (
+            <>
+              {error ? <div role="alert" className="error-banner"><strong>PUBLIC INTELLIGENCE UNAVAILABLE</strong><span>{error}</span></div> : null}
+              {loading ? <div role="status" className="loading-banner">Loading public read snapshot…</div> : null}
+              {!loading && view && visibleItems.length === 0 ? (
+                <div className="empty-state">
+                  <strong>0 rows returned by {lens} for this snapshot.</strong>
+                  <span>This is not a claim that nothing is happening or that evidence is absent.</span>
+                </div>
+              ) : null}
+              {view && visibleItems.length > 0 ? (
+                <EpisodeTable
+                  items={visibleItems}
+                  selectedEpisodeId={selectedEpisodeId}
+                  onSelect={setSelectedEpisodeId}
+                  onInspect={(episodeId) => void inspectEpisode(episodeId)}
+                />
+              ) : null}
+            </>
+          )}
 
           <footer className="workspace-footer">
-            <span>j/k move · Enter inspect · h health · a audit · ? help · r refresh same snapshot</span>
+            <span>j/k move · Enter inspect · h health · a audit · ? help · r refresh same snapshot · x experimental</span>
             <span>{view?.semantic_scope ?? "UNBOUND"} · policy {view?.view_policy_version ?? "—"}</span>
           </footer>
         </section>

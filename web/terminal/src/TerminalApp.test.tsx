@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it } from "vitest";
 import type {
   EpisodeEvidenceResponse,
+  ExperimentalOverviewResponse,
+  ExperimentalShadowRunResponse,
   FrontierPublicReadTransport,
   HealthResponse,
   ViewResponse,
@@ -111,14 +113,77 @@ const healthResponse: HealthResponse = {
   transport_state: "OK",
 };
 
+const experimentalShadowRun: ExperimentalShadowRunResponse = {
+  algorithm_version: "pef-v0",
+  as_of: snapshot.as_of,
+  authority_state: "EXPERIMENTAL_SHADOW",
+  candidate_artifact_id: "pefart_fixture",
+  candidate_freeze_receipt_id: "freezereceipt_fixture",
+  candidate_id: "pef_v0",
+  candidate_output_digest: "sha256:cand",
+  configuration_digest: "sha256:cfg",
+  control_receipt_id: "receipt_control",
+  control_snapshot_id: "snapshot_control",
+  episode_universe_digest: "sha256:universe",
+  experiment_id: "exp_pef_v0",
+  failure_reason: null,
+  generated_at: "2026-09-05T12:00:01.000000Z",
+  run_digest: "sha256:run",
+  run_id: "shadowrun_fixture",
+  schema_version: "experimental-read-response-v0",
+  status: "RAN",
+};
+
+const experimentalOverview: ExperimentalOverviewResponse = {
+  analysis_artifacts: {},
+  as_of: snapshot.as_of,
+  authority_state: "EXPERIMENTAL_SHADOW",
+  availability: {
+    shadow_run: "AVAILABLE",
+    pef_artifact: "NO_DATA",
+    evaluation_receipt: "NO_DATA",
+    feature_batch: "NO_DATA",
+  },
+  candidate_id: "pef_v0",
+  configuration_digest: "sha256:cfg",
+  experiment_id: "exp_pef_v0",
+  generated_at: "2026-09-05T12:00:01.000000Z",
+  latest_evaluation_receipt: null,
+  latest_feature_batch: null,
+  latest_pef_artifact: null,
+  latest_shadow_run: experimentalShadowRun,
+  interpretation: "EXPERIMENTAL_SHADOW read surface",
+  schema_version: "experimental-read-response-v0",
+};
+
+const experimentalNoDataOverview: ExperimentalOverviewResponse = {
+  ...experimentalOverview,
+  availability: {
+    shadow_run: "NO_DATA",
+    pef_artifact: "NO_DATA",
+    evaluation_receipt: "NO_DATA",
+    feature_batch: "NO_DATA",
+  },
+  latest_shadow_run: null,
+};
+
 class FakeTransport implements FrontierPublicReadTransport {
   readonly calls: Array<{ path: string; query: Record<string, unknown> }> = [];
+  experimentalOverviewPayload: ExperimentalOverviewResponse | null = experimentalOverview;
+  experimentalFails = false;
 
   async get<T>(
     path: string,
     query: Record<string, string | number | boolean | null | undefined> = {},
   ): Promise<T> {
     this.calls.push({ path, query });
+    if (path.startsWith("/v0/experimental/")) {
+      if (this.experimentalFails) throw new Error("experimental repository unavailable");
+      if (path === "/v0/experimental/overview") {
+        return (this.experimentalOverviewPayload ?? { availability: "NO_DATA", latest: null }) as T;
+      }
+      return { availability: "NO_DATA", latest: null } as T;
+    }
     if (path.startsWith("/v0/episodes/")) return evidenceResponse as T;
     if (path === "/v0/health") return healthResponse as T;
     if (path === "/v0/now") return viewResponse("NOW") as T;
@@ -160,5 +225,71 @@ describe("TERMINAL_V0", () => {
     await waitFor(() => expect(transport.calls.some((call) => call.path === "/v0/now")).toBe(true));
     const nowCall = transport.calls.find((call) => call.path === "/v0/now");
     expect(nowCall?.query.snapshot_id).toBe(snapshot.snapshot_id);
+  });
+
+  it("renders the EXPERIMENTAL lens labelled shadow with rank deltas and UNKNOWN candidate ranks", async () => {
+    const transport = new FakeTransport();
+    render(<TerminalApp transport={transport} />);
+    await screen.findByText("#7");
+    fireEvent.keyDown(window, { key: "x" });
+    await screen.findByText("Rank deltas (baseline RADAR vs candidate)");
+
+    expect(screen.getAllByText("EXPERIMENTAL SHADOW").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Shadow run status")).toBeTruthy();
+    expect(screen.getByText("Feature explanations")).toBeTruthy();
+    expect(screen.getByText("Experiment history")).toBeTruthy();
+
+    const overviewCall = transport.calls.find((call) => call.path === "/v0/experimental/overview");
+    expect(overviewCall?.query.as_of).toBe(snapshot.as_of);
+    const radarCall = transport.calls.find(
+      (call) => call.path === "/v0/radar" && call.query.snapshot_id !== undefined,
+    );
+    expect(radarCall?.query.snapshot_id).toBe(snapshot.snapshot_id);
+
+    expect(screen.getByText("#7")).toBeTruthy();
+    expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("persistence")).toBeTruthy();
+    expect(screen.getAllByText("shadowrun_fixture").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/independently confirmed/i)).toBeNull();
+    expect(screen.queryByText(/factual confidence/i)).toBeNull();
+  });
+
+  it("toggling EXPERIMENTAL preserves baseline state and returns without refetch", async () => {
+    const transport = new FakeTransport();
+    render(<TerminalApp transport={transport} />);
+    await screen.findByText("#7");
+    fireEvent.keyDown(window, { key: "x" });
+    await screen.findByText("Rank deltas (baseline RADAR vs candidate)");
+    fireEvent.keyDown(window, { key: "x" });
+    await screen.findByText("RADAR / episode activity");
+    expect(screen.queryByText("Rank deltas (baseline RADAR vs candidate)")).toBeNull();
+    expect(screen.getByText(/LOCAL FILTER/)).toBeTruthy();
+    const radarCalls = transport.calls.filter((call) => call.path === "/v0/radar");
+    expect(radarCalls).toHaveLength(2);
+  });
+
+  it("shows an explicit empty EXPERIMENTAL panel when no shadow data exists (NO_DATA)", async () => {
+    const transport = new FakeTransport();
+    transport.experimentalOverviewPayload = experimentalNoDataOverview;
+    render(<TerminalApp transport={transport} />);
+    await screen.findByText("#7");
+    fireEvent.keyDown(window, { key: "x" });
+    await screen.findByText("NO EXPERIMENTAL DATA for this as_of.");
+    expect(screen.getAllByText("NO_DATA").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/NO SHADOW RUN DATA/)).toBeTruthy();
+  });
+
+  it("renders experimental fetch failures as explicit errors without breaking baseline lenses", async () => {
+    const transport = new FakeTransport();
+    transport.experimentalFails = true;
+    render(<TerminalApp transport={transport} />);
+    await screen.findByText("#7");
+    fireEvent.keyDown(window, { key: "x" });
+    await screen.findByText("EXPERIMENTAL SHADOW UNAVAILABLE");
+    expect(screen.getByText("Baseline lenses remain available and unchanged.")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "2" });
+    await waitFor(() => expect(transport.calls.some((call) => call.path === "/v0/now")).toBe(true));
+    await screen.findByText("NOW / episode activity");
+    expect(screen.getByText("#7")).toBeTruthy();
   });
 });

@@ -1,0 +1,209 @@
+{
+  "schema_version": "advanced-ranking-preregistration-v0",
+  "authority": {
+    "document": "docs/ADVANCED_INTELLIGENCE_EXPERIMENTS.md",
+    "authority_commit": "1d38caf9a74ef278a6c4418bf6298aec6bb50c66"
+  },
+  "experiment_id": "advanced-ranking-pef-v0",
+  "candidate": {
+    "candidate_id": "prospective-primary-emission-freshness-v0",
+    "algorithm_version": "prospective-primary-emission-freshness-lexicographic-v0",
+    "configuration": {
+      "algorithm_version": "prospective-primary-emission-freshness-lexicographic-v0",
+      "input_contract": "same-baseline-observation-and-grouping-inputs-as-control",
+      "activity_eligibility": {
+        "eligible_reasons": [
+          "ACTIVE_ENRICHMENT",
+          "DISCOVERY",
+          "SCHEDULED"
+        ],
+        "exclude_backfill": true,
+        "exclude_recovered_after_gap": true
+      },
+      "feature_definitions": {
+        "has_any_prospective_evidence": "true iff episode has at least one member BaselineObservationInput with is_prospective=true at as_of",
+        "has_prospective_primary_emission": "true iff at least one prospective member observation has signal role PRIMARY_EMISSION",
+        "prospective_last_observed_at": "maximum observed_at among prospective member observations; null when none",
+        "prospective_age_seconds": "integer whole seconds from prospective_last_observed_at to as_of; null when no prospective member",
+        "prospective_source_role_diversity": "count of distinct signal roles across prospective member observations only",
+        "prospective_evidence_count": "count of prospective member observations only",
+        "baseline_activity_metrics": "reuse control BaselineEpisode mentions_1h, mentions_6h, mentions_24h, velocity_6h_delta, acceleration_6h for the exact same current grouping episode"
+      },
+      "primary_emission_role": "PRIMARY_EMISSION",
+      "ranking_order": [
+        "has_prospective_primary_emission_desc",
+        "has_any_prospective_evidence_desc",
+        "prospective_age_seconds_asc_null_last",
+        "velocity_6h_delta_desc",
+        "mentions_1h_desc",
+        "mentions_6h_desc",
+        "acceleration_6h_desc",
+        "mentions_24h_desc",
+        "prospective_source_role_diversity_desc",
+        "prospective_evidence_count_desc",
+        "episode_id_asc"
+      ],
+      "no_prospective_evidence_policy": "sort_after_any_episode_with_prospective_evidence",
+      "score_semantics": "NO_SCALAR_SCORE_LEXICOGRAPHIC_RANK_ONLY",
+      "grouping_contract": "candidate uses exact control grouping episode membership at each as_of and never regroups observations"
+    },
+    "configuration_digest": "sha256:e2627f62deac24e5f1b09960687761ebbcc61b3fd0c8fec07fec0006dcff7dc1",
+    "deterministic": true,
+    "implementation_status": "NOT_IMPLEMENTED_PREREGISTRATION_ONLY",
+    "authority_state_before_promotion": "EXPERIMENTAL_SHADOW"
+  },
+  "control": {
+    "projection_name": "baseline-intelligence",
+    "projection_version": "baseline-intelligence-v0",
+    "algorithm_version": "windowed-episode-metrics-v0",
+    "ranking_policy_version": "naive-episode-activity-v0"
+  },
+  "feature_contract": {
+    "allowed": [
+      "prospective PRIMARY_EMISSION role presence derived only from prospectively eligible member observations",
+      "prospective last-observed freshness derived only from prospectively eligible member observations",
+      "baseline prospective activity windows: mentions_1h, mentions_6h, mentions_24h, velocity_6h_delta, acceleration_6h",
+      "prospective source-role diversity derived only from prospectively eligible member observations",
+      "prospective evidence count",
+      "episode_id only as final deterministic tie-breaker"
+    ],
+    "prohibited": [
+      "BACKFILL observations as live activity or freshness",
+      "recovered-after-gap observations as live activity or freshness",
+      "raw payload, title, URL, body text, embedding or semantic-text features",
+      "source-specific identity as a ranking feature",
+      "future observations, future health, future grouping, evaluation labels or outcome data",
+      "confirmation, provenance-root, entity, assertion-lifecycle or manipulation verdict features",
+      "LLM outputs, remote mutable model outputs, learned weights or post-preregistration coefficient tuning",
+      "binary floating point or nondeterministic unseeded ranking"
+    ]
+  },
+  "evaluation": {
+    "global_rank_cutoff_k": 100,
+    "snapshot_schedule": {
+      "cadence_seconds": 300,
+      "alignment": "UTC_UNIX_EPOCH_MULTIPLE_OF_300_SECONDS",
+      "start": "first UTC epoch-multiple-of-300 boundary strictly after the GitHub main merge commit committer timestamp of the durable candidate-freeze receipt",
+      "ranking_window_seconds": 2419200,
+      "ranking_window_interval": "[start,start+2419200)",
+      "label_maturation_seconds_after_window": 86400,
+      "no_early_stopping": true,
+      "no_window_extension_for_sample_size": true
+    },
+    "paired_snapshot_integrity": {
+      "candidate_and_control_same_as_of": true,
+      "candidate_must_reference_exact_control_snapshot_id_and_receipt_id": true,
+      "baseline_complete_boundary_floor_bps": 9500,
+      "max_candidate_failed_or_missing_artifacts_when_control_complete": 0,
+      "missing_expected_boundaries_cannot_shift_start_or_end": true
+    },
+    "source_registry": {
+      "freeze_exact_registry_version_in_candidate_freeze": true,
+      "preregistered_source_registry_version": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "required_enabled_source_ids": [
+        "arxiv.cs-ai",
+        "cisa.kev",
+        "gdelt.frontier",
+        "github.ml-repos",
+        "hf.models",
+        "hn.frontpage",
+        "pypi.updates"
+      ],
+      "registry_change_during_confirmatory_window": "INVALIDATE_AND_RESTART"
+    },
+    "domain_mapping": {
+      "SOFTWARE_PACKAGES": {
+        "anchor_source_id": "pypi.updates"
+      },
+      "AI_MODELS": {
+        "anchor_source_id": "hf.models"
+      },
+      "SECURITY_VULNERABILITIES": {
+        "anchor_source_id": "cisa.kev"
+      },
+      "minimum_qualifying_domains": 2,
+      "promotion_rule": "EVERY_DOMAIN_MEETING_SAMPLE_ADEQUACY_MUST_PASS;_AT_LEAST_TWO_MUST_MEET_SAMPLE_ADEQUACY",
+      "attention_and_discovery_do_not_assign_domain": true,
+      "cross_stratum_resolution_group": "UNQUALIFIED_MIXED"
+    },
+    "opportunity": {
+      "anchor": "prospectively eligible canonical PRIMARY_EMISSION observation from one frozen V0 anchor source whose observed_at is inside the ranking window",
+      "stable_anchor_identity": "observation_id",
+      "resolution_at": "anchor.observed_at + 86400 seconds",
+      "deduplication": "at resolution_at, retain anchor only when it is earliest qualifying V0 primary-emission observation in its resolution grouping episode ordered by observed_at then observation_id",
+      "mixed_domain_rule": "if the resolution grouping episode contains qualifying V0 primary-emission anchors from more than one frozen stratum, classify UNQUALIFIED_MIXED",
+      "each_retained_anchor_counts_once": true
+    },
+    "outcome_label": {
+      "name": "FOLLOW_ON_ATTENTION_OR_DISCOVERY_WITHIN_24H",
+      "model_independent": true,
+      "adjudication": "AUTOMATED_DETERMINISTIC_NO_HUMAN_ADJUDICATION",
+      "positive": "resolution grouping episode contains at least one prospectively eligible observation with anchor.observed_at < observed_at <= resolution_at from hn.frontpage with ATTENTION role or gdelt.frontier with DISCOVERY role",
+      "negative": "no positive observation exists and both outcome lanes have OK transport/freshness/completeness/schema at every expected paired boundary from first boundary after anchor.observed_at through resolution_at",
+      "unresolved_coverage": "absence cannot resolve negative when either outcome lane has non-OK or missing health at any required boundary",
+      "positive_remains_positive_under_degraded_coverage": true,
+      "candidate_or_control_outputs_may_define_label": false
+    },
+    "detection": {
+      "episode_tracking": "at each paired snapshot, locate the current grouping episode containing the stable anchor observation_id; episode_id may change as membership evolves",
+      "candidate_detection": "earliest paired boundary at or before resolution_at where current anchor episode candidate rank <= global K",
+      "control_detection": "earliest paired boundary at or before resolution_at where current anchor episode baseline rank <= global K",
+      "never_detected_time": "resolution_at",
+      "candidate_failure_on_control_complete_boundary": "NO_DETECTION_AND_PROMOTION_GATE_FAILURE"
+    },
+    "precision": {
+      "unit": "unique resolved retained opportunity",
+      "arm_surfaced": "opportunity detected at least once by that arm before or at resolution_at",
+      "value": "positive surfaced resolved opportunities / all surfaced resolved positive-or-negative opportunities",
+      "point_floor": "candidate_precision >= control_precision in every adequately sampled domain",
+      "uncertainty_rule": "Newcombe two-sided 95% score interval for independent proportions; lower bound of candidate-minus-control difference must be >= -0.10 in every adequately sampled domain",
+      "newcombe_z": "1.959963984540054",
+      "noninferiority_margin": "0.10"
+    },
+    "lead_time": {
+      "value_seconds": "control_detection_time - candidate_detection_time",
+      "population": "all positive resolved retained opportunities in each adequately sampled domain, including arm misses assigned resolution_at",
+      "domain_floor": "median lead_time_advantage_seconds > 0",
+      "pooled_floor": "pooled median lead_time_advantage_seconds > 0",
+      "ties": "zero",
+      "no_dropped_misses": true
+    },
+    "sample_adequacy": {
+      "min_resolved_opportunities_per_domain": 30,
+      "min_positive_opportunities_per_domain": 10,
+      "min_surfaced_resolved_opportunities_per_arm_per_domain": 20,
+      "min_resolved_label_fraction_bps_per_domain": 9000,
+      "underpowered_domain": "NOT_QUALIFYING; retained and reported; cannot be selected as a promotion domain",
+      "fewer_than_two_adequately_sampled_domains": "INCONCLUSIVE_NO_PROMOTION",
+      "resolved_label_fraction_denominator": "all retained non-duplicate non-UNQUALIFIED_MIXED opportunities in the domain",
+      "resolved_label_fraction_numerator": "retained opportunities resolved POSITIVE or NEGATIVE; UNRESOLVED_COVERAGE is not resolved"
+    },
+    "coverage_and_health": {
+      "ranking_runs_under_real_observed_health_state": true,
+      "health_degradation_never_coerced_to_absence": true,
+      "all_health_states_retained_in_evaluation_artifacts": true
+    },
+    "multiplicity": {
+      "family_id": "advanced-ranking-v0-pef-single-candidate-family",
+      "policy": "SINGLE_CONFIRMATORY_CANDIDATE",
+      "overlapping_confirmatory_evaluation_of_materially_distinct_candidate": "INVALIDATE_PROMOTION_EVIDENCE_UNLESS_NEW_MULTIPLICITY_PREREGISTRATION_PRECEDES_OVERLAP",
+      "interim_outcome_based_early_stop": false
+    },
+    "promotion": {
+      "merge_of_candidate_code_is_promotion": false,
+      "separate_promotion_authority_required": true,
+      "candidate_must_pass_all_adequately_sampled_domains": true
+    }
+  },
+  "candidate_freeze_requirements": {
+    "after_implementation_and_test": true,
+    "before_first_confirmatory_boundary": true,
+    "bind_reviewed_preregistration_commit": true,
+    "bind_exact_implementation_commit_and_tree": true,
+    "bind_dependency_lock_digest": true,
+    "bind_build_artifact_digest_when_applicable": true,
+    "bind_source_registry_version": true,
+    "any_bound_identity_change": "NEW_FREEZE_AND_RESTART"
+  },
+  "implementation_authorized_by_this_preregistration_pr": false
+}

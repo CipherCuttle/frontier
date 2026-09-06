@@ -5,8 +5,11 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+from frontier.adapters.api.experimental_read import register_experimental_routes
 from frontier.adapters.api.public_read import create_public_read_app
+from frontier.application.experimental_read import ExperimentalReadService
 from frontier.application.public_read import PublicReadRepository, PublicReadService
+from frontier.domain.experimental_read import ExperimentalReadFailure
 
 ROOT = Path(__file__).resolve().parents[1]
 OPENAPI_PATH = ROOT / "contracts" / "public" / "openapi_v0.json"
@@ -28,9 +31,29 @@ class _SchemaOnlyRepository:
         raise RuntimeError("schema-only repository")
 
 
+class _SchemaOnlyExperimentalRepository:
+    """Fails closed: contract generation must never read live experiment data."""
+
+    def latest_shadow_run(self, *, as_of: Any = None) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def latest_pef_artifact(self, *, as_of: Any = None) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def latest_evaluation_receipt(self, *, as_of: Any = None) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def latest_feature_batch(self, *, as_of: Any = None) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def latest_analysis_artifacts(self, *, as_of: Any = None) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+
 def openapi_document() -> JsonObject:
     repository: PublicReadRepository = _SchemaOnlyRepository()
     app = create_public_read_app(PublicReadService(repository))
+    register_experimental_routes(app, ExperimentalReadService(_SchemaOnlyExperimentalRepository()))
     return app.openapi()
 
 

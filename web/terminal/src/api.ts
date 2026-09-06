@@ -1,10 +1,16 @@
 import {
   getEpisode,
+  getExperimentalFeatureBatches,
+  getExperimentalOverview,
+  getExperimentalShadowRuns,
   getHealth,
   getNow,
   getRadar,
   getTrending,
   type EpisodeEvidenceResponse,
+  type ExperimentalFeatureBatchSectionResponse,
+  type ExperimentalOverviewResponse,
+  type ExperimentalShadowRunSectionResponse,
   type FrontierPublicReadTransport,
   type HealthResponse,
   type PublicViewKind,
@@ -14,6 +20,14 @@ import {
 export type {
   EpisodeEvidenceResponse,
   EpisodeResponse,
+  ExperimentalAnalysisArtifactResponse,
+  ExperimentalEvaluationReceiptResponse,
+  ExperimentalFeatureBatchResponse,
+  ExperimentalFeatureBatchSectionResponse,
+  ExperimentalOverviewResponse,
+  ExperimentalPefArtifactResponse,
+  ExperimentalShadowRunResponse,
+  ExperimentalShadowRunSectionResponse,
   FrontierPublicReadTransport,
   HealthResponse,
   ObservationEvidenceResponse,
@@ -22,6 +36,29 @@ export type {
   SourceHealthResponse,
   ViewResponse,
 } from "../../../clients/typescript/src/generated/public_read_v0";
+
+/** Explicit EXPERIMENTAL_SHADOW availability states (R4): never fabricated. */
+export type ExperimentalAvailabilityState = "AVAILABLE" | "NO_DATA" | "UNKNOWN";
+
+const KNOWN_AVAILABILITY_STATES: readonly ExperimentalAvailabilityState[] = [
+  "AVAILABLE",
+  "NO_DATA",
+  "UNKNOWN",
+];
+
+/**
+ * Normalize an EXPERIMENTAL_SHADOW availability value.
+ *
+ * Fail-closed (R4): anything that is not an exact known state — including an
+ * unknown status string — resolves to UNKNOWN, never to AVAILABLE or NO_DATA.
+ */
+export function experimentalAvailability(
+  value: string | null | undefined,
+): ExperimentalAvailabilityState {
+  return KNOWN_AVAILABILITY_STATES.includes(value as ExperimentalAvailabilityState)
+    ? (value as ExperimentalAvailabilityState)
+    : "UNKNOWN";
+}
 
 export class PublicReadHttpError extends Error {
   readonly status: number;
@@ -99,6 +136,12 @@ export interface TerminalPublicReadApi {
   ): Promise<ViewResponse>;
   episode(episodeId: string, snapshotId: string): Promise<EpisodeEvidenceResponse>;
   health(snapshotId: string): Promise<HealthResponse>;
+  /** Labelled EXPERIMENTAL_SHADOW overview (identity/status surfaces only). */
+  experimentalOverview(asOf?: string): Promise<ExperimentalOverviewResponse>;
+  /** Labelled EXPERIMENTAL_SHADOW latest-shadow-run section (GET only). */
+  experimentalShadowRuns(asOf?: string): Promise<ExperimentalShadowRunSectionResponse>;
+  /** Labelled EXPERIMENTAL_SHADOW latest-feature-batch section (GET only). */
+  experimentalFeatureBatches(asOf?: string): Promise<ExperimentalFeatureBatchSectionResponse>;
 }
 
 export function createTerminalPublicReadApi(
@@ -141,6 +184,20 @@ export function createTerminalPublicReadApi(
       const response = await getHealth(transport, { snapshot_id: snapshotId });
       requireActiveSnapshot("health", snapshotId);
       return response;
+    },
+    async experimentalOverview(asOf) {
+      // EXPERIMENTAL_SHADOW surface: read-only GET; never mutates or reranks
+      // the baseline plane. Sections carry explicit NO_DATA/UNKNOWN states (R4).
+      const query = asOf ? { as_of: asOf } : {};
+      return await getExperimentalOverview(transport, query);
+    },
+    async experimentalShadowRuns(asOf) {
+      const query = asOf ? { as_of: asOf } : {};
+      return await getExperimentalShadowRuns(transport, query);
+    },
+    async experimentalFeatureBatches(asOf) {
+      const query = asOf ? { as_of: asOf } : {};
+      return await getExperimentalFeatureBatches(transport, query);
     },
   };
 }
