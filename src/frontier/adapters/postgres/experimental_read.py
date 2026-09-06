@@ -13,6 +13,15 @@ from typing import LiteralString, cast
 
 import psycopg
 
+from frontier.domain.experiment_status import (
+    BoundFreezeStatus,
+    CoverageHealthStatus,
+    DomainEvaluationStatusRow,
+    DomainOpportunityCounts,
+    EvaluationStatisticsStatus,
+    LatestRunStatus,
+    WindowBoundaryStatus,
+)
 from frontier.domain.experimental_analysis import ExperimentalAnalysisKind
 from frontier.domain.experimental_read import (
     AnalysisArtifactSummary,
@@ -22,6 +31,7 @@ from frontier.domain.experimental_read import (
     PefArtifactSummary,
     ShadowRunSummary,
 )
+from frontier.domain.health import HealthValue
 
 
 class PostgresExperimentalReadRepository:
@@ -242,6 +252,192 @@ class PostgresExperimentalReadRepository:
             result[kind] = summary
         return result
 
+    # ------------------------------------------------------------------
+    # WP6 (G4): SELECT-only status inputs for the coherent experiment
+    # status projection (fail-closed; missing rows are None, never data).
+    # ------------------------------------------------------------------
+
+    def latest_freeze_status(self) -> BoundFreezeStatus | None:
+        """Latest bound candidate freeze receipt (None = unbound)."""
+        row = self._fetch_one(
+            """
+            SELECT receipt_id, status, durable_freeze_at, implementation_commit,
+                   implementation_tree_digest, source_registry_digest, frozen_at
+            FROM candidate_freeze_receipts
+            ORDER BY frozen_at DESC, receipt_id DESC
+            LIMIT 1
+            """,
+            (),
+        )
+        if row is None:
+            return None
+        return BoundFreezeStatus(
+            receipt_id=cast(str, row[0]),
+            status=cast(str, row[1]),
+            durable_freeze_at=_canonical(row[2]),
+            implementation_commit=cast(str | None, row[3]),
+            implementation_tree_digest=cast(str | None, row[4]),
+            source_registry_digest=cast(str | None, row[5]),
+            frozen_at=_canonical(row[6]),
+        )
+
+    def window_boundaries(self) -> WindowBoundaryStatus | None:
+        """Earliest/latest stored run boundary plus latest attempt state."""
+        row = self._fetch_one(
+            """
+            SELECT
+              (SELECT min(as_of) FROM shadow_experiment_runs),
+              (SELECT max(as_of) FROM shadow_experiment_runs),
+              (SELECT status FROM experiment_run_attempts
+                ORDER BY as_of DESC, attempt_no DESC, attempt_id DESC LIMIT 1),
+              (SELECT detail FROM experiment_run_attempts
+                ORDER BY as_of DESC, attempt_no DESC, attempt_id DESC LIMIT 1)
+            """,
+            (),
+        )
+        if row is None or row[0] is None or row[1] is None:
+            return None
+        return WindowBoundaryStatus(
+            window_start=_canonical(row[0]),
+            latest_boundary_as_of=_canonical(row[1]),
+            latest_attempt_status=cast(str | None, row[2]),
+            latest_attempt_detail=cast(str | None, row[3]),
+        )
+
+    def latest_run_state(self) -> LatestRunStatus | None:
+        """Latest paired run lifecycle state (FAILED stays explicit)."""
+        row = self._fetch_one(
+            """
+            SELECT run_id, status, run_class
+            FROM shadow_experiment_runs
+            WHERE as_of <= COALESCE(%s, 'infinity'::timestamptz)
+            ORDER BY as_of DESC, run_id DESC
+            LIMIT 1
+            """,
+            (None,),
+        )
+        if row is None:
+            return None
+        return LatestRunStatus(
+            run_id=cast(str, row[0]),
+            status=cast(str, row[1]),
+            run_class=cast(str | None, row[2]),
+        )
+
+    def coverage_health(self) -> CoverageHealthStatus | None:
+        """Control coverage health of the latest paired boundary (R4).
+
+        Unknown lane strings fail closed instead of rendering as OK.
+        """
+        row = self._fetch_one(
+            """
+            SELECT run_json->>'control_transport_state',
+                   run_json->>'control_freshness_state',
+                   run_json->>'control_coverage_state',
+                   run_json->>'control_schema_state'
+            FROM shadow_experiment_runs
+            WHERE as_of <= COALESCE(%s, 'infinity'::timestamptz)
+            ORDER BY as_of DESC, run_id DESC
+            LIMIT 1
+            """,
+            (None,),
+        )
+        if row is None:
+            return None
+        states = (
+            cast(str | None, row[0]),
+            cast(str | None, row[1]),
+            cast(str | None, row[2]),
+            cast(str | None, row[3]),
+        )
+        parsed: list[str] = []
+        for value in states:
+            if value is None:
+                raise ExperimentalReadFailure("run coverage lane state is missing")
+            try:
+                parsed.append(HealthValue(value).value)
+            except ValueError as exc:
+                raise ExperimentalReadFailure(
+                    "run coverage lane state is not a known health value"
+                ) from exc
+        return CoverageHealthStatus(
+            transport_state=parsed[0],
+            freshness_state=parsed[1],
+            completeness_state=parsed[2],
+            schema_state=parsed[3],
+        )
+
+    def opportunity_domain_counts(self) -> tuple[DomainOpportunityCounts, ...]:
+        """Anchor-derived per-stratum counts (anchors ONLY, deterministic)."""
+        rows = self._fetch_all(
+            """
+            SELECT a.domain_stratum,
+                   count(*) AS anchors,
+                   count(*) FILTER (
+                       WHERE r.resolution_state = 'RESOLVED' AND r.label = 'POSITIVE'),
+                   count(*) FILTER (
+                       WHERE r.resolution_state = 'RESOLVED' AND r.label = 'NEGATIVE'),
+                   count(*) FILTER (
+                       WHERE r.resolution_state = 'UNKNOWN'
+                         AND r.label = 'UNRESOLVED_COVERAGE'),
+                   count(*) FILTER (WHERE r.resolution_state = 'EXCLUDED'),
+                   count(*) FILTER (WHERE r.anchor_id IS NULL)
+            FROM opportunity_anchors a
+            LEFT JOIN outcome_resolutions r USING (anchor_id)
+            GROUP BY a.domain_stratum
+            ORDER BY a.domain_stratum
+            """,
+            (),
+        )
+        counts: list[DomainOpportunityCounts] = []
+        for item in rows:
+            counts.append(
+                DomainOpportunityCounts(
+                    domain=cast(str, item[0]),
+                    anchor_count=int(cast(int, item[1])),
+                    resolved_positive_count=int(cast(int, item[2])),
+                    resolved_negative_count=int(cast(int, item[3])),
+                    unresolved_coverage_count=int(cast(int, item[4])),
+                    unknown_count=int(cast(int, item[4])),
+                    excluded_count=int(cast(int, item[5])),
+                    pending_count=int(cast(int, item[6])),
+                )
+            )
+        return tuple(counts)
+
+    def latest_evaluation_statistics(self) -> EvaluationStatisticsStatus | None:
+        """Latest receipt's status and its OWN stored statistics (verbatim)."""
+        row = self._fetch_one(
+            """
+            SELECT evaluation_id, status, freeze_status, receipt_json
+            FROM evaluation_receipts
+            WHERE as_of <= COALESCE(%s, 'infinity'::timestamptz)
+            ORDER BY as_of DESC, evaluation_id DESC
+            LIMIT 1
+            """,
+            (None,),
+        )
+        if row is None:
+            return None
+        receipt_json = row[3]
+        if not isinstance(receipt_json, dict):
+            raise ExperimentalReadFailure("evaluation receipt payload is not a mapping")
+        payload = cast(dict[str, object], receipt_json)
+        domains = _evaluation_domain_rows(payload)
+        pooled = _optional_text_field(
+            payload.get("pooled_median_lead_time_advantage_seconds"),
+            "pooled median lead time advantage seconds",
+        )
+        return EvaluationStatisticsStatus(
+            evaluation_id=cast(str, row[0]),
+            status=cast(str, row[1]),
+            freeze_status=cast(str | None, row[2]),
+            verdict=_optional_text_field(payload.get("verdict"), "verdict"),
+            status_reason=_optional_text_field(payload.get("status_reason"), "status reason"),
+            pooled_median_lead_time_advantage_seconds=pooled,
+            domains=domains,
+        )
+
     def _fetch_one(
         self, query: LiteralString, params: tuple[object, ...]
     ) -> tuple[object, ...] | None:
@@ -261,6 +457,95 @@ class PostgresExperimentalReadRepository:
         if row is None or row[0] is None:
             return None
         return int(cast(int, row[0]))
+
+
+def _require_text_field(value: object, what: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ExperimentalReadFailure(f"evaluation receipt {what} is missing or not text")
+    return value
+
+
+def _optional_text_field(value: object, what: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ExperimentalReadFailure(f"evaluation receipt {what} is missing or not text")
+    return value
+
+
+def _optional_decimal_text(value: object, what: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ExperimentalReadFailure(f"evaluation receipt {what} is not a canonical decimal")
+    return value
+
+
+def _arm_counts(payload: object, what: str) -> tuple[str | None, int | None, int | None]:
+    if not isinstance(payload, dict):
+        raise ExperimentalReadFailure(f"evaluation receipt {what} is not a mapping")
+    arm = cast(dict[str, object], payload)
+    surfaced = arm.get("surfaced_resolved")
+    positive = arm.get("positive_surfaced_resolved")
+    for item in (surfaced, positive):
+        if item is not None and (not isinstance(item, int) or isinstance(item, bool)):
+            raise ExperimentalReadFailure(f"evaluation receipt {what} count is not an integer")
+    return (
+        _optional_decimal_text(arm.get("precision"), f"{what} precision"),
+        cast("int | None", surfaced),
+        cast("int | None", positive),
+    )
+
+
+def _evaluation_domain_rows(
+    payload: dict[str, object],
+) -> tuple[DomainEvaluationStatusRow, ...]:
+    """Parse the receipt's stored per-domain rows fail-closed (verbatim)."""
+    raw_domains = payload.get("domains")
+    if raw_domains is None:
+        return ()
+    if not isinstance(raw_domains, list):
+        raise ExperimentalReadFailure("evaluation receipt domains are not a list")
+    rows: list[DomainEvaluationStatusRow] = []
+    for entry in cast("list[object]", raw_domains):
+        if not isinstance(entry, dict):
+            raise ExperimentalReadFailure("evaluation receipt domain row is not a mapping")
+        row = cast(dict[str, object], entry)
+        candidate_precision, candidate_surfaced, candidate_positive = _arm_counts(
+            row.get("candidate_arm"), "candidate arm"
+        )
+        control_precision, control_surfaced, control_positive = _arm_counts(
+            row.get("control_arm"), "control arm"
+        )
+        noninferiority = row.get("noninferiority_pass")
+        if noninferiority is not None and not isinstance(noninferiority, bool):
+            raise ExperimentalReadFailure("evaluation receipt noninferiority_pass is not a boolean")
+        adequacy = row.get("qualifies_sample_adequacy")
+        if adequacy is not None and not isinstance(adequacy, bool):
+            raise ExperimentalReadFailure(
+                "evaluation receipt qualifies_sample_adequacy is not a boolean"
+            )
+        rows.append(
+            DomainEvaluationStatusRow(
+                domain=_require_text_field(row.get("domain"), "domain"),
+                candidate_precision=candidate_precision,
+                candidate_surfaced_resolved=candidate_surfaced,
+                candidate_positive_surfaced_resolved=candidate_positive,
+                control_precision=control_precision,
+                control_surfaced_resolved=control_surfaced,
+                control_positive_surfaced_resolved=control_positive,
+                difference_lower_bound=_optional_decimal_text(
+                    row.get("difference_lower_bound"), "difference lower bound"
+                ),
+                noninferiority_pass=noninferiority,
+                median_lead_time_advantage_seconds=_optional_decimal_text(
+                    row.get("lead_time_median_advantage_seconds"),
+                    "median lead time advantage seconds",
+                ),
+                qualifies_sample_adequacy=adequacy,
+            )
+        )
+    return tuple(rows)
 
 
 def _analysis_summary(row: tuple[object, ...]) -> AnalysisArtifactSummary:
