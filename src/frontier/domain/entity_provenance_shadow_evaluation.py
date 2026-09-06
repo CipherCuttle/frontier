@@ -66,6 +66,16 @@ class ShadowEvaluationReport:
 
     @property
     def report_body(self) -> dict[str, CanonicalValue]:
+        source_coverage: dict[str, CanonicalValue] = {}
+        for source in BRIDGE_SOURCE_REGISTRY:
+            row: dict[str, CanonicalValue] = {
+                field: value for field, value in self.source_coverage[source].items()
+            }
+            source_coverage[source] = row
+        ignored_future_by_source: dict[str, CanonicalValue] = {
+            source: self.ignored_future_observation_by_source[source]
+            for source in BRIDGE_SOURCE_REGISTRY
+        }
         return {
             "as_of": self.as_of,
             "bridge_algorithm_version": BRIDGE_ALGORITHM_VERSION,
@@ -77,10 +87,7 @@ class ShadowEvaluationReport:
             "entity_decision": self.entity_decision,
             "entity_quality_status": self.entity_quality_status,
             "forbidden_inference_claims": list(self.forbidden_inference_claims),
-            "ignored_future_observation_by_source": {
-                source: self.ignored_future_observation_by_source[source]
-                for source in BRIDGE_SOURCE_REGISTRY
-            },
+            "ignored_future_observation_by_source": ignored_future_by_source,
             "ignored_future_observation_count": self.ignored_future_observation_count,
             "ignored_future_relation_count": self.ignored_future_relation_count,
             "integrity_status": self.integrity_status.value,
@@ -94,9 +101,7 @@ class ShadowEvaluationReport:
             "provenance_quality_status": self.provenance_quality_status,
             "quality_pass_fail_claim": self.quality_pass_fail_claim,
             "schema_version": REPORT_SCHEMA_VERSION,
-            "source_coverage": {
-                source: self.source_coverage[source] for source in BRIDGE_SOURCE_REGISTRY
-            },
+            "source_coverage": source_coverage,
             "source_registry_digest": self.source_registry_digest,
         }
 
