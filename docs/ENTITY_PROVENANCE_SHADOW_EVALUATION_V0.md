@@ -39,7 +39,7 @@ Frozen shadow-evaluation corpus:
 
 The corpus intentionally binds its first 20 executable inputs to exact case IDs from the already-frozen bridge corpus at the bridge corpus digest above. The final four cases contain complete inline canonical fixture inputs. A bridge-case reference is not a suggestion: it resolves to the exact observations, relations, metadata, and `as_of` from that frozen bridge case. Fixture substitution is forbidden.
 
-Every case now freezes:
+Every case freezes:
 
 - exact `as_of`;
 - exact source-registry digest supplied to the evaluator;
@@ -49,12 +49,25 @@ Every case now freezes:
 - exact integrity status;
 - exact entity and provenance decision outcome, including literal `NO_EVALUATION` / `NOT_EVALUABLE` where applicable;
 - exact PIT, malformed-evidence, native-signal, future-evidence, weak-relation, and direct-derivation counts;
-- exact source-coverage contract;
 - exact scientific quality statuses;
 - exact empty forbidden-inference claim set;
 - exact `UNAVAILABLE` promotion status.
 
 There are no advisory `may` outcomes in the frozen expected diagnostics.
+
+Exact expected-report authority is separately machine-bound to prevent symbolic coverage or implementation-chosen report bytes:
+
+- path: `fixtures/entity_provenance/shadow_evaluation_expected_reports_v0.json`;
+- schema: `frontier-entity-provenance-shadow-evaluation-expected-reports-v0`;
+- report schema: `frontier-entity-provenance-shadow-evaluation-report-v0`;
+- case count: 24;
+- exact Git blob SHA-1 identity: `d0fa4e4ff82eeb70f551e4274eb856b5f5e9f3d4`.
+
+For every case, that artifact freezes one exact complete seven-source coverage map and one exact canonical report digest. Sparse coverage profiles are only an encoding: they deterministically expand across the exact seven-source order with literal zero rows for absent sources. Implementations may not choose alternate coverage values.
+
+The report digest rule is non-circular: `report_digest = sha256(canonical_json(report_body))`, where object keys are sorted lexicographically, frozen arrays preserve order, separators are `,` and `:`, UTF-8 is used with `ensure_ascii=false`, and `report_digest` itself is outside `report_body`.
+
+The expected-report artifact also makes the negative evidence requirements executable. In particular, EPSE-024 explicitly requires both `source multiplicity must not imply factual independence` and `direct_derivation_evidence_count=0 must not imply factual independence or no derivation`.
 
 Exact source registry remains unchanged with digest:
 
@@ -67,12 +80,13 @@ This phase may implement only:
 - an offline/in-memory shadow evaluator over the exact frozen inputs defined by the corpus;
 - reuse of the merged `ENTITY_PROVENANCE_BRIDGE_V0` adapter;
 - execution of the frozen selected entity/provenance candidates;
-- deterministic experimental diagnostic reports;
+- deterministic experimental diagnostic reports matching the bound expected-report authority;
 - hostile tests for PIT, drift, replay, semantic non-escalation, underpowered evidence, and forbidden provenance-laundering signals.
 
 It MUST NOT:
 
 - choose convenient replacement fixtures after implementation results are visible;
+- choose alternate coverage maps, output fields, or report digests;
 - read arbitrary current database state as a substitute for a reconstructed historical horizon;
 - add a migration or canonical schema field;
 - persist evaluation output;
@@ -86,7 +100,7 @@ It MUST NOT:
 - change baseline or PEF ranking;
 - produce a promotion PASS/FAIL decision;
 - treat source multiplicity as independence;
-- treat zero provenance coverage as evidence of no derivation.
+- treat zero provenance or zero direct-derivation coverage as evidence of no derivation or independence.
 
 ## Point-in-time contract
 
@@ -135,7 +149,7 @@ and:
 
 unless a future separately merged authority changes the evidence substrate. This evaluator itself may not accept ad-hoc stronger relation inputs to escape the block.
 
-The frozen hostile corpus explicitly exercises all presently identified laundering paths. None of these signals may become `DIRECT_DERIVATIVE`, true origin, provenance root, or factual independence:
+The frozen hostile authority explicitly exercises all presently identified laundering paths. None of these signals may become `DIRECT_DERIVATIVE`, true origin, provenance root, or factual independence:
 
 - `REFERENCES`;
 - `CORRECTS`;
@@ -155,7 +169,7 @@ V0 separates evaluator integrity from scientific quality.
 
 Allowed integrity states:
 
-- `COMPLETE_DIAGNOSTIC` — the frozen evaluator ran over conforming exact inputs and produced the exact deterministic diagnostics required by the corpus;
+- `COMPLETE_DIAGNOSTIC` — the frozen evaluator ran over conforming exact inputs and produced the exact deterministic diagnostics required by the bound corpus and expected-report authority;
 - `INVALID_DRIFT` — frozen identity/config/registry/PIT constraints were violated.
 
 `COMPLETE_DIAGNOSTIC` does not mean candidate quality passed.
@@ -170,7 +184,7 @@ A deterministic shadow report must include at least:
 - exact bridge/candidate identities;
 - integrity status and drift reasons;
 - PIT-eligible observation count;
-- per-source supported/degraded/unsupported coverage;
+- exact complete seven-source supported/degraded/unsupported coverage;
 - native-ID signal count;
 - malformed identity-field count;
 - ignored future observation count globally and per source;
@@ -182,7 +196,7 @@ A deterministic shadow report must include at least:
 - entity quality status;
 - provenance quality status;
 - promotion status `UNAVAILABLE`;
-- canonical report digest.
+- canonical report digest matching the exact frozen case digest.
 
 Zero values must remain literal zeros and must not be narrated into stronger conclusions.
 
@@ -204,21 +218,24 @@ The 24 executable cases attack:
 - earliest-observation origin inference;
 - GitHub fork-boolean derivation inference;
 - shared-URL derivation/origin inference across two bridge-supported sources;
-- zero-provenance-coverage and source-multiplicity independence claims.
+- zero-provenance/direct-derivation-coverage and source-multiplicity independence claims.
 
-The corpus is frozen before evaluator implementation. Its inputs, expected outputs, statuses, and evidence limits may not be weakened after implementation results are visible.
+The corpus and expected-report artifact are frozen before evaluator implementation. Their inputs, exact coverage maps, exact report digests, statuses, and evidence limits may not be weakened after implementation results are visible.
 
 ## Success / falsification
 
 Implementation closes only if:
 
 - all 24 frozen executable cases produce their exact mandatory diagnostics;
+- all 24 produce the exact complete seven-source coverage maps frozen by the expected-report authority;
+- all 24 produce the exact canonical report digests frozen by the expected-report authority;
 - deterministic replay is byte-identical with an identical report digest;
 - registry drift fails closed before quality counting;
 - no future evidence leaks through PIT boundaries;
 - unsupported sources remain unsupported;
 - malformed native identity evidence fails closed;
 - no canonical relation or forbidden laundering signal becomes derivation/origin/independence evidence;
+- source multiplicity and zero direct-derivation coverage remain explicitly non-authoritative;
 - `forbidden_inference_claims` remains empty in every frozen case;
 - entity quality remains `INSUFFICIENT_INDEPENDENT_GROUND_TRUTH`;
 - provenance quality remains `BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE`;
