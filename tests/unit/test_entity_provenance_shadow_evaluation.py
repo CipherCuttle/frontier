@@ -247,8 +247,7 @@ def _expand_coverage(
 ) -> dict[str, dict[str, int]]:
     expansion = _object(document["coverage_expansion"], "coverage_expansion")
     fields = [
-        _string(value, "tuple field")
-        for value in _array(expansion["tuple_fields"], "tuple_fields")
+        _string(value, "tuple field") for value in _array(expansion["tuple_fields"], "tuple_fields")
     ]
     absent = [
         _integer(value, "absent tuple value")
@@ -359,8 +358,7 @@ def test_registry_drift_fails_closed_before_any_quality_counting() -> None:
     assert report.entity_decision == "NO_EVALUATION"
     assert report.provenance_decision == "NO_EVALUATION"
     assert all(
-        row["total_pit_eligible_observations"] == 0
-        for row in report.source_coverage.values()
+        row["total_pit_eligible_observations"] == 0 for row in report.source_coverage.values()
     )
 
 
