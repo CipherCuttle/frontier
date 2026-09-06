@@ -89,9 +89,7 @@ def _cases() -> dict[str, dict[str, object]]:
     corpus = _load(CORPUS_PATH)
     return {
         _as_string(case["id"], "case.id"): case
-        for case in (
-            _as_object(value, "case") for value in _as_list(corpus["cases"], "cases")
-        )
+        for case in (_as_object(value, "case") for value in _as_list(corpus["cases"], "cases"))
     }
 
 
@@ -284,11 +282,7 @@ def test_merge_authority_does_not_upgrade_quality_or_grant_runtime_truth() -> No
     implementation = _as_object(
         authority["implementation_authority_on_merge"], "implementation_authority_on_merge"
     )
-    permitted = {
-        key
-        for key, value in implementation.items()
-        if value is True
-    }
+    permitted = {key for key, value in implementation.items() if value is True}
     assert permitted == {
         "offline_packet_validator",
         "offline_blinding_redactor",
