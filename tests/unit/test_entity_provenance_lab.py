@@ -155,9 +155,7 @@ def test_inferred_derivation_relation_is_not_direct_derivative() -> None:
         ),
     )
 
-    explicit = assess_provenance(
-        "explicit-reference-v0", case.left, right, as_of=case.as_of
-    )
+    explicit = assess_provenance("explicit-reference-v0", case.left, right, as_of=case.as_of)
     hybrid = assess_provenance(
         "transparent-provenance-hybrid-v0", case.left, right, as_of=case.as_of
     )
