@@ -2,20 +2,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import cast
+
+import pytest
 
 from frontier.domain.entity_provenance_lab import (
     ENTITY_CANDIDATES,
     PROVENANCE_CANDIDATES,
     EntityDecision,
+    LabRelation,
     ProvenanceDecision,
     assess_entity,
     assess_provenance,
     build_selection_report,
     corpus_digest,
     load_corpus,
+    parse_corpus,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -133,6 +138,93 @@ def test_exact_mirror_is_not_promoted_to_direct_derivative() -> None:
         "transparent-provenance-hybrid-v0", case.left, case.right, as_of=case.as_of
     )
     assert result.decision is ProvenanceDecision.SHARED_UPSTREAM_POSSIBLE
+
+
+def test_inferred_derivation_relation_is_not_direct_derivative() -> None:
+    case = _case("EPV-002")
+    assert case.left.canonical_url is not None
+    right = replace(
+        case.right,
+        relations=(
+            LabRelation(
+                relation_type="COPY_OF",
+                target_external_ref=case.left.canonical_url,
+                authority="INFERRED",
+                created_at=case.right.observed_at,
+            ),
+        ),
+    )
+
+    explicit = assess_provenance(
+        "explicit-reference-v0", case.left, right, as_of=case.as_of
+    )
+    hybrid = assess_provenance(
+        "transparent-provenance-hybrid-v0", case.left, right, as_of=case.as_of
+    )
+
+    assert explicit.decision is ProvenanceDecision.NO_LINK_EVIDENCE
+    assert hybrid.decision is ProvenanceDecision.SHARED_UPSTREAM_POSSIBLE
+
+
+def test_inferred_alias_relation_does_not_establish_entity_identity() -> None:
+    case = _case("EPV-007")
+    assert case.left.canonical_url is not None
+    right = replace(
+        case.right,
+        relations=(
+            LabRelation(
+                relation_type="ALIAS_OF",
+                target_external_ref=case.left.canonical_url,
+                authority="INFERRED",
+                created_at=case.right.observed_at,
+            ),
+        ),
+    )
+
+    result = assess_entity("transparent-entity-hybrid-v0", case.left, right, as_of=case.as_of)
+    assert result.decision is EntityDecision.AMBIGUOUS
+
+
+def test_non_string_native_id_is_rejected_before_identity_assessment() -> None:
+    malformed: dict[str, object] = {
+        "schema_version": "frontier-entity-provenance-corpus-v0",
+        "authority": {
+            "runtime_authority": False,
+            "public_authority": False,
+            "persistence_authority": False,
+        },
+        "cases": [
+            {
+                "id": "EPV-BAD-NATIVE-ID",
+                "category": "malformed_native_id",
+                "as_of": "2026-09-05T10:10:00Z",
+                "expected_entity": "AMBIGUOUS",
+                "expected_provenance": "NO_LINK_EVIDENCE",
+                "rationale": "malformed identifiers must fail closed",
+                "left": {
+                    "source_id": "fixture.left",
+                    "source_item_key": "left",
+                    "observed_at": "2026-09-05T10:00:00Z",
+                    "canonical_url": "https://left.example/item",
+                    "entity_type": "PROJECT",
+                    "entity_name": "Example",
+                    "native_ids": [{"issuer": "one"}],
+                },
+                "right": {
+                    "source_id": "fixture.right",
+                    "source_item_key": "right",
+                    "observed_at": "2026-09-05T10:01:00Z",
+                    "canonical_url": "https://right.example/item",
+                    "entity_type": "PROJECT",
+                    "entity_name": "Example",
+                    "native_ids": [{"issuer": "one"}],
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="native id must be a string"):
+        parse_corpus(malformed)
 
 
 def test_lab_outputs_contain_no_truth_escalation_keys() -> None:
