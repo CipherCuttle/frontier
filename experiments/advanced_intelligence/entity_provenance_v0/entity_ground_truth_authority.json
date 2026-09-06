@@ -1,0 +1,126 @@
+{
+  "adjudication_protocol": {
+    "abstention_rule": "Any primary abstention yields ABSTAIN_INSUFFICIENT_EVIDENCE.",
+    "adjudicators_independent": true,
+    "agreement_rule": "Both independent primary adjudicators must agree on SAME_ENTITY or DIFFERENT_ENTITY.",
+    "disagreement_rule": "ABSTAIN_DISAGREEMENT; no majority-forced tie break in V0.",
+    "distinct_persons_required": true,
+    "evaluable_gold_labels": [
+      "SAME_ENTITY",
+      "DIFFERENT_ENTITY"
+    ],
+    "minimum_primary_adjudicators": 2,
+    "non_evaluable_states": [
+      "ABSTAIN_INSUFFICIENT_EVIDENCE",
+      "ABSTAIN_DISAGREEMENT",
+      "ABSTAIN_CONFLICTING_EVIDENCE",
+      "INVALID_PACKET"
+    ],
+    "peer_labels_hidden_until_submission": true
+  },
+  "authority_state": "FROZEN_ENTITY_GROUND_TRUTH_AUTHORITY_CANDIDATE",
+  "candidate_blinding": {
+    "candidate_outputs_hidden": true,
+    "candidate_reasons_hidden": true,
+    "redacted_frontier_fields": [
+      "native_ids",
+      "canonical_url",
+      "entity_name",
+      "entity_type",
+      "source_item_key",
+      "ALIAS_OF relation",
+      "RENAMED_FROM relation"
+    ],
+    "rule": "Adjudicators receive only external evidence packets. Any candidate output/reason or redacted Frontier identity signal in the adjudication view invalidates the packet."
+  },
+  "closure": {
+    "next_if_closed": "implement only the bounded packet/redaction/adjudication validators; real adjudications remain external human work. A later quality-evaluation authority requires an immutable real label bundle.",
+    "required": [
+      "24 frozen protocol cases remain exact and executable",
+      "accepted gold controls prove candidate outputs/reasons and all frozen Frontier identity fields are blinded",
+      "evidence independence requires immutable candidate-disjoint evidence from at least two distinct origin groups",
+      "two distinct independent human adjudicators are required and cannot see peer labels before submission",
+      "disagreement/conflicting/insufficient evidence abstains rather than being forced",
+      "model-generated labels and mutable label bundles fail closed",
+      "challenge-only labels cannot enter headline metrics",
+      "zero evaluable labels cannot create a quality claim",
+      "one bounded hostile authority review closes under the standard repair policy"
+    ]
+  },
+  "evidence_protocol": {
+    "conflicting_decisive_directions": "ABSTAIN_CONFLICTING_EVIDENCE",
+    "every_evidence_item_candidate_disjoint": true,
+    "every_evidence_item_immutable_snapshot_digest": true,
+    "label_origin": "HUMAN_INDEPENDENT",
+    "minimum_decisive_evidence_items": 2,
+    "minimum_distinct_origin_groups": 2,
+    "mirrors_share_origin_group": true,
+    "model_or_automated_gold_labels": "INVALID_PACKET",
+    "one_or_zero_decisive_origin_groups": "ABSTAIN_INSUFFICIENT_EVIDENCE",
+    "permitted_evidence_classes": [
+      "EXTERNAL_EXPLICIT_IDENTITY_DECLARATION",
+      "EXTERNAL_EXPLICIT_DISTINCTNESS_DECLARATION",
+      "INDEPENDENT_CONTROLLED_RESOURCE_CONTINUITY",
+      "INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY",
+      "INDEPENDENT_AUTHORSHIP_CONTEXT"
+    ]
+  },
+  "implementation_authority_on_merge": {
+    "api": false,
+    "candidate_promotion": false,
+    "candidate_quality_metrics": false,
+    "candidate_quality_pass_fail": false,
+    "canonical_entity_authority": false,
+    "migration": false,
+    "offline_adjudication_receipt_validator": true,
+    "offline_blinding_redactor": true,
+    "offline_packet_validator": true,
+    "persistence": false,
+    "protocol_hostile_tests": true,
+    "real_world_label_generation_by_frontier": false,
+    "source_registry_change": false,
+    "terminal": false,
+    "worker_scheduling": false
+  },
+  "immutability": {
+    "evidence_snapshot_digest_required": true,
+    "label_bundle_must_be_frozen_before_scoring": true,
+    "post_freeze_label_mutation": "creates a new label-bundle identity; prior and new bundles may not be silently pooled"
+  },
+  "lineage": {
+    "selected_entity_candidate": "transparent-entity-hybrid-v0",
+    "shadow_evaluation_authority_merge_commit": "0638aaca0e1025ea256306172712f46b94515bc7",
+    "shadow_evaluation_corpus_blob_sha1": "58c91348a6f81f31d99aadf50a1c32fb22ac0882",
+    "shadow_evaluation_implementation_merge_commit": "fbf69ecd9f0bf810011e71e8dd2c1627e0b02011",
+    "shadow_expected_reports_blob_sha1": "d0fa4e4ff82eeb70f551e4274eb856b5f5e9f3d4",
+    "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee"
+  },
+  "parent_main_commit": "fbf69ecd9f0bf810011e71e8dd2c1627e0b02011",
+  "phase_id": "ENTITY_GROUND_TRUTH_V0",
+  "protocol_corpus": {
+    "case_count": 24,
+    "git_blob_sha1": "c922306ce09c5db18c09f9d33f6ce21301252026",
+    "note": "Synthetic hostile protocol cases only; they are not real-world ground-truth labels and cannot be scored as candidate quality evidence.",
+    "path": "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v0.json",
+    "schema_version": "frontier-entity-ground-truth-protocol-corpus-v0"
+  },
+  "sampling_protocol": {
+    "challenge_only_rule": "Adversarial/challenge cases are diagnostic only and may not be pooled into headline quality metrics.",
+    "evaluation_random_rule": "Selection must be frozen before candidate scoring for the sampled pair set; candidate predictions/reasons may not influence inclusion.",
+    "headline_metric_eligibility": "Only immutable EVALUATION_RANDOM labels with final SAME_ENTITY or DIFFERENT_ENTITY gold status may be eligible in a later separately authorized quality evaluation.",
+    "sample_roles": [
+      "EVALUATION_RANDOM",
+      "CHALLENGE_ONLY"
+    ],
+    "zero_evaluable_labels": "No quality PASS/FAIL or candidate-quality claim."
+  },
+  "schema_version": "frontier-entity-ground-truth-authority-v0",
+  "scientific_boundary": {
+    "current_entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+    "goal": "Create a candidate-disjoint human adjudication protocol capable of producing future immutable SAME_ENTITY/DIFFERENT_ENTITY gold labels without exposing candidate outputs or consumed Frontier identity signals.",
+    "problem": "Current entity candidate consumes provider-native identifiers, canonical targets, entity type/name, and explicit alias/rename evidence; labels derived from those same Frontier signals are circular.",
+    "promotion_authorized": false,
+    "quality_evaluation_authorized": false,
+    "quality_status_after_authority_merge": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH"
+  }
+}
