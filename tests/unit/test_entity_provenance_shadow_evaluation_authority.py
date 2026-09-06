@@ -7,8 +7,7 @@ from typing import cast
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTHORITY_PATH = (
-    ROOT
-    / "experiments/advanced_intelligence/entity_provenance_v0/shadow_evaluation_authority.json"
+    ROOT / "experiments/advanced_intelligence/entity_provenance_v0/shadow_evaluation_authority.json"
 )
 CORPUS_PATH = ROOT / "fixtures/entity_provenance/shadow_evaluation_corpus_v0.json"
 
@@ -58,7 +57,10 @@ def _digest(value: object) -> str:
 
 def test_shadow_evaluation_authority_binds_exact_lineage() -> None:
     authority = _load(AUTHORITY_PATH)
-    assert authority["schema_version"] == "frontier-entity-provenance-shadow-evaluation-authority-v0"
+    assert (
+        authority["schema_version"]
+        == "frontier-entity-provenance-shadow-evaluation-authority-v0"
+    )
     assert authority["phase_id"] == "ENTITY_PROVENANCE_SHADOW_EVALUATION_V0"
     assert authority["authority_state"] == "FROZEN_SHADOW_EVALUATION_AUTHORITY_CANDIDATE"
     assert authority["parent_main_commit"] == EXPECTED_PARENT
@@ -164,10 +166,16 @@ def test_protocol_binds_registry_and_required_non_escalating_metrics() -> None:
     assert input_authority["source_registry_digest"] == EXPECTED_REGISTRY
 
     protocol = _as_object(authority["evaluation_protocol"], "evaluation_protocol")
-    statuses = {_as_string(value, "integrity status") for value in _as_list(protocol["integrity_statuses"], "integrity_statuses")}
+    statuses = {
+        _as_string(value, "integrity status")
+        for value in _as_list(protocol["integrity_statuses"], "integrity_statuses")
+    }
     assert statuses == {"COMPLETE_DIAGNOSTIC", "INVALID_DRIFT"}
 
-    metrics = {_as_string(value, "metric") for value in _as_list(protocol["required_metrics"], "required_metrics")}
+    metrics = {
+        _as_string(value, "metric")
+        for value in _as_list(protocol["required_metrics"], "required_metrics")
+    }
     assert "ignored future observation count globally and per source" in metrics
     assert "direct-derivation evidence count" in metrics
     assert "report digest" in metrics
