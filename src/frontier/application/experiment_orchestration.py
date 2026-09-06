@@ -30,6 +30,7 @@ from enum import StrEnum
 from typing import Protocol
 
 from frontier.application.advanced_intelligence import run_shadow_experiment
+from frontier.application.drift_sentry import DriftChecker
 from frontier.application.intelligence import (
     BaselineIntelligenceRepository,
     run_baseline_intelligence,
@@ -41,6 +42,7 @@ from frontier.domain.advanced_intelligence import (
 )
 from frontier.domain.candidate_freeze import CandidateFreezeReceipt, FreezeStatus
 from frontier.domain.digests import Digest
+from frontier.domain.drift_sentry import DriftStatus
 from frontier.domain.intelligence import BaselineObservationInput, BaselineSnapshot
 from frontier.domain.opportunity import ExperimentAttemptStatus, ExperimentRunAttempt
 from frontier.domain.receipt import ProjectionReceipt
@@ -107,7 +109,8 @@ def evaluate_confirmatory_gates(
     after ``durable_freeze_at``, (d) the run executes in the canonical DB
     context. Any failing gate denies the confirmatory run. A DEV run never
     reaches this evaluation, and confirmatory status is never inferred merely
-    because a receipt exists somewhere. Sentry-drift recomputation is WP5.
+    because a receipt exists somewhere. Sentry-drift recomputation (WP5) runs
+    AFTER these gates in the orchestrator/evaluator confirmatory paths.
     """
     if binding is None:
         return ConfirmatoryDecision(False, "no candidate freeze receipt is bound")
@@ -227,6 +230,7 @@ class ExperimentOrchestrator:
         shadow_runner: ShadowExperimentRunner | None = None,
         run_class: str = RUN_CLASS_DEV,
         canonical_context: bool = False,
+        drift_sentry: DriftChecker | None = None,
         worker_id: str = "frontier-worker",
         lease_seconds: float = 120.0,
         cadence_seconds: int = EXPERIMENT_BOUNDARY_CADENCE_SECONDS,
@@ -248,6 +252,7 @@ class ExperimentOrchestrator:
         self._shadow_runner: ShadowExperimentRunner = shadow_runner or run_shadow_experiment
         self._run_class = run_class
         self._canonical_context = canonical_context
+        self._drift_sentry = drift_sentry
         self._worker_id = worker_id
         self._lease_seconds = lease_seconds
         self._cadence_seconds = cadence_seconds
@@ -348,6 +353,26 @@ class ExperimentOrchestrator:
                     detail=decision.reason,
                 )
             freeze_receipt = decision.receipt
+            assert decision.receipt is not None  # gate semantics guarantee a FROZEN receipt
+            if self._drift_sentry is not None:
+                drift_report = self._drift_sentry.check(decision.receipt, now=self._clock())
+                if drift_report.status is DriftStatus.DRIFTED:
+                    detail = "DRIFTED: " + "; ".join(drift_report.reasons)
+                    self._attempts.finish(
+                        attempt.attempt_id,
+                        owner=self._worker_id,
+                        status=ExperimentAttemptStatus.SKIPPED,
+                        detail=detail,
+                        at=self._clock(),
+                    )
+                    return ExperimentCycleResult(
+                        boundary=boundary,
+                        action=ExperimentCycleAction.SKIPPED_CONFIRMATORY_GATES,
+                        attempt=_with_status(
+                            attempt, ExperimentAttemptStatus.SKIPPED, detail=detail
+                        ),
+                        detail=detail,
+                    )
         try:
             run = self._run_paired_experiment(attempt, boundary, freeze_receipt)
         except Exception as error:  # explicit FAILED attempt, never silent

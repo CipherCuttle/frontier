@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Protocol
 
+from frontier.application.drift_sentry import DriftChecker
 from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
     PEF_CANDIDATE_ID,
@@ -29,6 +30,7 @@ from frontier.domain.advanced_intelligence import (
     ShadowRunStatus,
 )
 from frontier.domain.candidate_freeze import CandidateFreezeReceipt, FreezeStatus
+from frontier.domain.drift_sentry import DriftStatus
 from frontier.domain.evaluation import (
     GLOBAL_RANK_CUTOFF_K,
     MINIMUM_QUALIFYING_DOMAINS,
@@ -282,6 +284,7 @@ def evaluate_shadow_experiment_from_persisted(
     confirmatory: bool = False,
     canonical_context: bool = False,
     durable_freeze_at: datetime | None = None,
+    drift_sentry: DriftChecker | None = None,
     window_start: datetime | None = None,
     feature_batch_id: str | None = None,
     rank_cutoff_k: int = GLOBAL_RANK_CUTOFF_K,
@@ -301,7 +304,12 @@ def evaluate_shadow_experiment_from_persisted(
     ``confirmatory=True`` requires ``canonical_context=True`` (WP2 gate d);
     gates (a)-(c): FROZEN binding, non-NULL durability, strict
     ``as_of > durable_freeze_at`` — are enforced by the existing binding
-    failure semantics and surface as ``INVALID_DRIFT`` receipts.
+    failure semantics and surface as ``INVALID_DRIFT`` receipts. When a drift
+    sentry is supplied (WP5), the bound freeze receipt is additionally
+    recomputed against the live repository BEFORE evaluation; ANY drift
+    yields a DRIFTED verification receipt and therefore an ``INVALID_DRIFT``
+    evaluation under the EXISTING semantics (no new status). DEV runs are
+    unaffected: the sentry only runs on the confirmatory path.
     """
     from frontier.application.evaluation_loaders import (  # runtime import avoids a cycle
         load_paired_snapshot,
@@ -330,6 +338,14 @@ def evaluate_shadow_experiment_from_persisted(
     # compare every run's bound receipt against the evaluated receipt: runs
     # bound to a different freeze therefore surface as INVALID_DRIFT.
     freeze_receipt = ordered[0].freeze_receipt
+    if confirmatory and drift_sentry is not None:
+        # WP5 drift sentry (fail-closed): ANY drift in the recomputed identity
+        # invalidates the receipt BEFORE evaluation, reusing the existing
+        # INVALID_DRIFT semantics. The verification receipt is transient —
+        # the sentry never mutates or persists stored state.
+        drift_report = drift_sentry.check(freeze_receipt, now=generated_at)
+        if drift_report.status is DriftStatus.DRIFTED:
+            freeze_receipt = drift_sentry.verify_receipt(freeze_receipt, now=generated_at)
     receipt = evaluate_shadow_experiment(
         snapshots=tuple(item.snapshot for item in ordered),
         opportunity_groups=opportunity_groups,

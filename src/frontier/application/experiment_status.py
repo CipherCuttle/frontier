@@ -13,6 +13,7 @@ from __future__ import annotations
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from typing import cast
 
+from frontier.domain.drift_sentry import DriftReport, DriftStatus
 from frontier.domain.evaluation import EVALUATION_CONFIGURATION
 from frontier.domain.experiment_status import (
     DOMAIN_PRESENTATION_ORDER,
@@ -180,6 +181,7 @@ def build_experiment_status(
     coverage: CoverageHealthStatus | None,
     opportunity_counts: tuple[DomainOpportunityCounts, ...],
     evaluation: EvaluationStatisticsStatus | None,
+    drift_report: DriftReport | None = None,
 ) -> ExperimentStatus:
     """Assemble the single coherent status; every rule is fail-closed (R4).
 
@@ -265,8 +267,13 @@ def build_experiment_status(
             STATE_AVAILABLE if freeze.source_registry_digest is not None else STATE_UNAVAILABLE
         )
 
-    drift_invalid = (freeze is not None and freeze.status == "DRIFTED") or (
-        evaluation is not None and evaluation.status == "INVALID_DRIFT"
+    # Optional live recompute (WP5): when a sentry report is supplied, ANY
+    # drift forces the INVALID_DRIFT drift state; the default projection is
+    # unchanged (pure projection of stored state).
+    drift_invalid = (
+        (freeze is not None and freeze.status == "DRIFTED")
+        or (evaluation is not None and evaluation.status == "INVALID_DRIFT")
+        or (drift_report is not None and drift_report.status is DriftStatus.DRIFTED)
     )
 
     return ExperimentStatus(
