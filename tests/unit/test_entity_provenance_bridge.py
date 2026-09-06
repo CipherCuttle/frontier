@@ -207,11 +207,14 @@ def test_frozen_18_case_bridge_corpus() -> None:
         ]
 
         if "ignored_future_observations" in expected:
-            assert run.coverage.ignored_future_observation_count == expected[
-                "ignored_future_observations"
-            ], case_id
+            assert (
+                run.coverage.ignored_future_observation_count
+                == expected["ignored_future_observations"]
+            ), case_id
         if "ignored_future_relations" in expected:
-            assert run.coverage.ignored_future_relation_count == expected["ignored_future_relations"], case_id
+            assert (
+                run.coverage.ignored_future_relation_count == expected["ignored_future_relations"]
+            ), case_id
         if expected.get("direct_derivation") is False:
             assert run.coverage.direct_derivation_evidence_count == 0, case_id
             assert all(
@@ -220,9 +223,10 @@ def test_frozen_18_case_bridge_corpus() -> None:
             ), case_id
 
         if "malformed_identity_fields" in expected:
-            assert sum(value.malformed_identity_fields for value in eligible_records) == expected[
-                "malformed_identity_fields"
-            ], case_id
+            assert (
+                sum(value.malformed_identity_fields for value in eligible_records)
+                == expected["malformed_identity_fields"]
+            ), case_id
 
         if "entity_supported" in expected:
             expected_supported = expected["entity_supported"]
@@ -237,7 +241,9 @@ def test_frozen_18_case_bridge_corpus() -> None:
         if "entity_native_id" in expected:
             expected_native = expected["entity_native_id"]
             actual_native = [value.native_id for value in eligible_records]
-            assert actual_native and all(value == expected_native for value in actual_native), case_id
+            assert actual_native and all(value == expected_native for value in actual_native), (
+                case_id
+            )
 
         if "entity_native_ids" in expected:
             assert [value.native_id for value in eligible_records] == expected[
@@ -245,8 +251,12 @@ def test_frozen_18_case_bridge_corpus() -> None:
             ], case_id
 
         if "entity_type" in expected:
-            actual_types = [value.entity_type for value in eligible_records if value.entity_supported]
-            assert actual_types and all(value == expected["entity_type"] for value in actual_types), case_id
+            actual_types = [
+                value.entity_type for value in eligible_records if value.entity_supported
+            ]
+            assert actual_types and all(
+                value == expected["entity_type"] for value in actual_types
+            ), case_id
 
 
 def test_selected_entity_candidate_receives_only_frozen_native_identity_signal() -> None:
