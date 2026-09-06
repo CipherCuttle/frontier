@@ -44,6 +44,26 @@ def test_arxiv_recent_submission_is_primary_metadata_without_abstract_copy() -> 
     assert candidate.payload.source_metadata["categories"] == ["cs.AI", "cs.LG"]
 
 
+def test_arxiv_oversized_identifier_is_rejected_without_escaping_normalization() -> None:
+    oversized_id = "https://arxiv.org/abs/" + ("x" * 4096)
+    body = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <id>{oversized_id}</id>
+        <updated>2026-09-05T19:45:00Z</updated>
+        <published>2026-09-05T19:45:00Z</published>
+        <title>Oversized identifier fixture</title>
+      </entry>
+    </feed>""".encode()
+
+    batch = normalize_arxiv_cs_ai(body, retrieved_at=NOW, fetch_digest=sha256_digest(body))
+
+    assert batch.candidates == ()
+    assert batch.records_received == 1
+    assert batch.records_rejected == 1
+    assert batch.schema_health is HealthValue.DEGRADED
+
+
 def github_repo(*, pushed_at: str, stars: int) -> dict[str, object]:
     return {
         "id": 123456,
