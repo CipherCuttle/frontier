@@ -1,0 +1,235 @@
+{
+  "candidate_under_future_evaluation": "transparent-entity-hybrid-v0",
+  "case_count": 24,
+  "cases": [
+    {
+      "attack": "control: valid blinded SAME_ENTITY adjudication",
+      "category": "valid_same_random",
+      "expected": {
+        "forbidden_claims": [],
+        "headline_metric_eligible": true,
+        "label_status": "ADJUDICATED_SAME_ENTITY",
+        "packet_status": "ACCEPT",
+        "quality_claim": null,
+        "required_action": "ACCEPT_LABEL"
+      },
+      "id": "EGT-001",
+      "input": {
+        "adjudicators": [
+          {
+            "adjudicator_id": "A1",
+            "independent": true,
+            "label": "SAME_ENTITY",
+            "person_key": "person-1",
+            "saw_other_label_before_submit": false
+          },
+          {
+            "adjudicator_id": "A2",
+            "independent": true,
+            "label": "SAME_ENTITY",
+            "person_key": "person-2",
+            "saw_other_label_before_submit": false
+          }
+        ],
+        "candidate_blinding": {
+          "candidate_output_visible": false,
+          "candidate_reasons_visible": false,
+          "frontier_alias_or_rename_relation_visible": false,
+          "frontier_canonical_url_visible": false,
+          "frontier_entity_name_visible": false,
+          "frontier_entity_type_visible": false,
+          "frontier_native_ids_visible": false,
+          "frontier_source_item_key_visible": false
+        },
+        "evidence_items": [
+          {
+            "candidate_disjoint": true,
+            "captured_at": "2026-09-01T12:00:00Z",
+            "decisive_direction": "SAME_ENTITY",
+            "evidence_class": "EXTERNAL_EXPLICIT_IDENTITY_DECLARATION",
+            "evidence_id": "E1",
+            "origin_group": "origin-a",
+            "origin_key": "primary-doc-a",
+            "snapshot_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "candidate_disjoint": true,
+            "captured_at": "2026-09-01T12:00:00Z",
+            "decisive_direction": "SAME_ENTITY",
+            "evidence_class": "INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY",
+            "evidence_id": "E2",
+            "origin_group": "origin-b",
+            "origin_key": "archive-doc-b",
+            "snapshot_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "label_bundle_frozen": true,
+        "label_origin": "HUMAN_INDEPENDENT",
+        "sample_role": "EVALUATION_RANDOM",
+        "sampling_frozen_before_candidate_scoring": true
+      },
+      "rationale": "control: valid blinded SAME_ENTITY adjudication"
+    },
+    {
+      "attack": "control: valid blinded DIFFERENT_ENTITY adjudication",
+      "category": "valid_different_random",
+      "expected": {
+        "forbidden_claims": [],
+        "headline_metric_eligible": true,
+        "label_status": "ADJUDICATED_DIFFERENT_ENTITY",
+        "packet_status": "ACCEPT",
+        "quality_claim": null,
+        "required_action": "ACCEPT_LABEL"
+      },
+      "id": "EGT-002",
+      "input": {
+        "adjudicators": [
+          {
+            "adjudicator_id": "A1",
+            "independent": true,
+            "label": "DIFFERENT_ENTITY",
+            "person_key": "person-1",
+            "saw_other_label_before_submit": false
+          },
+          {
+            "adjudicator_id": "A2",
+            "independent": true,
+            "label": "DIFFERENT_ENTITY",
+            "person_key": "person-2",
+            "saw_other_label_before_submit": false
+          }
+        ],
+        "candidate_blinding": {
+          "candidate_output_visible": false,
+          "candidate_reasons_visible": false,
+          "frontier_alias_or_rename_relation_visible": false,
+          "frontier_canonical_url_visible": false,
+          "frontier_entity_name_visible": false,
+          "frontier_entity_type_visible": false,
+          "frontier_native_ids_visible": false,
+          "frontier_source_item_key_visible": false
+        },
+        "evidence_items": [
+          {
+            "candidate_disjoint": true,
+            "captured_at": "2026-09-01T12:00:00Z",
+            "decisive_direction": "DIFFERENT_ENTITY",
+            "evidence_class": "EXTERNAL_EXPLICIT_DISTINCTNESS_DECLARATION",
+            "evidence_id": "E1",
+            "origin_group": "origin-a",
+            "origin_key": "primary-doc-a",
+            "snapshot_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          {
+            "candidate_disjoint": true,
+            "captured_at": "2026-09-01T12:00:00Z",
+            "decisive_direction": "DIFFERENT_ENTITY",
+            "evidence_class": "INDEPENDENT_AUTHORSHIP_CONTEXT",
+            "evidence_id": "E2",
+            "origin_group": "origin-b",
+            "origin_key": "archive-doc-b",
+            "snapshot_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "label_bundle_frozen": true,
+        "label_origin": "HUMAN_INDEPENDENT",
+        "sample_role": "EVALUATION_RANDOM",
+        "sampling_frozen_before_candidate_scoring": true
+      },
+      "rationale": "control: valid blinded DIFFERENT_ENTITY adjudication"
+    },
+    {
+      "attack": "candidate output shown to adjudicators",
+      "category": "candidate_output_leak",
+      "expected": {
+        "forbidden_claims": [],
+        "headline_metric_eligible": false,
+        "label_status": "INVALID_PACKET",
+        "packet_status": "REJECT",
+        "quality_claim": null,
+        "required_action": "REJECT_CANDIDATE_LEAK"
+      },
+      "id": "EGT-003",
+      "input": {
+        "adjudicators": [{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],
+        "candidate_blinding":{"candidate_output_visible":true,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},
+        "evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
+        "label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true
+      },
+      "rationale": "candidate output shown to adjudicators"
+    },
+    {
+      "attack":"candidate reasons shown to adjudicators","category":"candidate_reason_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_CANDIDATE_LEAK"},"id":"EGT-004","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":true,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"candidate reasons shown to adjudicators"
+    },
+    {
+      "attack":"Frontier native_ids shown in packet","category":"native_id_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"id":"EGT-005","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":true,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"Frontier native_ids shown in packet"
+    },
+    {
+      "attack":"Frontier canonical_url shown in packet","category":"canonical_url_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"id":"EGT-006","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":true,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"Frontier canonical_url shown in packet"
+    },
+    {
+      "attack":"Frontier entity_name shown in packet","category":"entity_name_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"id":"EGT-007","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":true,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"Frontier entity_name shown in packet"
+    },
+    {
+      "attack":"Frontier entity_type shown in packet","category":"entity_type_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"id":"EGT-008","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":true,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"Frontier entity_type shown in packet"
+    },
+    {
+      "attack":"source item key may encode provider-native identity","category":"source_item_key_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"id":"EGT-009","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":true},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"source item key may encode provider-native identity"
+    },
+    {
+      "attack":"Frontier alias/rename relation shown in packet","category":"alias_relation_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"id":"EGT-010","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":true,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"Frontier alias/rename relation shown in packet"
+    },
+    {
+      "attack":"only one decisive evidence item","category":"single_decisive_evidence","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_INSUFFICIENT_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"id":"EGT-011","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"only one decisive evidence item"
+    },
+    {
+      "attack":"two items but same origin_group","category":"mirrored_evidence_not_independent","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_INSUFFICIENT_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"id":"EGT-012","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"mirror-group","origin_key":"doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E2","origin_group":"mirror-group","origin_key":"mirror-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"two items but same origin_group"
+    },
+    {
+      "attack":"evidence explicitly derived from candidate-visible field","category":"candidate_derived_evidence","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_NONINDEPENDENT_EVIDENCE"},"id":"EGT-013","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":false,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E2","origin_group":"origin-b","origin_key":"doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"evidence explicitly derived from candidate-visible field"
+    },
+    {
+      "attack":"mutable evidence lacks immutable snapshot digest","category":"missing_snapshot_digest","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_UNBOUND_EVIDENCE"},"id":"EGT-014","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"doc-a","snapshot_digest":null},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E2","origin_group":"origin-b","origin_key":"doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"mutable evidence lacks immutable snapshot digest"
+    },
+    {
+      "attack":"two independent adjudicators disagree","category":"adjudicator_disagreement","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_DISAGREEMENT","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"id":"EGT-015","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"DIFFERENT_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"two independent adjudicators disagree"
+    },
+    {
+      "attack":"one adjudicator abstains","category":"adjudicator_abstention","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_INSUFFICIENT_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"id":"EGT-016","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"ABSTAIN_INSUFFICIENT_EVIDENCE","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"one adjudicator abstains"
+    },
+    {
+      "attack":"same person fills both adjudicator slots","category":"same_person_double_vote","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_ADJUDICATOR_NONINDEPENDENCE"},"id":"EGT-017","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"same person fills both adjudicator slots"
+    },
+    {
+      "attack":"second adjudicator sees first label before submitting","category":"adjudicator_sees_peer_label","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_ADJUDICATOR_NONINDEPENDENCE"},"id":"EGT-018","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":true}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"second adjudicator sees first label before submitting"
+    },
+    {
+      "attack":"automated/model label attempts to enter gold set","category":"model_generated_label","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_NONHUMAN_GROUND_TRUTH"},"id":"EGT-019","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"MODEL_GENERATED","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"automated/model label attempts to enter gold set"
+    },
+    {
+      "attack":"headline sample selected after candidate scoring","category":"candidate_aware_sampling","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_SELECTION_LEAK"},"id":"EGT-020","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":false},"rationale":"headline sample selected after candidate scoring"
+    },
+    {
+      "attack":"valid challenge-only label cannot enter headline metrics","category":"challenge_sample_not_headline","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ADJUDICATED_SAME_ENTITY","packet_status":"ACCEPT","quality_claim":null,"required_action":"ACCEPT_DIAGNOSTIC_ONLY"},"id":"EGT-021","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"CHALLENGE_ONLY","sampling_frozen_before_candidate_scoring":true},"rationale":"valid challenge-only label cannot enter headline metrics"
+    },
+    {
+      "attack":"mutable label bundle cannot be scored","category":"label_bundle_not_frozen","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_MUTABLE_LABEL"},"id":"EGT-022","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"primary-doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY","evidence_id":"E2","origin_group":"origin-b","origin_key":"archive-doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":false,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"mutable label bundle cannot be scored"
+    },
+    {
+      "attack":"independent decisive evidence conflicts","category":"conflicting_evidence_directions","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_CONFLICTING_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"id":"EGT-023","input":{"adjudicators":[{"adjudicator_id":"A1","independent":true,"label":"SAME_ENTITY","person_key":"person-1","saw_other_label_before_submit":false},{"adjudicator_id":"A2","independent":true,"label":"SAME_ENTITY","person_key":"person-2","saw_other_label_before_submit":false}],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"SAME_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_IDENTITY_DECLARATION","evidence_id":"E1","origin_group":"origin-a","origin_key":"doc-a","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"candidate_disjoint":true,"captured_at":"2026-09-01T12:00:00Z","decisive_direction":"DIFFERENT_ENTITY","evidence_class":"EXTERNAL_EXPLICIT_DISTINCTNESS_DECLARATION","evidence_id":"E2","origin_group":"origin-b","origin_key":"doc-b","snapshot_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"independent decisive evidence conflicts"
+    },
+    {
+      "attack":"empty/everything-abstained cohort must not emit quality PASS/FAIL","category":"zero_evaluable_labels_no_quality_claim","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"NO_EVALUABLE_LABEL","packet_status":"ACCEPT","quality_claim":null,"required_action":"NO_QUALITY_CLAIM"},"id":"EGT-024","input":{"adjudicators":[],"candidate_blinding":{"candidate_output_visible":false,"candidate_reasons_visible":false,"frontier_alias_or_rename_relation_visible":false,"frontier_canonical_url_visible":false,"frontier_entity_name_visible":false,"frontier_entity_type_visible":false,"frontier_native_ids_visible":false,"frontier_source_item_key_visible":false},"evidence_items":[],"label_bundle_frozen":true,"label_origin":"HUMAN_INDEPENDENT","sample_role":"EVALUATION_RANDOM","sampling_frozen_before_candidate_scoring":true},"rationale":"empty/everything-abstained cohort must not emit quality PASS/FAIL"
+    }
+  ],
+  "labels": [
+    "SAME_ENTITY",
+    "DIFFERENT_ENTITY",
+    "ABSTAIN_INSUFFICIENT_EVIDENCE",
+    "ABSTAIN_DISAGREEMENT",
+    "ABSTAIN_CONFLICTING_EVIDENCE",
+    "INVALID_PACKET"
+  ],
+  "phase_id": "ENTITY_GROUND_TRUTH_V0",
+  "schema_version": "frontier-entity-ground-truth-protocol-corpus-v0"
+}
