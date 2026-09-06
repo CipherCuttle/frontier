@@ -97,7 +97,9 @@ def _confirmatory_run_binding_failure(
         if run.candidate_freeze_receipt_id != freeze_receipt.receipt_id:
             return f"shadow run {run.run_id} does not bind the evaluated candidate freeze receipt"
         if run.as_of <= durable_freeze_at:
-            return f"shadow run {run.run_id} boundary is not strictly after durable candidate freeze"
+            return (
+                f"shadow run {run.run_id} boundary is not strictly after durable candidate freeze"
+            )
     return None
 
 
