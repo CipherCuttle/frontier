@@ -9,8 +9,12 @@ from frontier.domain.digests import sha256_digest
 
 ROOT = Path(__file__).resolve().parents[2]
 PREREG = ROOT / "experiments" / "advanced_intelligence" / "pef_v0" / "preregistration.json"
+SOURCE_REGISTRY = ROOT / "sources" / "registry" / "registry_v0.json"
 AUTHORITY_COMMIT = "1d38caf9a74ef278a6c4418bf6298aec6bb50c66"
 CONFIG_DIGEST = "sha256:e2627f62deac24e5f1b09960687761ebbcc61b3fd0c8fec07fec0006dcff7dc1"
+INTEGRATED_SOURCE_REGISTRY_VERSION = (
+    "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee"
+)
 RANKING_ORDER = [
     "has_prospective_primary_emission_desc",
     "has_any_prospective_evidence_desc",
@@ -25,8 +29,10 @@ RANKING_ORDER = [
     "episode_id_asc",
 ]
 REQUIRED_SOURCES = [
+    "arxiv.cs-ai",
     "cisa.kev",
     "gdelt.frontier",
+    "github.ml-repos",
     "hf.models",
     "hn.frontpage",
     "pypi.updates",
@@ -52,6 +58,16 @@ def require_dict(value: object, name: str) -> dict[str, Any]:
 def main() -> int:
     try:
         document = require_dict(json.loads(PREREG.read_text(encoding="utf-8")), "document")
+        live_registry = require_dict(
+            json.loads(SOURCE_REGISTRY.read_text(encoding="utf-8")), "source registry"
+        )
+        if live_registry.get("schema_version") != "source-registry-v0":
+            return fail("unexpected live source registry schema_version")
+        if live_registry.get("required_source_ids") != REQUIRED_SOURCES:
+            return fail("live source registry source set drifted")
+        if live_registry.get("source_registry_version") != INTEGRATED_SOURCE_REGISTRY_VERSION:
+            return fail("live source registry version drifted")
+
         if document.get("schema_version") != "advanced-ranking-preregistration-v0":
             return fail("unexpected schema_version")
 
@@ -134,6 +150,11 @@ def main() -> int:
         registry = require_dict(evaluation.get("source_registry"), "source_registry")
         if registry.get("required_enabled_source_ids") != REQUIRED_SOURCES:
             return fail("required source set drifted")
+        if (
+            registry.get("preregistered_source_registry_version")
+            != INTEGRATED_SOURCE_REGISTRY_VERSION
+        ):
+            return fail("preregistered source registry version drifted")
         if registry.get("freeze_exact_registry_version_in_candidate_freeze") is not True:
             return fail("source registry must be frozen in candidate freeze")
         if registry.get("registry_change_during_confirmatory_window") != "INVALIDATE_AND_RESTART":
