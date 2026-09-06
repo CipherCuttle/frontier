@@ -21,11 +21,7 @@ from frontier.domain.entity_provenance_lab import (
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "fixtures/entity_provenance/corpus_v0.json"
 PREREG = (
-    ROOT
-    / "experiments"
-    / "advanced_intelligence"
-    / "entity_provenance_v0"
-    / "preregistration.json"
+    ROOT / "experiments" / "advanced_intelligence" / "entity_provenance_v0" / "preregistration.json"
 )
 
 
@@ -85,8 +81,9 @@ def test_selection_report_follows_frozen_precision_rules() -> None:
     report = build_selection_report(cases, corpus_digest_value=corpus_digest(CORPUS))
 
     assert report.selected_entity_candidate == "transparent-entity-hybrid-v0"
-    # Direct-derivative recall is the frozen primary provenance criterion; the
-    # simpler explicit-reference candidate therefore wins the conservative tie.
+    # The frozen rule optimizes DIRECT_DERIVATIVE recall and then lower complexity,
+    # so the conservative explicit-reference candidate wins; the richer hybrid is
+    # still measured and remains available for falsification.
     assert report.selected_provenance_candidate == "explicit-reference-v0"
 
     entity = {item.candidate_version: item for item in report.entity_metrics}
@@ -100,9 +97,7 @@ def test_selection_report_follows_frozen_precision_rules() -> None:
 
 def test_future_alias_relation_does_not_leak_into_case_horizon() -> None:
     case = _case("EPV-018")
-    before = assess_entity(
-        "transparent-entity-hybrid-v0", case.left, case.right, as_of=case.as_of
-    )
+    before = assess_entity("transparent-entity-hybrid-v0", case.left, case.right, as_of=case.as_of)
     after = assess_entity(
         "transparent-entity-hybrid-v0",
         case.left,
@@ -116,9 +111,7 @@ def test_future_alias_relation_does_not_leak_into_case_horizon() -> None:
 
 def test_fork_keeps_entity_and_provenance_dimensions_separate() -> None:
     case = _case("EPV-006")
-    entity = assess_entity(
-        "transparent-entity-hybrid-v0", case.left, case.right, as_of=case.as_of
-    )
+    entity = assess_entity("transparent-entity-hybrid-v0", case.left, case.right, as_of=case.as_of)
     provenance = assess_provenance(
         "transparent-provenance-hybrid-v0", case.left, case.right, as_of=case.as_of
     )
@@ -129,9 +122,7 @@ def test_fork_keeps_entity_and_provenance_dimensions_separate() -> None:
 
 def test_same_name_without_stable_evidence_stays_ambiguous() -> None:
     case = _case("EPV-014")
-    result = assess_entity(
-        "transparent-entity-hybrid-v0", case.left, case.right, as_of=case.as_of
-    )
+    result = assess_entity("transparent-entity-hybrid-v0", case.left, case.right, as_of=case.as_of)
     assert result.decision is EntityDecision.AMBIGUOUS
 
 
