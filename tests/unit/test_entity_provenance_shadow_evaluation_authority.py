@@ -90,7 +90,7 @@ def _canonical_digest(value: object) -> str:
 def _git_blob_sha1(path: Path) -> str:
     raw = path.read_bytes()
     header = f"blob {len(raw)}\0".encode()
-    return hashlib.sha1(header + raw).hexdigest()  # noqa: S324 - Git object identity, not security
+    return hashlib.sha1(header + raw).hexdigest()
 
 
 def test_shadow_evaluation_authority_binds_exact_lineage() -> None:
@@ -165,7 +165,7 @@ def test_shadow_evaluation_corpus_is_exact_executable_24_case_authority() -> Non
             assert input_value["observations"], case_id
 
         expected = _as_object(case["expected"], f"{case_id}.expected")
-        assert REQUIRED_EXPECTED_FIELDS <= set(expected), case_id
+        assert set(expected) >= REQUIRED_EXPECTED_FIELDS, case_id
         assert expected["direct_derivation_evidence_count"] == 0, case_id
         assert expected["entity_quality_status"] == "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", case_id
         assert expected["provenance_quality_status"] == "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", (
@@ -220,7 +220,7 @@ def test_frozen_corpus_covers_every_forbidden_provenance_laundering_path() -> No
     corpus = _load(CORPUS_PATH)
     cases = [_as_object(value, "case") for value in _as_list(corpus["cases"], "cases")]
     categories = {_as_string(case["category"], "category") for case in cases}
-    assert LAUNDERING_CATEGORIES <= categories
+    assert categories >= LAUNDERING_CATEGORIES
 
     laundering_text = " ".join(
         _as_string(value, "forbidden signal")
