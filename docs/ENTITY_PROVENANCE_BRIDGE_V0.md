@@ -45,7 +45,7 @@ Bridge hostile corpus:
 
 - path: `fixtures/entity_provenance/bridge_corpus_v0.json`;
 - case count: 18;
-- canonical digest: `sha256:9b9998be5245c7d4481652c588177c6a46ed486dd5b51902630bd36b901686ad`.
+- canonical digest: `sha256:34d1c75a7999f0338ae81add88e358d444f0bbd58d59696c08bb7ae0fbaf209f`.
 
 Exact source registry remains:
 
