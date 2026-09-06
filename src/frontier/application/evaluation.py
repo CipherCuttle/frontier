@@ -72,6 +72,29 @@ def _validate_run_identity(run: ShadowExperimentRun) -> None:
         raise ValueError("shadow run configuration digest mismatch")
 
 
+def _confirmatory_run_binding_failure(
+    runs: Sequence[ShadowExperimentRun],
+    freeze_receipt: CandidateFreezeReceipt,
+) -> str | None:
+    """Return why these runs cannot contribute confirmatory evidence.
+
+    Development shadow runs are allowed to exist before candidate freeze, but
+    they must never become confirmatory merely because a FROZEN receipt is
+    supplied later. A confirmatory run must bind the exact receipt identity and
+    its snapshot boundary must be strictly after the receipt's own frozen_at
+    timestamp, which is the strongest freeze-boundary timestamp represented in
+    the current receipt contract. The later operational durability/merge gate
+    remains responsible for choosing the preregistered first 300-second
+    boundary strictly after the durable receipt enters canonical history.
+    """
+    for run in runs:
+        if run.candidate_freeze_receipt_id != freeze_receipt.receipt_id:
+            return f"shadow run {run.run_id} does not bind the evaluated candidate freeze receipt"
+        if run.as_of <= freeze_receipt.frozen_at:
+            return f"shadow run {run.run_id} boundary is not strictly after candidate freeze"
+    return None
+
+
 def build_anchor_tracking(
     opportunity: RetainedOpportunity,
     snapshots: Sequence[PairedSnapshot],
@@ -140,12 +163,8 @@ def evaluate_shadow_experiment(
     runs = [snapshot.run for snapshot in ordered]
     for run in runs:
         _validate_run_identity(run)
-        if (
-            run.candidate_freeze_receipt_id is not None
-            and run.candidate_freeze_receipt_id != freeze_receipt.receipt_id
-        ):
-            raise ValueError("shadow run freeze receipt id mismatch with bound freeze receipt")
 
+    confirmatory_binding_failure = _confirmatory_run_binding_failure(runs, freeze_receipt)
     failed_runs = [run.run_id for run in runs if run.status is ShadowRunStatus.FAILED]
 
     opportunities = build_retained_opportunities(opportunity_groups)
@@ -185,11 +204,17 @@ def evaluate_shadow_experiment(
         status = EvaluationStatus.FAILED
         status_reason = f"shadow runs FAILED: {', '.join(failed_runs)}"
     elif len(qualifying_domains) < MINIMUM_QUALIFYING_DOMAINS:
+        # Underpowered development/diagnostic evaluation remains explicitly
+        # non-confirmatory. Freeze binding is mandatory before a COMPLETE
+        # receipt can ever carry confirmatory evidence.
         status = EvaluationStatus.INSUFFICIENT_SAMPLE
         status_reason = (
             "fewer than two adequately sampled domains: "
             f"{len(qualifying_domains)} qualifying of {len(domain_evaluations)}"
         )
+    elif confirmatory_binding_failure is not None:
+        status = EvaluationStatus.INVALID_DRIFT
+        status_reason = confirmatory_binding_failure
     else:
         all_pass = (
             all(evaluation.promotion_eligible for evaluation in qualifying_domains)
