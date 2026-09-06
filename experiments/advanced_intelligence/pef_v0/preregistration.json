@@ -99,9 +99,12 @@
     },
     "source_registry": {
       "freeze_exact_registry_version_in_candidate_freeze": true,
+      "preregistered_source_registry_version": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
       "required_enabled_source_ids": [
+        "arxiv.cs-ai",
         "cisa.kev",
         "gdelt.frontier",
+        "github.ml-repos",
         "hf.models",
         "hn.frontpage",
         "pypi.updates"
