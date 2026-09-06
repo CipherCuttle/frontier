@@ -544,7 +544,7 @@ def normalize_arxiv_cs_ai(
         title = _atom_text(entry, "title")
         published_text = _atom_text(entry, "published")
         updated_text = _atom_text(entry, "updated")
-        if entry_id is None or title is None:
+        if entry_id is None or title is None or len(entry_id.encode("utf-8")) > 4096:
             rejected += 1
             continue
         published = _iso_time(published_text)
