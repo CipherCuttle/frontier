@@ -142,8 +142,14 @@ def test_shadow_evaluation_corpus_is_exact_executable_24_case_authority() -> Non
 
     for case in cases:
         case_id = _as_string(case["id"], "case.id")
-        assert _as_string(case["entity_candidate"], "entity_candidate") == "transparent-entity-hybrid-v0"
-        assert _as_string(case["provenance_candidate"], "provenance_candidate") == "explicit-reference-v0"
+        assert (
+            _as_string(case["entity_candidate"], "entity_candidate")
+            == "transparent-entity-hybrid-v0"
+        )
+        assert (
+            _as_string(case["provenance_candidate"], "provenance_candidate")
+            == "explicit-reference-v0"
+        )
         assert isinstance(case["as_of"], str)
         assert isinstance(case["evaluation_pairs"], list)
 
@@ -162,10 +168,9 @@ def test_shadow_evaluation_corpus_is_exact_executable_24_case_authority() -> Non
         assert REQUIRED_EXPECTED_FIELDS <= set(expected), case_id
         assert expected["direct_derivation_evidence_count"] == 0, case_id
         assert expected["entity_quality_status"] == "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", case_id
-        assert (
-            expected["provenance_quality_status"]
-            == "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE"
-        ), case_id
+        assert expected["provenance_quality_status"] == "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", (
+            case_id
+        )
         assert expected["promotion_status"] == "UNAVAILABLE", case_id
         assert expected["forbidden_inference_claims"] == [], case_id
         assert expected["quality_pass_fail_claim"] is None, case_id
@@ -187,9 +192,7 @@ def test_registry_drift_case_fails_before_quality_counting() -> None:
     corpus = _load(CORPUS_PATH)
     cases = {
         _as_string(case["id"], "case.id"): case
-        for case in (
-            _as_object(value, "case") for value in _as_list(corpus["cases"], "cases")
-        )
+        for case in (_as_object(value, "case") for value in _as_list(corpus["cases"], "cases"))
     }
     drift = cases["EPSE-019"]
     assert drift["source_registry_digest"] != EXPECTED_REGISTRY
@@ -204,9 +207,7 @@ def test_replay_case_requires_byte_identical_report_and_digest() -> None:
     corpus = _load(CORPUS_PATH)
     cases = {
         _as_string(case["id"], "case.id"): case
-        for case in (
-            _as_object(value, "case") for value in _as_list(corpus["cases"], "cases")
-        )
+        for case in (_as_object(value, "case") for value in _as_list(corpus["cases"], "cases"))
     }
     replay = cases["EPSE-020"]
     permutations = _as_list(replay["replay_permutations"], "replay_permutations")
