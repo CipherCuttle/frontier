@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from frontier.application.evaluation import _confirmatory_run_binding_failure  # pyright: ignore[reportPrivateUsage]
+from frontier.application.evaluation import (
+    _confirmatory_run_binding_failure,  # pyright: ignore[reportPrivateUsage]
+)
 from frontier.domain.advanced_intelligence import (
     ShadowControlArmRanking,
     ShadowExperimentRun,
