@@ -19,8 +19,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import cast
 
 from .advanced_intelligence import PEF_CANDIDATE_ID, PEF_CONFIGURATION_DIGEST, PEF_EXPERIMENT_ID
+from .canonical_json import CanonicalValue
 from .evaluation import EVALUATION_CONFIGURATION, QUALIFYING_DOMAINS
 from .health import HealthValue
 
@@ -308,3 +310,121 @@ class ExperimentStatus:
     evaluation_receipt_status: str | None = None
     evaluation_receipt_state: str = STATE_NO_DATA
     drift_state: str = DRIFT_STATE_OK
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentStatusInputs:
+    """Stored-state inputs for :func:`build_experiment_status` (SELECT-only).
+
+    Every field is exactly the stored state (``None`` = absent) — never a
+    guessed or coerced value (R4). A failed repository fetch never lands here:
+    the application layer maps repository failures to explicit ``UNKNOWN``.
+    """
+
+    freeze: BoundFreezeStatus | None
+    window: WindowBoundaryStatus | None
+    run: LatestRunStatus | None
+    coverage: CoverageHealthStatus | None
+    opportunity_counts: tuple[DomainOpportunityCounts, ...]
+    evaluation: EvaluationStatisticsStatus | None
+
+
+def _render_opportunity_counts(
+    counts: tuple[DomainOpportunityCounts, ...],
+) -> list[CanonicalValue]:
+    return [
+        {
+            "anchor_count": item.anchor_count,
+            "domain": item.domain,
+            "excluded_count": item.excluded_count,
+            "pending_count": item.pending_count,
+            "resolved_negative_count": item.resolved_negative_count,
+            "resolved_positive_count": item.resolved_positive_count,
+            "unknown_count": item.unknown_count,
+            "unresolved_coverage_count": item.unresolved_coverage_count,
+        }
+        for item in counts
+    ]
+
+
+def _render_domain_evaluation_row(row: DomainEvaluationStatusRow) -> CanonicalValue:
+    return {
+        "candidate_positive_surfaced_resolved": row.candidate_positive_surfaced_resolved,
+        "candidate_precision": row.candidate_precision,
+        "candidate_surfaced_resolved": row.candidate_surfaced_resolved,
+        "control_positive_surfaced_resolved": row.control_positive_surfaced_resolved,
+        "control_precision": row.control_precision,
+        "control_surfaced_resolved": row.control_surfaced_resolved,
+        "difference_lower_bound": row.difference_lower_bound,
+        "domain": row.domain,
+        "median_lead_time_advantage_seconds": row.median_lead_time_advantage_seconds,
+        "noninferiority_pass": row.noninferiority_pass,
+        "qualifies_sample_adequacy": row.qualifies_sample_adequacy,
+    }
+
+
+def _render_precision(status: ArmPrecisionStatus) -> CanonicalValue:
+    return {
+        "positive_surfaced_resolved": status.positive_surfaced_resolved,
+        "precision": status.precision,
+        "state": status.state,
+        "surfaced_resolved": status.surfaced_resolved,
+    }
+
+
+def render_experiment_status(status: ExperimentStatus) -> dict[str, CanonicalValue]:
+    """Render the WP6 status projection as canonical JSON (deterministic).
+
+    The rendering is verbatim over the projection's own values; it never
+    recomputes thresholds, statistics, or evaluation semantics.
+    """
+    return {
+        "baseline_precision": _render_precision(status.baseline_precision),
+        "candidate_freeze_receipt_id": status.candidate_freeze_receipt_id,
+        "candidate_freeze_state": status.candidate_freeze_state,
+        "candidate_id": status.candidate_id,
+        "candidate_precision": _render_precision(status.candidate_precision),
+        "configuration_digest": status.configuration_digest,
+        "drift_state": status.drift_state,
+        "domain_evaluation_rows": [
+            _render_domain_evaluation_row(row) for row in status.domain_evaluation_rows
+        ],
+        "evaluation_receipt_state": status.evaluation_receipt_state,
+        "evaluation_receipt_status": status.evaluation_receipt_status,
+        "experiment_id": status.experiment_id,
+        "implementation_commit": status.implementation_commit,
+        "implementation_state": status.implementation_state,
+        "implementation_tree_digest": status.implementation_tree_digest,
+        "latest_attempt_detail": status.latest_attempt_detail,
+        "latest_attempt_status": status.latest_attempt_status,
+        "latest_boundary_as_of": status.latest_boundary_as_of,
+        "latest_run_id": status.latest_run_id,
+        "latest_run_status": status.latest_run_status,
+        "lead_time": {
+            "baseline_median_lead_time_seconds": status.lead_time.baseline_median_lead_time_seconds,
+            "candidate_median_lead_time_seconds": (
+                status.lead_time.candidate_median_lead_time_seconds
+            ),
+            "delta_median_advantage_seconds": status.lead_time.delta_median_advantage_seconds,
+            "state": status.lead_time.state,
+        },
+        "noninferiority": {
+            "lower_bound": status.noninferiority.lower_bound,
+            "margin": status.noninferiority.margin,
+            "state": status.noninferiority.state,
+        },
+        "opportunity_counts": _render_opportunity_counts(status.opportunity_counts),
+        "qualifying_opportunity_counts": _render_opportunity_counts(
+            status.qualifying_opportunity_counts
+        ),
+        "run_state": status.run_state,
+        "sample_adequacy_thresholds": cast(
+            "dict[str, CanonicalValue]", dict(status.sample_adequacy_thresholds)
+        ),
+        "schema_version": status.schema_version,
+        "source_registry_digest": status.source_registry_digest,
+        "source_registry_state": status.source_registry_state,
+        "window_start": status.window_start,
+        "window_state": status.window_state,
+        "coverage_state": status.coverage_state,
+    }
