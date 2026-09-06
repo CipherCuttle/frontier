@@ -1,0 +1,48 @@
+{
+  "schema_version": "source-contract-v0",
+  "source_id": "arxiv.cs-ai",
+  "display_name": "arXiv cs.AI Recent Submissions",
+  "enabled": true,
+  "acquisition_class": "A_AUTHORITATIVE_STRUCTURED",
+  "signal_roles": [
+    "PRIMARY_EMISSION"
+  ],
+  "transport": "ATOM",
+  "endpoint": {
+    "url": "https://export.arxiv.org/api/query?search_query=cat%3Acs.AI&start=0&max_results=100&sortBy=submittedDate&sortOrder=descending",
+    "method": "GET",
+    "accepted_content_types": [
+      "application/atom+xml",
+      "application/xml",
+      "text/xml"
+    ],
+    "policy_profile": "structured-public-v0",
+    "authentication": "NONE",
+    "credential_ref": null
+  },
+  "expected_cadence": {
+    "freshness_class": "F2",
+    "poll_interval_seconds": 900
+  },
+  "policy": {
+    "access_state": "ALLOWED",
+    "browser_authorized": false,
+    "raw_artifact_retention": "NONE",
+    "extracted_text_retention": "BOUNDED_CANONICAL",
+    "public_excerpt_mode": "METADATA_ONLY",
+    "attribution_required": true,
+    "policy_reviewed_at": "2026-09-05",
+    "policy_references": [
+      "https://info.arxiv.org/help/api/",
+      "https://info.arxiv.org/about/index.html"
+    ],
+    "notes": "Public Atom metadata only. arXiv presence is primary evidence of an arXiv submission, not peer-review status or factual truth. Polling is intentionally sparse and the capped window degrades completeness when saturated."
+  },
+  "capability": {
+    "primary_evidence_eligible": true,
+    "etag_support": "UNKNOWN",
+    "last_modified_support": "UNKNOWN",
+    "finite_window": true,
+    "schema_reference": "https://www.rfc-editor.org/rfc/rfc4287"
+  }
+}
