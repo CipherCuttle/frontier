@@ -75,23 +75,29 @@ def _validate_run_identity(run: ShadowExperimentRun) -> None:
 def _confirmatory_run_binding_failure(
     runs: Sequence[ShadowExperimentRun],
     freeze_receipt: CandidateFreezeReceipt,
+    *,
+    durable_freeze_at: datetime | None,
 ) -> str | None:
     """Return why these runs cannot contribute confirmatory evidence.
 
-    Development shadow runs are allowed to exist before candidate freeze, but
-    they must never become confirmatory merely because a FROZEN receipt is
-    supplied later. A confirmatory run must bind the exact receipt identity and
-    its snapshot boundary must be strictly after the receipt's own frozen_at
-    timestamp, which is the strongest freeze-boundary timestamp represented in
-    the current receipt contract. The later operational durability/merge gate
-    remains responsible for choosing the preregistered first 300-second
-    boundary strictly after the durable receipt enters canonical history.
+    ``frozen_at`` records receipt creation, not canonical durability. The
+    caller must therefore supply ``durable_freeze_at`` from the GitHub ``main``
+    merge commit that made this exact freeze receipt durable. Missing or
+    inconsistent durability evidence fails closed. Every confirmatory run must
+    bind the exact receipt identity and its paired boundary must be strictly
+    after that durable-main timestamp.
     """
+    if durable_freeze_at is None:
+        return "durable candidate-freeze main-merge timestamp is required"
+    if durable_freeze_at.tzinfo is None or durable_freeze_at.utcoffset() is None:
+        return "durable candidate-freeze main-merge timestamp must be timezone-aware"
+    if durable_freeze_at < freeze_receipt.frozen_at:
+        return "durable candidate-freeze timestamp cannot precede receipt creation"
     for run in runs:
         if run.candidate_freeze_receipt_id != freeze_receipt.receipt_id:
             return f"shadow run {run.run_id} does not bind the evaluated candidate freeze receipt"
-        if run.as_of <= freeze_receipt.frozen_at:
-            return f"shadow run {run.run_id} boundary is not strictly after candidate freeze"
+        if run.as_of <= durable_freeze_at:
+            return f"shadow run {run.run_id} boundary is not strictly after durable candidate freeze"
     return None
 
 
@@ -144,6 +150,7 @@ def evaluate_shadow_experiment(
     freeze_receipt: CandidateFreezeReceipt,
     evaluation_horizon: datetime,
     generated_at: datetime,
+    durable_freeze_at: datetime | None = None,
     rank_cutoff_k: int = GLOBAL_RANK_CUTOFF_K,
 ) -> EvaluationReceipt:
     """Evaluate the paired shadow window under the preregistered rules."""
@@ -164,7 +171,11 @@ def evaluate_shadow_experiment(
     for run in runs:
         _validate_run_identity(run)
 
-    confirmatory_binding_failure = _confirmatory_run_binding_failure(runs, freeze_receipt)
+    confirmatory_binding_failure = _confirmatory_run_binding_failure(
+        runs,
+        freeze_receipt,
+        durable_freeze_at=durable_freeze_at,
+    )
     failed_runs = [run.run_id for run in runs if run.status is ShadowRunStatus.FAILED]
 
     opportunities = build_retained_opportunities(opportunity_groups)
@@ -205,8 +216,8 @@ def evaluate_shadow_experiment(
         status_reason = f"shadow runs FAILED: {', '.join(failed_runs)}"
     elif len(qualifying_domains) < MINIMUM_QUALIFYING_DOMAINS:
         # Underpowered development/diagnostic evaluation remains explicitly
-        # non-confirmatory. Freeze binding is mandatory before a COMPLETE
-        # receipt can ever carry confirmatory evidence.
+        # non-confirmatory. Freeze binding and durable-main evidence are
+        # mandatory before a COMPLETE receipt can carry confirmatory evidence.
         status = EvaluationStatus.INSUFFICIENT_SAMPLE
         status_reason = (
             "fewer than two adequately sampled domains: "
