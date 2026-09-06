@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from frontier.domain.entity_provenance_lab import (
     ENTITY_CANDIDATES,
@@ -29,14 +29,15 @@ def _case(case_id: str):
     return next(case for case in load_corpus(CORPUS) if case.case_id == case_id)
 
 
-def _all_keys(value: Any) -> set[str]:
+def _all_keys(value: object) -> set[str]:
     keys: set[str] = set()
     if isinstance(value, dict):
-        for key, child in value.items():
+        mapping = cast(dict[object, object], value)
+        for key, child in mapping.items():
             keys.add(str(key))
             keys.update(_all_keys(child))
     elif isinstance(value, list):
-        for child in value:
+        for child in cast(list[object], value):
             keys.update(_all_keys(child))
     return keys
 
