@@ -29,6 +29,7 @@ PROVENANCE_CANDIDATES: Final = (
 )
 _DIRECT: Final = frozenset({"COPY_OF", "REVISION_OF", "FORK_OF"})
 _ALIASES: Final = frozenset({"ALIAS_OF", "RENAMED_FROM"})
+_EXPLICIT_RELATION_AUTHORITY: Final = "SOURCE_EXPLICIT"
 _COORDINATES: Final = frozenset({"pypi", "cve", "doi", "publisher_item"})
 _SPACE: Final = re.compile(r"\s+")
 _TOKEN: Final = re.compile(r"[^\W_]+", flags=re.UNICODE)
@@ -285,7 +286,10 @@ def assess_entity(
             *_relations(left, right.canonical_url, as_of),
             *_relations(right, left.canonical_url, as_of),
         )
-        if any(r.relation_type in _ALIASES for r in relations):
+        if any(
+            r.relation_type in _ALIASES and r.authority == _EXPLICIT_RELATION_AUTHORITY
+            for r in relations
+        ):
             return Assessment(
                 candidate_version,
                 EntityDecision.SAME_ENTITY,
@@ -326,7 +330,7 @@ def _direct_relation(
             for r in sorted(
                 values, key=lambda x: (x.relation_type, x.authority, x.target_external_ref)
             )
-            if r.relation_type in _DIRECT
+            if r.relation_type in _DIRECT and r.authority == _EXPLICIT_RELATION_AUTHORITY
         ),
         None,
     )
@@ -393,6 +397,12 @@ def _as_list(value: object, name: str) -> list[object]:
     return cast(list[object], value)
 
 
+def _as_string(value: object, name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a string")
+    return value
+
+
 def _relation(document: dict[str, object]) -> LabRelation:
     created = document.get("created_at")
     return LabRelation(
@@ -417,7 +427,7 @@ def _observation(document: dict[str, object]) -> LabObservation:
         else str(document["canonical_url"]),
         entity_type=str(document["entity_type"]),
         entity_name=str(document["entity_name"]),
-        native_ids=tuple(str(value) for value in native_ids),
+        native_ids=tuple(_as_string(value, "native id") for value in native_ids),
         title=None if document.get("title") is None else str(document["title"]),
         text=None if document.get("text") is None else str(document["text"]),
         artifact_version=None
