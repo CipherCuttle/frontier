@@ -16,7 +16,7 @@
       "scenario": "Two PIT-eligible PyPI release observations share the same frozen native package identity.",
       "required": [
         "candidate_may_emit_SAME_ENTITY",
-        "entity_quality_verdict_must_remain_INSUFFICIENT_INDEPENDENT_GROUND_TRUTH"
+        "entity_quality_status_must_remain_INSUFFICIENT_INDEPENDENT_GROUND_TRUTH"
       ]
     },
     {
@@ -166,7 +166,7 @@
       "category": "no_independent_ground_truth",
       "scenario": "Entity candidate behavior is evaluated only against bridge/native-ID-derived signals.",
       "required": [
-        "entity_quality_verdict_INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+        "entity_quality_status_INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
         "promotion_verdict_UNAVAILABLE",
         "no_PASS_or_FAIL_quality_claim"
       ]
