@@ -18,6 +18,6 @@ Current carried items:
 | D004 | DEFERRED_REQUIREMENT | specialist analytical store | only after Postgres workload evidence |
 | D005 | DEFERRED_REQUIREMENT | graph storage | only after relational projection demonstrably fails operator/algorithm need |
 | D006 | UNPROVEN_ASSUMPTION | exact trend/clustering/dedupe algorithms | P04+ experimental evidence; no pre-crowning |
-| D007 | KNOWN_COMPROMISE | GitHub `main` branch is currently unprotected; reviewed exact-head merges + CI reduce but do not eliminate accidental/direct-write risk | enable and verify branch protection/ruleset before parallel agent development becomes routine |
+| D007 | KNOWN_COMPROMISE | GitHub `main` was unprotected (GET /branches/main/protection -> 404 "Branch not protected"; GET /rules/branches/main -> [] as of 2026-09-06). Mitigated: branch ruleset `main-pr-verify-gate` (id 22366099, enforcement active) now requires pull_request + required_status_checks context `verify` on `refs/heads/main`; classic branch protection API still returns 404 (ruleset-only). Direct writes by admins are still possible via bypass; bypass_actors currently empty and current_user_can_bypass=never. | verify ruleset enforcement holds through first agent-parallel PR cycle |
 
 Vague `TODO refactor later` debt is not governance.
