@@ -1,0 +1,326 @@
+{
+  "schema_version": "frontier-entity-provenance-shadow-evaluation-corpus-v1",
+  "phase_id": "ENTITY_PROVENANCE_SHADOW_EVALUATION_V0",
+  "authority": {
+    "runtime_authority": false,
+    "persistence_authority": false,
+    "public_authority": false,
+    "canonical_entity_authority": false,
+    "canonical_provenance_authority": false,
+    "promotion_authority": false
+  },
+  "execution_contract": {
+    "bridge_input_corpus_path": "fixtures/entity_provenance/bridge_corpus_v0.json",
+    "bridge_input_corpus_digest": "sha256:34d1c75a7999f0338ae81add88e358d444f0bbd58d59696c08bb7ae0fbaf209f",
+    "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+    "entity_candidate": "transparent-entity-hybrid-v0",
+    "provenance_candidate": "explicit-reference-v0",
+    "bridge_case_resolution": "A bridge_case_ref resolves to the exact observations, relations, and as_of in bridge_corpus_v0.json at the bound digest. Fixture substitution or mutation is forbidden.",
+    "inline_input_resolution": "Inline observations and relations are complete executable canonical fixture inputs. Implementation-chosen replacement inputs are forbidden.",
+    "expected_output_rule": "Every expected field is mandatory exact output. NO_EVALUATION is a literal zero-assessment outcome, not permission to choose another decision.",
+    "quality_rule": "Entity quality PASS/FAIL/accuracy/precision/recall and provenance quality PASS/FAIL are unauthorized in every case. Promotion is always UNAVAILABLE.",
+    "forbidden_signal_rule": "Every forbidden_signal is a mandatory negative assertion. It may not create DIRECT_DERIVATIVE, true origin, provenance root, or factual independence.",
+    "replay_rule": "Every listed replay permutation must produce byte-identical canonical report bytes and the identical report digest."
+  },
+  "cases": [
+    {
+      "id": "EPSE-001",
+      "category": "pypi_same_native_identity",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-001"},
+      "evaluation_pairs": [[0, 1]],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "SAME_ENTITY", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-002",
+      "category": "cisa_same_cve_identity",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-002"},
+      "evaluation_pairs": [[0, 1]],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "SAME_ENTITY", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-003",
+      "category": "github_rename_same_numeric_id",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-003"},
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["provider-native identity is candidate input and is not independent correctness ground truth"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "SAME_ENTITY", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-004",
+      "category": "github_conflicting_numeric_ids",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-004"},
+      "evaluation_pairs": [[0, 1]],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "DIFFERENT_ENTITY", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-005",
+      "category": "hf_same_provider_key",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-005"},
+      "evaluation_pairs": [[0, 1]],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "SAME_ENTITY", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-006",
+      "category": "hn_unsupported",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-006"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 1, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-007",
+      "category": "gdelt_unsupported",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-007"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 1, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-008",
+      "category": "arxiv_unsupported",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-008"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 1, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-009",
+      "category": "references_not_derivation",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-009"},
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["REFERENCES must not become derivation, true origin, provenance root, or factual independence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NOT_EVALUABLE", "provenance_decision": "NOT_EVALUABLE", "pit_eligible_observation_count": 2, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 1, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-010",
+      "category": "corrects_not_derivation",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-010"},
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["CORRECTS must not become derivation, true origin, provenance root, or factual independence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NOT_EVALUABLE", "provenance_decision": "NOT_EVALUABLE", "pit_eligible_observation_count": 2, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 1, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-011",
+      "category": "retracts_not_derivation",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-011"},
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["RETRACTS must not become derivation, true origin, provenance root, or factual independence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NOT_EVALUABLE", "provenance_decision": "NOT_EVALUABLE", "pit_eligible_observation_count": 2, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 1, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-012",
+      "category": "github_fork_boolean_single_no_parent",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-012"},
+      "evaluation_pairs": [],
+      "forbidden_signals": ["fork boolean alone is not explicit derivation evidence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 1, "native_id_signal_count": 1, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-013",
+      "category": "future_observation_rejected",
+      "as_of": "2026-09-06T10:30:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-013"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 0, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 1, "ignored_future_observation_by_source": {"pypi.updates": 1}, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-014",
+      "category": "old_published_backfill_not_knowledge_time",
+      "as_of": "2026-09-06T10:30:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-014"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 0, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 1, "ignored_future_observation_by_source": {"arxiv.cs-ai": 1}, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-015",
+      "category": "malformed_github_id_fails_closed",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-015"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 1, "native_id_signal_count": 0, "malformed_identity_field_count": 1, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-016",
+      "category": "cisa_metadata_mismatch_fails_closed",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-016"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 1, "native_id_signal_count": 0, "malformed_identity_field_count": 1, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-017",
+      "category": "shared_url_cannot_override_unsupported",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-017"},
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["shared URL must not create entity truth, derivation, origin, provenance root, or independence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NOT_EVALUABLE", "provenance_decision": "NOT_EVALUABLE", "pit_eligible_observation_count": 2, "native_id_signal_count": 1, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-018",
+      "category": "future_relation_rejected",
+      "as_of": "2026-09-06T10:30:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-018"},
+      "evaluation_pairs": [[0, 1]],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "NOT_EVALUABLE", "provenance_decision": "NOT_EVALUABLE", "pit_eligible_observation_count": 2, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 1, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-019",
+      "category": "registry_drift_invalidates_before_counting",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:wrong-registry",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-001"},
+      "evaluation_pairs": [],
+      "expected": {"integrity_status": "INVALID_DRIFT", "drift_reasons": ["source-registry-digest-mismatch"], "entity_decision": "NO_EVALUATION", "provenance_decision": "NO_EVALUATION", "pit_eligible_observation_count": 0, "native_id_signal_count": 0, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "NO_VALID_COUNTING", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-020",
+      "category": "deterministic_replay",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {"bridge_case_ref": "BRV-001"},
+      "evaluation_pairs": [[0, 1]],
+      "replay_permutations": [{"observation_order": [0, 1], "relation_order": []}, {"observation_order": [1, 0], "relation_order": []}],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "SAME_ENTITY", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": "EXACT_BRIDGE_CASE_COVERAGE", "replay_requirement": "BYTE_IDENTICAL_CANONICAL_REPORT_AND_DIGEST", "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-021",
+      "category": "mirrored_text_not_derivation",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {
+        "observations": [
+          {"source_id": "cisa.kev", "source_item_key": "CVE-2026-9100", "observed_at": "2026-09-06T10:00:00Z", "kind": "DOCUMENT", "payload": {"canonical_url": "https://mirror.example/x", "title": "Mirror", "source_metadata": {"cve_id": "CVE-2026-9100", "body_text": "identical substantive release text copied across two distinct providers"}}},
+          {"source_id": "hf.models", "source_item_key": "org/mirror", "observed_at": "2026-09-06T11:00:00Z", "kind": "ARTIFACT", "payload": {"artifact_type": "huggingface-model-repo", "name": "org/mirror", "version": "v1", "canonical_url": "https://mirror.example/x", "source_metadata": {"body_text": "identical substantive release text copied across two distinct providers"}}}
+        ],
+        "relations": []
+      },
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["mirrored text must not become DIRECT_DERIVATIVE, true origin, provenance root, or factual independence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "AMBIGUOUS", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": {"cisa.kev": {"total": 1, "supported": 1, "degraded": 0, "unsupported": 0, "native_id_signals": 1}, "hf.models": {"total": 1, "supported": 1, "degraded": 0, "unsupported": 0, "native_id_signals": 1}}, "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-022",
+      "category": "earliest_observation_not_origin",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {
+        "observations": [
+          {"source_id": "pypi.updates", "source_item_key": "early/1", "observed_at": "2026-09-06T09:00:00Z", "kind": "ARTIFACT", "payload": {"artifact_type": "python-package-release", "name": "early", "version": "1", "canonical_url": null, "source_metadata": {}}},
+          {"source_id": "hf.models", "source_item_key": "org/later", "observed_at": "2026-09-06T11:00:00Z", "kind": "ARTIFACT", "payload": {"artifact_type": "huggingface-model-repo", "name": "org/later", "version": "v1", "canonical_url": null, "source_metadata": {}}}
+        ],
+        "relations": []
+      },
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["earliest observed_at must not become true origin, provenance root, or proof of independence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "AMBIGUOUS", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": {"pypi.updates": {"total": 1, "supported": 1, "degraded": 0, "unsupported": 0, "native_id_signals": 1}, "hf.models": {"total": 1, "supported": 1, "degraded": 0, "unsupported": 0, "native_id_signals": 1}}, "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-023",
+      "category": "github_fork_boolean_not_derivation",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {
+        "observations": [
+          {"source_id": "github.ml-repos", "source_item_key": "upstream/repo", "observed_at": "2026-09-06T10:00:00Z", "kind": "ARTIFACT", "payload": {"artifact_type": "github-repository", "name": "upstream/repo", "version": null, "canonical_url": "https://github.com/upstream/repo", "source_metadata": {"github_repository_id": 5001, "fork": false}}},
+          {"source_id": "github.ml-repos", "source_item_key": "fork/repo", "observed_at": "2026-09-06T11:00:00Z", "kind": "ARTIFACT", "payload": {"artifact_type": "github-repository", "name": "fork/repo", "version": null, "canonical_url": "https://github.com/fork/repo", "source_metadata": {"github_repository_id": 5002, "fork": true}}}
+        ],
+        "relations": []
+      },
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["GitHub fork boolean without separately authorized explicit parent evidence must not become DIRECT_DERIVATIVE or true origin"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "DIFFERENT_ENTITY", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": {"github.ml-repos": {"total": 2, "supported": 2, "degraded": 0, "unsupported": 0, "native_id_signals": 2}}, "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    },
+    {
+      "id": "EPSE-024",
+      "category": "shared_url_supported_sources_not_provenance",
+      "as_of": "2026-09-06T12:00:00Z",
+      "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+      "entity_candidate": "transparent-entity-hybrid-v0",
+      "provenance_candidate": "explicit-reference-v0",
+      "input": {
+        "observations": [
+          {"source_id": "pypi.updates", "source_item_key": "urlcase/1", "observed_at": "2026-09-06T10:00:00Z", "kind": "ARTIFACT", "payload": {"artifact_type": "python-package-release", "name": "urlcase", "version": "1", "canonical_url": "https://shared.example/release", "source_metadata": {}}},
+          {"source_id": "hf.models", "source_item_key": "org/urlcase", "observed_at": "2026-09-06T11:00:00Z", "kind": "ARTIFACT", "payload": {"artifact_type": "huggingface-model-repo", "name": "org/urlcase", "version": "v1", "canonical_url": "https://shared.example/release", "source_metadata": {}}}
+        ],
+        "relations": []
+      },
+      "evaluation_pairs": [[0, 1]],
+      "forbidden_signals": ["shared canonical URL must not imply DIRECT_DERIVATIVE, true origin, provenance root, or factual independence"],
+      "expected": {"integrity_status": "COMPLETE_DIAGNOSTIC", "entity_decision": "AMBIGUOUS", "provenance_decision": "NO_LINK_EVIDENCE", "pit_eligible_observation_count": 2, "native_id_signal_count": 2, "malformed_identity_field_count": 0, "ignored_future_observation_count": 0, "ignored_future_relation_count": 0, "eligible_weak_relation_count": 0, "direct_derivation_evidence_count": 0, "source_coverage": {"pypi.updates": {"total": 1, "supported": 1, "degraded": 0, "unsupported": 0, "native_id_signals": 1}, "hf.models": {"total": 1, "supported": 1, "degraded": 0, "unsupported": 0, "native_id_signals": 1}}, "entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH", "provenance_quality_status": "BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE", "promotion_status": "UNAVAILABLE", "forbidden_inference_claims": [], "quality_pass_fail_claim": null}
+    }
+  ]
+}
