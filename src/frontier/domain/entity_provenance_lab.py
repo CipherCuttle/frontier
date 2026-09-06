@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 LAB_SCHEMA_VERSION: Final = "entity-provenance-lab-result-v0"
 LAB_AUTHORITY_STATE: Final = "EXPERIMENTAL_LAB_ONLY"
@@ -381,7 +381,19 @@ def assess_provenance(
     )
 
 
-def _relation(document: dict[str, Any]) -> LabRelation:
+def _as_object(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be an object")
+    return cast(dict[str, object], value)
+
+
+def _as_list(value: object, name: str) -> list[object]:
+    if not isinstance(value, list):
+        raise ValueError(f"{name} must be an array")
+    return cast(list[object], value)
+
+
+def _relation(document: dict[str, object]) -> LabRelation:
     created = document.get("created_at")
     return LabRelation(
         str(document["relation_type"]),
@@ -391,7 +403,11 @@ def _relation(document: dict[str, Any]) -> LabRelation:
     )
 
 
-def _observation(document: dict[str, Any]) -> LabObservation:
+def _observation(document: dict[str, object]) -> LabObservation:
+    native_ids_value = document.get("native_ids", [])
+    relations_value = document.get("relations", [])
+    native_ids = _as_list(native_ids_value, "native_ids")
+    relation_values = _as_list(relations_value, "relations")
     return LabObservation(
         source_id=str(document["source_id"]),
         source_item_key=str(document["source_item_key"]),
@@ -401,33 +417,39 @@ def _observation(document: dict[str, Any]) -> LabObservation:
         else str(document["canonical_url"]),
         entity_type=str(document["entity_type"]),
         entity_name=str(document["entity_name"]),
-        native_ids=tuple(map(str, document.get("native_ids", []))),
+        native_ids=tuple(str(value) for value in native_ids),
         title=None if document.get("title") is None else str(document["title"]),
         text=None if document.get("text") is None else str(document["text"]),
         artifact_version=None
         if document.get("artifact_version") is None
         else str(document["artifact_version"]),
-        relations=tuple(_relation(x) for x in document.get("relations", [])),
+        relations=tuple(
+            _relation(_as_object(value, "relation")) for value in relation_values
+        ),
     )
 
 
-def parse_corpus(document: dict[str, Any]) -> tuple[LabCase, ...]:
+def parse_corpus(document: dict[str, object]) -> tuple[LabCase, ...]:
     if document.get("schema_version") != CORPUS_SCHEMA_VERSION:
         raise ValueError("unexpected entity/provenance corpus schema")
-    authority = document.get("authority")
-    if not isinstance(authority, dict) or any(
+
+    authority = _as_object(document.get("authority"), "authority")
+    if any(
         authority.get(key) is not False
         for key in ("runtime_authority", "public_authority", "persistence_authority")
     ):
         raise ValueError(
             "lab corpus must explicitly deny runtime, public, and persistence authority"
         )
-    raw_cases = document.get("cases")
-    if not isinstance(raw_cases, list) or not raw_cases:
+
+    raw_cases = _as_list(document.get("cases"), "cases")
+    if not raw_cases:
         raise ValueError("lab corpus requires cases")
+
     result: list[LabCase] = []
     seen: set[str] = set()
-    for raw in raw_cases:
+    for raw_value in raw_cases:
+        raw = _as_object(raw_value, "lab case")
         case_id = str(raw["id"])
         if case_id in seen:
             raise ValueError(f"duplicate lab case id: {case_id}")
@@ -437,8 +459,8 @@ def parse_corpus(document: dict[str, Any]) -> tuple[LabCase, ...]:
                 case_id,
                 str(raw["category"]),
                 _time(str(raw["as_of"])),
-                _observation(raw["left"]),
-                _observation(raw["right"]),
+                _observation(_as_object(raw.get("left"), "left observation")),
+                _observation(_as_object(raw.get("right"), "right observation")),
                 EntityDecision(str(raw["expected_entity"])),
                 ProvenanceDecision(str(raw["expected_provenance"])),
                 str(raw["rationale"]),
@@ -448,9 +470,8 @@ def parse_corpus(document: dict[str, Any]) -> tuple[LabCase, ...]:
 
 
 def load_corpus(path: Path) -> tuple[LabCase, ...]:
-    document = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(document, dict):
-        raise ValueError("lab corpus root must be an object")
+    loaded: object = json.loads(path.read_text(encoding="utf-8"))
+    document = _as_object(loaded, "lab corpus root")
     return parse_corpus(document)
 
 
