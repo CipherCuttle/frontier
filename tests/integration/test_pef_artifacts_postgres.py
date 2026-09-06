@@ -37,9 +37,11 @@ def test_postgres_pef_artifact_retains_ranking_and_rolls_back_conflict() -> None
     assert DB_URL is not None
     retrieved_at = datetime(2026, 9, 5, 11, tzinfo=UTC)
     body = b"""<rss version="2.0"><channel>
-      <item><title>Prospective emission live</title><link>https://example.com/pef-live</link>
+      <item><title>Prospective emission freshness corridor breach</title>
+        <link>https://example.com/pef-emission</link>
         <comments>https://news.ycombinator.com/item?id=88001</comments></item>
-      <item><title>Backfilled emission</title><link>https://example.com/pef-backfill</link>
+      <item><title>Prospective emission freshness corridor breach</title>
+        <link>https://example.com/pef-emission</link>
         <comments>https://news.ycombinator.com/item?id=88002</comments></item>
     </channel></rss>"""
     batch = normalize_hn_frontpage(

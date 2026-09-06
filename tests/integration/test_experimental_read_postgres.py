@@ -10,6 +10,7 @@ import pytest
 psycopg = pytest.importorskip("psycopg")
 
 from psycopg import Connection
+from psycopg.types.json import Jsonb
 
 from frontier.adapters.postgres.experimental_read import (
     PostgresExperimentalReadRepository,
@@ -84,15 +85,17 @@ def _seed_rows(connection: ConnectionT) -> None:
                 "receipt_" + _hex("eval-receipt"),
                 "receipt_" + _hex("eval-receipt"),
                 "sha256:" + "6" * 64,
-                {
-                    "generated_at": "2026-09-05T12:00:00.000000Z",
-                    "experiment_id": "advanced-ranking-pef-v0",
-                    "candidate_id": "prospective-primary-emission-freshness-v0",
-                    "episodes": [
-                        {"episode_id": "e1", "rank": 1},
-                        {"episode_id": "e2", "rank": 2},
-                    ],
-                },
+                Jsonb(
+                    {
+                        "generated_at": "2026-09-05T12:00:00.000000Z",
+                        "experiment_id": "advanced-ranking-pef-v0",
+                        "candidate_id": "prospective-primary-emission-freshness-v0",
+                        "episodes": [
+                            {"episode_id": "e1", "rank": 1},
+                            {"episode_id": "e2", "rank": 2},
+                        ],
+                    }
+                ),
             ),
         )
         cur.execute(
@@ -123,10 +126,12 @@ def _seed_rows(connection: ConnectionT) -> None:
                 "sha256:" + "6" * 64,
                 "sha256:" + "7" * 64,
                 "sha256:" + "8" * 64,
-                {
-                    "generated_at": "2026-09-05T12:00:00.000000Z",
-                    "candidate_freeze_receipt_id": None,
-                },
+                Jsonb(
+                    {
+                        "generated_at": "2026-09-05T12:00:00.000000Z",
+                        "candidate_freeze_receipt_id": None,
+                    }
+                ),
             ),
         )
         cur.execute(
@@ -157,8 +162,8 @@ def _seed_rows(connection: ConnectionT) -> None:
                 "sha256:" + "a" * 64,
                 "sha256:" + "b" * 64,
                 "sha256:" + "c" * 64,
-                ["shadowrun_" + _hex("shadow-run")],
-                {"status_reason": "sample", "verdict": None},
+                Jsonb(["shadowrun_" + _hex("shadow-run")]),
+                Jsonb({"status_reason": "sample", "verdict": None}),
             ),
         )
         for index in range(2):
@@ -188,7 +193,7 @@ def _seed_rows(connection: ConnectionT) -> None:
                     "advanced-transparent-features-v0",
                     "sha256:" + "f" * 64,
                     "sha256:" + "0" * 64,
-                    {"episode_id": f"episode_{index}", "features": []},
+                    Jsonb({"episode_id": f"episode_{index}", "features": []}),
                 ),
             )
         cur.execute(
@@ -217,7 +222,7 @@ def _seed_rows(connection: ConnectionT) -> None:
                 "sha256:" + "1" * 64,
                 "sha256:" + "2" * 64,
                 "sha256:" + "3" * 64,
-                {"descriptors": []},
+                Jsonb({"descriptors": []}),
             ),
         )
         cur.execute(
@@ -246,7 +251,7 @@ def _seed_rows(connection: ConnectionT) -> None:
                 "sha256:" + "1" * 64,
                 "sha256:" + "2" * 64,
                 "sha256:" + "3" * 64,
-                {"episodes": []},
+                Jsonb({"episodes": []}),
             ),
         )
 
