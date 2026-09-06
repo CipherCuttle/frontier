@@ -26,12 +26,8 @@ BRIDGE_AUTHORITY_STATE: Final = "EXPERIMENTAL_EPHEMERAL_ONLY"
 SUPPORTED_ENTITY_SOURCES: Final = frozenset(
     {"pypi.updates", "cisa.kev", "github.ml-repos", "hf.models"}
 )
-UNSUPPORTED_ENTITY_SOURCES: Final = frozenset(
-    {"arxiv.cs-ai", "gdelt.frontier", "hn.frontpage"}
-)
-BRIDGE_SOURCE_REGISTRY: Final = tuple(
-    sorted(SUPPORTED_ENTITY_SOURCES | UNSUPPORTED_ENTITY_SOURCES)
-)
+UNSUPPORTED_ENTITY_SOURCES: Final = frozenset({"arxiv.cs-ai", "gdelt.frontier", "hn.frontpage"})
+BRIDGE_SOURCE_REGISTRY: Final = tuple(sorted(SUPPORTED_ENTITY_SOURCES | UNSUPPORTED_ENTITY_SOURCES))
 _CVE_RE: Final = re.compile(r"^CVE-\d{4}-\d{4,}$")
 
 
@@ -298,7 +294,9 @@ def _bridge_cisa(observation: Observation) -> BridgeObservation:
             malformed=1,
         )
     metadata_cve = payload.source_metadata.get("cve_id")
-    if metadata_cve is not None and (not isinstance(metadata_cve, str) or metadata_cve != source_key):
+    if metadata_cve is not None and (
+        not isinstance(metadata_cve, str) or metadata_cve != source_key
+    ):
         return _degraded(
             observation,
             entity_type="VULNERABILITY",
@@ -435,9 +433,7 @@ def build_entity_provenance_bridge(
         # the strongest authorized action.
         eligible_weak_relations += 1
 
-    records = tuple(
-        sorted(bridged, key=lambda value: (value.source_id, value.observation_id))
-    )
+    records = tuple(sorted(bridged, key=lambda value: (value.source_id, value.observation_id)))
     coverage = BridgeCoverageReport(
         by_source={source_id: mutable[source_id].freeze() for source_id in BRIDGE_SOURCE_REGISTRY},
         direct_derivation_evidence_count=0,
