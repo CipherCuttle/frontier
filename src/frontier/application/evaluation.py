@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING, Protocol
 
 from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
@@ -42,6 +43,12 @@ from frontier.domain.evaluation import (
     evaluate_domains,
     pooled_lead_time_median,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - annotations only
+    from frontier.application.evaluation_loaders import (
+        EvaluationArtifactStore,
+        PersistedRunRef,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,3 +259,86 @@ def evaluate_shadow_experiment(
         status_reason=status_reason,
         verdict=verdict,
     )
+
+
+class EvaluationReceiptPersistence(Protocol):
+    """Append-only persistence port for evaluation receipts (R8).
+
+    Implementations must be idempotent by construction: a digest-identical
+    replay of the same content-derived receipt identity is a no-op and a
+    digest-different conflict is an error.
+    """
+
+    def record_receipt(self, receipt: EvaluationReceipt) -> None: ...
+
+
+def evaluate_shadow_experiment_from_persisted(
+    *,
+    store: EvaluationArtifactStore,
+    runs: Sequence[PersistedRunRef],
+    opportunity_groups: Sequence[OpportunityGroup],
+    evaluation_horizon: datetime,
+    generated_at: datetime,
+    confirmatory: bool = False,
+    canonical_context: bool = False,
+    durable_freeze_at: datetime | None = None,
+    window_start: datetime | None = None,
+    feature_batch_id: str | None = None,
+    rank_cutoff_k: int = GLOBAL_RANK_CUTOFF_K,
+    receipt_repository: EvaluationReceiptPersistence | None = None,
+) -> EvaluationReceipt:
+    """Evaluate a persisted shadow window end-to-end from durable artifacts.
+
+    Additive operational path (WP4, G2): every paired snapshot is loaded via
+    :func:`frontier.application.evaluation_loaders.load_paired_snapshot` with
+    strong identity checks (digest recomputation, never trust), then fed
+    through the EXISTING frozen :func:`evaluate_shadow_experiment` — the
+    algorithm, thresholds and status semantics are unchanged. The produced
+    receipt is persisted through the append-only evaluation-receipt
+    repository when one is supplied; the content-derived ``evaluation_id``
+    makes re-persisting an identical evaluation a no-op.
+
+    ``confirmatory=True`` requires ``canonical_context=True`` (WP2 gate d);
+    gates (a)-(c): FROZEN binding, non-NULL durability, strict
+    ``as_of > durable_freeze_at`` — are enforced by the existing binding
+    failure semantics and surface as ``INVALID_DRIFT`` receipts.
+    """
+    from frontier.application.evaluation_loaders import (  # runtime import avoids a cycle
+        load_paired_snapshot,
+    )
+
+    if not runs:
+        raise ValueError("persisted evaluation requires at least one persisted run")
+    if confirmatory and not canonical_context:
+        raise ValueError("confirmatory persisted evaluation requires the canonical DB context")
+    if len({ref.run_id for ref in runs}) != len(runs):
+        raise ValueError("duplicate persisted run ids in evaluation request")
+
+    loaded = tuple(
+        load_paired_snapshot(
+            store,
+            ref.run_id,
+            as_of=ref.as_of,
+            confirmatory=confirmatory,
+            window_start=window_start,
+            feature_batch_id=feature_batch_id,
+        )
+        for ref in runs
+    )
+    ordered = tuple(sorted(loaded, key=lambda item: item.snapshot.run.as_of))
+    # The confirmatory binding semantics in ``evaluate_shadow_experiment``
+    # compare every run's bound receipt against the evaluated receipt: runs
+    # bound to a different freeze therefore surface as INVALID_DRIFT.
+    freeze_receipt = ordered[0].freeze_receipt
+    receipt = evaluate_shadow_experiment(
+        snapshots=tuple(item.snapshot for item in ordered),
+        opportunity_groups=opportunity_groups,
+        freeze_receipt=freeze_receipt,
+        evaluation_horizon=evaluation_horizon,
+        generated_at=generated_at,
+        durable_freeze_at=durable_freeze_at,
+        rank_cutoff_k=rank_cutoff_k,
+    )
+    if receipt_repository is not None:
+        receipt_repository.record_receipt(receipt)
+    return receipt
