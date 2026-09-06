@@ -99,9 +99,7 @@ def test_bridge_corpus_is_exact_frozen_18_case_authority() -> None:
     assert corpus["schema_version"] == "frontier-entity-provenance-bridge-corpus-v0"
     cases = _as_list(corpus["cases"], "cases")
     assert len(cases) == 18
-    case_ids = {
-        _as_string(_as_object(case, "case")["id"], "case.id") for case in cases
-    }
+    case_ids = {_as_string(_as_object(case, "case")["id"], "case.id") for case in cases}
     assert case_ids == EXPECTED_CASE_IDS
     assert len(case_ids) == len(cases)
     assert _digest(corpus) == EXPECTED_BRIDGE_CORPUS
