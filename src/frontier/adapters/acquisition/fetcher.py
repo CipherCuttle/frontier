@@ -265,6 +265,29 @@ def _retry_after(headers: dict[str, str], maximum: int) -> int | None:
     return min(maximum, max(0, seconds))
 
 
+def _rate_limit_retry_after(
+    raw_headers: Sequence[tuple[str, str]],
+    sanitized_headers: dict[str, str],
+    maximum: int,
+) -> int | None:
+    retry_after = _retry_after(sanitized_headers, maximum)
+    if retry_after is not None:
+        return retry_after
+
+    remaining = [
+        value.strip() for name, value in raw_headers if name.lower() == "x-ratelimit-remaining"
+    ]
+    reset = [value.strip() for name, value in raw_headers if name.lower() == "x-ratelimit-reset"]
+    if remaining != ["0"] or len(reset) != 1:
+        return None
+    try:
+        reset_epoch = int(reset[0])
+    except ValueError:
+        return None
+    now_epoch = int(datetime.now(UTC).timestamp())
+    return min(maximum, max(1, reset_epoch - now_epoch + 1))
+
+
 def _decoder(content_encoding: str | None) -> Decompressor | None:
     if content_encoding is None or content_encoding.lower() in ("", "identity"):
         return None
@@ -377,7 +400,38 @@ class SecureHttpFetcher:
                     current_url = next_url
                     continue
                 retry_after = _retry_after(headers, self._policy.retry.max_retry_after_seconds)
-                if response.status == 429 or 500 <= response.status <= 599:
+                rate_limit_retry_after = _rate_limit_retry_after(
+                    raw_headers,
+                    headers,
+                    self._policy.retry.max_retry_after_seconds,
+                )
+                if response.status == 403 and rate_limit_retry_after is not None:
+                    return self._failure(
+                        request,
+                        current_url,
+                        redirects,
+                        FetchOutcome.FAILED,
+                        "HTTP_403_RATE_LIMITED",
+                        "upstream returned explicit rate-limit response",
+                        True,
+                        http_status=response.status,
+                        response_headers=headers,
+                        retry_after_seconds=rate_limit_retry_after,
+                    )
+                if response.status == 429:
+                    return self._failure(
+                        request,
+                        current_url,
+                        redirects,
+                        FetchOutcome.FAILED,
+                        "HTTP_429",
+                        "upstream returned retryable HTTP status",
+                        True,
+                        http_status=response.status,
+                        response_headers=headers,
+                        retry_after_seconds=rate_limit_retry_after,
+                    )
+                if 500 <= response.status <= 599:
                     return self._failure(
                         request,
                         current_url,

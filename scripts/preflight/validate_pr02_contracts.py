@@ -57,11 +57,26 @@ REQUIRED_BLOCK_CLASSES = {
     "IPV4_MAPPED_PRIVATE",
 }
 EXPECTED_SOURCES: dict[str, dict[str, Any]] = {
+    "arxiv.cs-ai": {
+        "acquisition_class": "A_AUTHORITATIVE_STRUCTURED",
+        "roles": ["PRIMARY_EMISSION"],
+        "transport": "ATOM",
+        "endpoint": (
+            "https://export.arxiv.org/api/query?"
+            "search_query=cat%3Acs.AI&start=0&max_results=100&"
+            "sortBy=submittedDate&sortOrder=descending"
+        ),
+        "primary": True,
+        "finite": True,
+    },
     "cisa.kev": {
         "acquisition_class": "A_AUTHORITATIVE_STRUCTURED",
         "roles": ["BEHAVIORAL", "PRIMARY_EMISSION"],
         "transport": "JSON_HTTP",
-        "endpoint": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+        "endpoint": (
+            "https://www.cisa.gov/sites/default/files/feeds/"
+            "known_exploited_vulnerabilities.json"
+        ),
         "primary": True,
         "finite": False,
     },
@@ -69,7 +84,25 @@ EXPECTED_SOURCES: dict[str, dict[str, Any]] = {
         "acquisition_class": "B_OPEN_AGGREGATION",
         "roles": ["DISCOVERY"],
         "transport": "JSON_HTTP",
-        "endpoint": "https://api.gdeltproject.org/api/v2/doc/doc?query=(AI%20OR%20%22artificial%20intelligence%22%20OR%20LLM%20OR%20%22machine%20learning%22%20OR%20cryptocurrency%20OR%20bitcoin%20OR%20ethereum%20OR%20cybersecurity%20OR%20%22open%20source%22)&mode=artlist&format=json&timespan=1h&maxrecords=250&sort=datedesc",
+        "endpoint": (
+            "https://api.gdeltproject.org/api/v2/doc/doc?"
+            "query=(AI%20OR%20%22artificial%20intelligence%22%20OR%20LLM%20OR%20"
+            "%22machine%20learning%22%20OR%20cryptocurrency%20OR%20bitcoin%20OR%20"
+            "ethereum%20OR%20cybersecurity%20OR%20%22open%20source%22)&mode=artlist&"
+            "format=json&timespan=1h&maxrecords=250&sort=datedesc"
+        ),
+        "primary": False,
+        "finite": True,
+    },
+    "github.ml-repos": {
+        "acquisition_class": "A_AUTHORITATIVE_STRUCTURED",
+        "roles": ["BEHAVIORAL", "DISCOVERY"],
+        "transport": "REST",
+        "endpoint": (
+            "https://api.github.com/search/repositories?"
+            "q=topic%3Amachine-learning+fork%3Afalse+archived%3Afalse&"
+            "sort=updated&order=desc&per_page=100"
+        ),
         "primary": False,
         "finite": True,
     },
@@ -77,7 +110,10 @@ EXPECTED_SOURCES: dict[str, dict[str, Any]] = {
         "acquisition_class": "A_AUTHORITATIVE_STRUCTURED",
         "roles": ["PRIMARY_EMISSION"],
         "transport": "REST",
-        "endpoint": "https://huggingface.co/api/models?sort=lastModified&direction=-1&limit=100&expand=author,createdAt,lastModified,pipeline_tag,sha,tags",
+        "endpoint": (
+            "https://huggingface.co/api/models?sort=lastModified&direction=-1&limit=100&"
+            "expand=author,createdAt,lastModified,pipeline_tag,sha,tags"
+        ),
         "primary": True,
         "finite": True,
     },
@@ -218,7 +254,10 @@ def validate_schemas() -> None:
 
 def validate_policy() -> dict[str, Any]:
     policy = load(POLICY_PATH)
-    require(policy.get("schema_version") == "fetch-policy-v0", "fetch policy schema version mismatch")
+    require(
+        policy.get("schema_version") == "fetch-policy-v0",
+        "fetch policy schema version mismatch",
+    )
     require(
         policy.get("policy_profile") == "structured-public-v0",
         "unexpected fetch policy profile",
@@ -291,6 +330,13 @@ def validate_source_contract(source: dict[str, Any]) -> None:
     )
     accepted = endpoint.get("accepted_content_types")
     require(isinstance(accepted, list) and accepted, f"{source_id}: accepted content types missing")
+    cadence = source.get("expected_cadence")
+    require(isinstance(cadence, dict), f"{source_id}: expected cadence missing")
+    poll_seconds = cadence.get("poll_interval_seconds")
+    require(
+        isinstance(poll_seconds, int) and 60 <= poll_seconds <= 86400,
+        f"{source_id}: poll interval invalid",
+    )
     policy = source.get("policy")
     require(isinstance(policy, dict), f"{source_id}: source policy missing")
     require(
@@ -324,7 +370,8 @@ def validate_source_contract(source: dict[str, Any]) -> None:
         require(
             endpoint.get("fallback_urls")
             == [
-                "https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json"
+                "https://raw.githubusercontent.com/cisagov/kev-data/develop/"
+                "known_exploited_vulnerabilities.json"
             ],
             "CISA same-authority fallback missing or changed",
         )
@@ -334,7 +381,8 @@ def validate_source_contract(source: dict[str, Any]) -> None:
         )
         require(
             capability.get("schema_reference")
-            == "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities_schema.json",
+            == "https://www.cisa.gov/sites/default/files/feeds/"
+            "known_exploited_vulnerabilities_schema.json",
             "CISA schema reference changed unexpectedly",
         )
     elif source_id == "hn.frontpage":
@@ -366,6 +414,46 @@ def validate_source_contract(source: dict[str, Any]) -> None:
             any("rate-limits" in str(ref) for ref in refs),
             "Hugging Face policy must reference rate-limit documentation",
         )
+    elif source_id == "arxiv.cs-ai":
+        require(
+            roles == ["PRIMARY_EMISSION"] and capability.get("primary_evidence_eligible") is True,
+            "arXiv must describe repository emission, not downstream corroboration",
+        )
+        parsed = urlsplit(str(endpoint["url"]))
+        query = parse_qs(parsed.query)
+        require(query.get("search_query") == ["cat:cs.AI"], "arXiv category scope drifted")
+        require(query.get("start") == ["0"], "arXiv first-page scope drifted")
+        require(query.get("max_results") == ["100"], "arXiv result cap drifted")
+        require(query.get("sortBy") == ["submittedDate"], "arXiv ordering field drifted")
+        require(query.get("sortOrder") == ["descending"], "arXiv ordering direction drifted")
+        require(
+            int(poll_seconds) >= 300,
+            "arXiv polling must remain sparse enough for public API etiquette",
+        )
+    elif source_id == "github.ml-repos":
+        require(
+            roles == ["BEHAVIORAL", "DISCOVERY"]
+            and capability.get("primary_evidence_eligible") is False,
+            "GitHub search must remain behavioral/discovery evidence",
+        )
+        parsed = urlsplit(str(endpoint["url"]))
+        query = parse_qs(parsed.query)
+        require(query.get("per_page") == ["100"], "GitHub finite result cap drifted")
+        require(query.get("sort") == ["updated"], "GitHub activity ordering drifted")
+        require(query.get("order") == ["desc"], "GitHub ordering direction drifted")
+        q = query.get("q")
+        require(
+            q == ["topic:machine-learning fork:false archived:false"],
+            "GitHub search scope drifted",
+        )
+        require(
+            int(poll_seconds) >= 600,
+            "GitHub unauthenticated search polling must remain conservative",
+        )
+        require(
+            any("rate-limits" in str(ref) for ref in refs),
+            "GitHub policy must reference current rate-limit documentation",
+        )
 
 
 def load_registry_sources() -> list[dict[str, Any]]:
@@ -378,7 +466,10 @@ def load_registry_sources() -> list[dict[str, Any]]:
 
 def validate_registry(sources: list[dict[str, Any]]) -> None:
     registry = load(REGISTRY_PATH)
-    require(registry.get("schema_version") == "source-registry-v0", "source registry schema mismatch")
+    require(
+        registry.get("schema_version") == "source-registry-v0",
+        "source registry schema mismatch",
+    )
     ids = [source["source_id"] for source in sorted(sources, key=lambda item: item["source_id"])]
     require(ids == sorted(EXPECTED_SOURCES), "enabled source set drifted")
     require(registry.get("required_source_ids") == ids, "registry source IDs must be sorted and exact")
@@ -397,9 +488,15 @@ def validate_examples(policy: dict[str, Any], sources: list[dict[str, Any]]) -> 
     request = load(REQUEST_EXAMPLE)
     result = load(RESULT_EXAMPLE)
     pypi = next(source for source in sources if source["source_id"] == "pypi.updates")
-    require(request.get("schema_version") == "fetch-request-v0", "request example schema version mismatch")
+    require(
+        request.get("schema_version") == "fetch-request-v0",
+        "request example schema version mismatch",
+    )
     require(request.get("source_id") == "pypi.updates", "request example wrong source")
-    require(request.get("url") == pypi["endpoint"]["url"], "request URL must derive from source contract")
+    require(
+        request.get("url") == pypi["endpoint"]["url"],
+        "request URL must derive from source contract",
+    )
     require(request.get("method") == "GET", "request method must be GET")
     require(request.get("credential_ref") is None, "request example must carry no credential")
     require(
@@ -416,7 +513,10 @@ def validate_examples(policy: dict[str, Any], sources: list[dict[str, Any]]) -> 
     )
     headers = request.get("request_headers")
     require(isinstance(headers, dict), "request headers missing")
-    require(set(headers) <= ALLOWED_REQUEST_HEADERS, "request example contains header outside V0 allowlist")
+    require(
+        set(headers) <= ALLOWED_REQUEST_HEADERS,
+        "request example contains header outside V0 allowlist",
+    )
     require("User-Agent" in headers, "PyPI request must identify FRONTIER with User-Agent")
     require(
         result.get("schema_version") == "bounded-fetch-result-v0",

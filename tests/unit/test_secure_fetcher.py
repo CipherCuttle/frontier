@@ -235,6 +235,65 @@ def test_retry_after_is_capped_by_frozen_policy() -> None:
     assert result.failure.retry_after_seconds == 3600
 
 
+def test_explicit_403_retry_after_is_rate_limited_not_permission_retry() -> None:
+    response = FakeResponse(403, (("Retry-After", "120"),))
+    fetcher = SecureHttpFetcher(
+        policy(),
+        resolver=lambda _host, _port: ("8.8.8.8",),
+        exchange=ScriptedExchange(response),
+    )
+
+    result = fetcher.fetch_sync(request())
+
+    assert result.outcome is FetchOutcome.FAILED
+    assert result.failure is not None
+    assert result.failure.code == "HTTP_403_RATE_LIMITED"
+    assert result.failure.retryable
+    assert result.failure.retry_after_seconds == 120
+
+
+def test_explicit_403_reset_epoch_is_capped_without_crossing_fetch_header_contract() -> None:
+    response = FakeResponse(
+        403,
+        (
+            ("X-RateLimit-Remaining", "0"),
+            ("X-RateLimit-Reset", "4102444800"),
+        ),
+    )
+    fetcher = SecureHttpFetcher(
+        policy(),
+        resolver=lambda _host, _port: ("8.8.8.8",),
+        exchange=ScriptedExchange(response),
+    )
+
+    result = fetcher.fetch_sync(request())
+
+    assert result.outcome is FetchOutcome.FAILED
+    assert result.failure is not None
+    assert result.failure.code == "HTTP_403_RATE_LIMITED"
+    assert result.failure.retryable
+    assert result.failure.retry_after_seconds == 3600
+    assert "X-RateLimit-Remaining" not in result.response_headers
+    assert "X-RateLimit-Reset" not in result.response_headers
+
+
+def test_403_without_explicit_rate_limit_evidence_remains_nonretryable() -> None:
+    response = FakeResponse(403, ())
+    fetcher = SecureHttpFetcher(
+        policy(),
+        resolver=lambda _host, _port: ("8.8.8.8",),
+        exchange=ScriptedExchange(response),
+    )
+
+    result = fetcher.fetch_sync(request())
+
+    assert result.outcome is FetchOutcome.FAILED
+    assert result.failure is not None
+    assert result.failure.code == "HTTP_403"
+    assert not result.failure.retryable
+    assert result.failure.retry_after_seconds is None
+
+
 def test_304_crosses_fetch_seam_as_empty_success_for_trusted_cache_decision() -> None:
     response = FakeResponse(304, (("ETag", '"same"'),))
     fetcher = SecureHttpFetcher(
