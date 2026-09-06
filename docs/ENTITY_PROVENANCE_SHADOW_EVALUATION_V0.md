@@ -33,8 +33,28 @@ The next safe question is therefore:
 Frozen shadow-evaluation corpus:
 
 - path: `fixtures/entity_provenance/shadow_evaluation_corpus_v0.json`;
-- case count: 18;
-- digest: `sha256:a210e838abb856f5472dc68503aae088599ba85e2de6a99840525fcd92c42892`.
+- schema: `frontier-entity-provenance-shadow-evaluation-corpus-v1`;
+- case count: 24;
+- exact Git blob SHA-1 identity: `58c91348a6f81f31d99aadf50a1c32fb22ac0882`.
+
+The corpus intentionally binds its first 20 executable inputs to exact case IDs from the already-frozen bridge corpus at the bridge corpus digest above. The final four cases contain complete inline canonical fixture inputs. A bridge-case reference is not a suggestion: it resolves to the exact observations, relations, metadata, and `as_of` from that frozen bridge case. Fixture substitution is forbidden.
+
+Every case now freezes:
+
+- exact `as_of`;
+- exact source-registry digest supplied to the evaluator;
+- exact entity/provenance candidate identities;
+- exact executable observation/relation input by immutable bridge-case reference or complete inline fixture;
+- exact mandatory evaluation pair(s);
+- exact integrity status;
+- exact entity and provenance decision outcome, including literal `NO_EVALUATION` / `NOT_EVALUABLE` where applicable;
+- exact PIT, malformed-evidence, native-signal, future-evidence, weak-relation, and direct-derivation counts;
+- exact source-coverage contract;
+- exact scientific quality statuses;
+- exact empty forbidden-inference claim set;
+- exact `UNAVAILABLE` promotion status.
+
+There are no advisory `may` outcomes in the frozen expected diagnostics.
 
 Exact source registry remains unchanged with digest:
 
@@ -44,14 +64,15 @@ Exact source registry remains unchanged with digest:
 
 This phase may implement only:
 
-- an offline/in-memory shadow evaluator over caller-supplied canonical observations and relations;
+- an offline/in-memory shadow evaluator over the exact frozen inputs defined by the corpus;
 - reuse of the merged `ENTITY_PROVENANCE_BRIDGE_V0` adapter;
 - execution of the frozen selected entity/provenance candidates;
 - deterministic experimental diagnostic reports;
-- hostile tests for PIT, drift, replay, semantic non-escalation, and underpowered evidence.
+- hostile tests for PIT, drift, replay, semantic non-escalation, underpowered evidence, and forbidden provenance-laundering signals.
 
 It MUST NOT:
 
+- choose convenient replacement fixtures after implementation results are visible;
 - read arbitrary current database state as a substitute for a reconstructed historical horizon;
 - add a migration or canonical schema field;
 - persist evaluation output;
@@ -76,13 +97,13 @@ For evaluation at `as_of = T`:
 - future observations and relations remain explicitly counted as excluded evidence;
 - ignored future observations must remain attributable to their source as well as globally;
 - changing input iteration order must not change the canonical report bytes or report digest;
-- source-registry digest mismatch makes the evaluation `INVALID_DRIFT` and invalidates quality counting.
+- source-registry digest mismatch makes the evaluation `INVALID_DRIFT` before quality counting.
 
 ## Entity evaluation contract
 
 The frozen entity candidate is `transparent-entity-hybrid-v0` supplied only through the merged bridge.
 
-The evaluator may report candidate behavior and coverage, including `SAME_ENTITY`, `DIFFERENT_ENTITY`, and `AMBIGUOUS` decision counts.
+The evaluator may report the exact frozen candidate behavior for each mandatory evaluation pair: `SAME_ENTITY`, `DIFFERENT_ENTITY`, `AMBIGUOUS`, or the explicit non-assessment states frozen by the corpus.
 
 However current bridge/native-ID-derived evidence is not an independent correctness oracle for that same candidate. Therefore V0 freezes:
 
@@ -114,7 +135,19 @@ and:
 
 unless a future separately merged authority changes the evidence substrate. This evaluator itself may not accept ad-hoc stronger relation inputs to escape the block.
 
-`REFERENCES`, `CORRECTS`, `RETRACTS`, GitHub fork booleans, same URLs, mirrored text, earliest observation, or source multiplicity may not be upgraded to `DIRECT_DERIVATIVE`, true origin, provenance root, or factual independence.
+The frozen hostile corpus explicitly exercises all presently identified laundering paths. None of these signals may become `DIRECT_DERIVATIVE`, true origin, provenance root, or factual independence:
+
+- `REFERENCES`;
+- `CORRECTS`;
+- `RETRACTS`;
+- exact/mirrored text;
+- earliest `observed_at`;
+- GitHub `fork` booleans without separately authorized explicit parent evidence;
+- shared canonical URLs, including a pair where both sources otherwise have supported bridge identities;
+- source multiplicity;
+- zero direct-derivation coverage.
+
+`NO_LINK_EVIDENCE` is never factual independence.
 
 ## Integrity status
 
@@ -122,7 +155,7 @@ V0 separates evaluator integrity from scientific quality.
 
 Allowed integrity states:
 
-- `COMPLETE_DIAGNOSTIC` — the frozen evaluator ran over conforming inputs and produced a deterministic report;
+- `COMPLETE_DIAGNOSTIC` — the frozen evaluator ran over conforming exact inputs and produced the exact deterministic diagnostics required by the corpus;
 - `INVALID_DRIFT` — frozen identity/config/registry/PIT constraints were violated.
 
 `COMPLETE_DIAGNOSTIC` does not mean candidate quality passed.
@@ -142,8 +175,10 @@ A deterministic shadow report must include at least:
 - malformed identity-field count;
 - ignored future observation count globally and per source;
 - ignored future relation count;
-- entity decision counts;
+- entity decision outcome(s);
+- provenance decision outcome(s);
 - direct-derivation evidence count;
+- forbidden-inference claims, which must remain the exact empty set for V0;
 - entity quality status;
 - provenance quality status;
 - promotion status `UNAVAILABLE`;
@@ -153,33 +188,38 @@ Zero values must remain literal zeros and must not be narrated into stronger con
 
 ## Frozen hostile evaluation corpus
 
-The 18 cases attack:
+The 24 executable cases attack:
 
 - supported native-identity continuity;
 - conflicting stable identities;
 - repository rename continuity via numeric ID only;
-- malformed CISA metadata;
+- malformed CISA/GitHub identity metadata;
 - unsupported arXiv/GDELT/HN identity upgrades;
 - PIT-future observation and relation leakage;
-- registry drift;
+- registry drift before quality counting;
 - deterministic replay under reordered inputs;
-- `REFERENCES`/`CORRECTS`/`RETRACTS` derivation escalation;
-- zero-provenance-coverage misinterpretation;
-- circular entity validation using the candidate's own input signal.
+- circular entity validation using the candidate's own input signal;
+- `REFERENCES` / `CORRECTS` / `RETRACTS` derivation escalation;
+- mirrored-text derivation/origin inference;
+- earliest-observation origin inference;
+- GitHub fork-boolean derivation inference;
+- shared-URL derivation/origin inference across two bridge-supported sources;
+- zero-provenance-coverage and source-multiplicity independence claims.
 
-The corpus is frozen before evaluator implementation. Its cases, statuses, and evidence limits may not be weakened after implementation results are visible.
+The corpus is frozen before evaluator implementation. Its inputs, expected outputs, statuses, and evidence limits may not be weakened after implementation results are visible.
 
 ## Success / falsification
 
 Implementation closes only if:
 
-- all 18 frozen cases pass;
-- deterministic replay is byte-identical;
-- registry drift fails closed;
+- all 24 frozen executable cases produce their exact mandatory diagnostics;
+- deterministic replay is byte-identical with an identical report digest;
+- registry drift fails closed before quality counting;
 - no future evidence leaks through PIT boundaries;
 - unsupported sources remain unsupported;
 - malformed native identity evidence fails closed;
-- no canonical relation becomes derivation evidence;
+- no canonical relation or forbidden laundering signal becomes derivation/origin/independence evidence;
+- `forbidden_inference_claims` remains empty in every frozen case;
 - entity quality remains `INSUFFICIENT_INDEPENDENT_GROUND_TRUTH`;
 - provenance quality remains `BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE`;
 - promotion remains `UNAVAILABLE`;
