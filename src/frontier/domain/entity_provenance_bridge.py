@@ -89,12 +89,14 @@ class SourceBridgeCoverage:
     entity_bridge_unsupported: int = 0
     native_id_signal_count: int = 0
     malformed_identity_field_count: int = 0
+    ignored_future_observation_count: int = 0
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
         return {
             "entity_bridge_degraded": self.entity_bridge_degraded,
             "entity_bridge_supported": self.entity_bridge_supported,
             "entity_bridge_unsupported": self.entity_bridge_unsupported,
+            "ignored_future_observation_count": self.ignored_future_observation_count,
             "malformed_identity_field_count": self.malformed_identity_field_count,
             "native_id_signal_count": self.native_id_signal_count,
             "total_pit_eligible_observations": self.total_pit_eligible_observations,
@@ -156,6 +158,7 @@ class _MutableCoverage:
     unsupported: int = 0
     native: int = 0
     malformed: int = 0
+    ignored_future: int = 0
 
     def freeze(self) -> SourceBridgeCoverage:
         return SourceBridgeCoverage(
@@ -165,6 +168,7 @@ class _MutableCoverage:
             entity_bridge_unsupported=self.unsupported,
             native_id_signal_count=self.native,
             malformed_identity_field_count=self.malformed,
+            ignored_future_observation_count=self.ignored_future,
         )
 
 
@@ -293,16 +297,15 @@ def _bridge_cisa(observation: Observation) -> BridgeObservation:
             reason="malformed-cisa-source-item-cve",
             malformed=1,
         )
-    metadata_cve = payload.source_metadata.get("cve_id")
-    if metadata_cve is not None and (
-        not isinstance(metadata_cve, str) or metadata_cve != source_key
-    ):
-        return _degraded(
-            observation,
-            entity_type="VULNERABILITY",
-            reason="cisa-cve-metadata-mismatch",
-            malformed=1,
-        )
+    if "cve_id" in payload.source_metadata:
+        metadata_cve = payload.source_metadata["cve_id"]
+        if not isinstance(metadata_cve, str) or metadata_cve != source_key:
+            return _degraded(
+                observation,
+                entity_type="VULNERABILITY",
+                reason="cisa-cve-metadata-mismatch",
+                malformed=1,
+            )
     return _supported(
         observation,
         entity_type="VULNERABILITY",
@@ -411,6 +414,7 @@ def build_entity_provenance_bridge(
             raise ValueError(f"source is outside frozen bridge registry: {source_id}")
         if observation.observed_at > as_of:
             ignored_future_observations += 1
+            mutable[source_id].ignored_future += 1
             continue
         value = bridge_observation(observation)
         bridged.append(value)
