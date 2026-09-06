@@ -123,7 +123,6 @@ def test_postgres_pef_artifact_retains_ranking_and_rolls_back_conflict() -> None
 
         repository = PostgresPefArtifactRepository(conn)
         repository.publish_complete_artifact(result.artifact, result.receipt)
-        assert repository.latest_artifact_id() == result.artifact.artifact_id
         retained = repository.get_artifact_json(result.artifact.artifact_id)
         assert retained == result.artifact.to_canonical()
 

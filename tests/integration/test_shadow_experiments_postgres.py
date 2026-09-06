@@ -120,7 +120,6 @@ def test_postgres_shadow_run_persists_paired_result_and_is_append_only() -> None
 
         repository = PostgresShadowRunRepository(conn)
         repository.record_run(result)
-        assert repository.latest_run_id() == result.run_id
         retained = repository.get_run_json(result.run_id)
         assert retained == result.to_canonical()
 

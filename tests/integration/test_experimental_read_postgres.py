@@ -287,6 +287,10 @@ def test_latest_summaries_round_trip_identity_fields() -> None:
         assert batch.batch_id == "featurebatch_" + _hex("batch")
         assert batch.vector_count == 2
         assert batch.authority_state == "EXPERIMENTAL_SHADOW"
+        # Proves the adapter reads the persisted feature_schema_version column
+        # (migration 0008) while exposing the public schema_version field.
+        assert batch.schema_version == "advanced-features-v0"
+        assert batch.algorithm_version == "advanced-transparent-features-v0"
 
         analyses = repository.latest_analysis_artifacts()
         assert {

@@ -187,7 +187,8 @@ class PostgresExperimentalReadRepository:
             SELECT batch_id, batch_digest, status, as_of, generated_at,
                    control_snapshot_id, control_receipt_id,
                    episode_universe_digest, configuration_digest,
-                   schema_version, algorithm_version, authority_state
+                   feature_schema_version AS schema_version,
+                   algorithm_version, authority_state
             FROM feature_vectors
             WHERE as_of <= COALESCE(%s, 'infinity'::timestamptz)
             ORDER BY as_of DESC, feature_vector_id DESC
