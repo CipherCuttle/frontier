@@ -34,7 +34,7 @@ Frozen shadow-evaluation corpus:
 
 - path: `fixtures/entity_provenance/shadow_evaluation_corpus_v0.json`;
 - case count: 18;
-- digest: `sha256:cc108608c68b1db1356b720f630b29707f4ef013c3af4226847002f3b513cd7c`.
+- digest: `sha256:a210e838abb856f5472dc68503aae088599ba85e2de6a99840525fcd92c42892`.
 
 Exact source registry remains unchanged with digest:
 
