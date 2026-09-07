@@ -85,7 +85,10 @@ def main() -> int:
         candidate = require_dict(document.get("candidate"), "candidate")
         if candidate.get("candidate_id") != "prospective-primary-emission-freshness-v0":
             return fail("unexpected candidate_id")
-        if candidate.get("algorithm_version") != "prospective-primary-emission-freshness-lexicographic-v0":
+        if (
+            candidate.get("algorithm_version")
+            != "prospective-primary-emission-freshness-lexicographic-v0"
+        ):
             return fail("unexpected candidate algorithm_version")
         if candidate.get("deterministic") is not True:
             return fail("candidate must remain deterministic")
@@ -96,13 +99,18 @@ def main() -> int:
 
         configuration = require_dict(candidate.get("configuration"), "candidate.configuration")
         calculated_digest = str(sha256_digest(canonical_json_bytes(configuration)))
-        if calculated_digest != CONFIG_DIGEST or candidate.get("configuration_digest") != CONFIG_DIGEST:
+        if (
+            calculated_digest != CONFIG_DIGEST
+            or candidate.get("configuration_digest") != CONFIG_DIGEST
+        ):
             return fail("candidate configuration digest drifted")
         if configuration.get("ranking_order") != RANKING_ORDER:
             return fail("candidate ranking order drifted")
         if configuration.get("score_semantics") != "NO_SCALAR_SCORE_LEXICOGRAPHIC_RANK_ONLY":
             return fail("candidate score semantics drifted")
-        eligibility = require_dict(configuration.get("activity_eligibility"), "activity_eligibility")
+        eligibility = require_dict(
+            configuration.get("activity_eligibility"), "activity_eligibility"
+        )
         if eligibility != {
             "eligible_reasons": ["ACTIVE_ENRICHMENT", "DISCOVERY", "SCHEDULED"],
             "exclude_backfill": True,
@@ -137,7 +145,9 @@ def main() -> int:
         if schedule != expected_schedule:
             return fail("snapshot schedule drifted")
 
-        paired = require_dict(evaluation.get("paired_snapshot_integrity"), "paired_snapshot_integrity")
+        paired = require_dict(
+            evaluation.get("paired_snapshot_integrity"), "paired_snapshot_integrity"
+        )
         if paired != {
             "candidate_and_control_same_as_of": True,
             "candidate_must_reference_exact_control_snapshot_id_and_receipt_id": True,
@@ -167,7 +177,10 @@ def main() -> int:
                 return fail(f"{domain} anchor source drifted")
         if domains.get("minimum_qualifying_domains") != 2:
             return fail("minimum domain count drifted")
-        if domains.get("promotion_rule") != "EVERY_DOMAIN_MEETING_SAMPLE_ADEQUACY_MUST_PASS;_AT_LEAST_TWO_MUST_MEET_SAMPLE_ADEQUACY":
+        if (
+            domains.get("promotion_rule")
+            != "EVERY_DOMAIN_MEETING_SAMPLE_ADEQUACY_MUST_PASS;_AT_LEAST_TWO_MUST_MEET_SAMPLE_ADEQUACY"
+        ):
             return fail("domain promotion rule drifted")
 
         opportunity = require_dict(evaluation.get("opportunity"), "opportunity")
@@ -189,7 +202,10 @@ def main() -> int:
             return fail("observed positive evidence must remain positive")
 
         precision = require_dict(evaluation.get("precision"), "precision")
-        if precision.get("point_floor") != "candidate_precision >= control_precision in every adequately sampled domain":
+        if (
+            precision.get("point_floor")
+            != "candidate_precision >= control_precision in every adequately sampled domain"
+        ):
             return fail("precision point floor drifted")
         if precision.get("newcombe_z") != "1.959963984540054":
             return fail("precision z value drifted")
@@ -223,7 +239,9 @@ def main() -> int:
         if multiplicity.get("interim_outcome_based_early_stop") is not False:
             return fail("interim outcome stopping must remain forbidden")
 
-        freeze = require_dict(document.get("candidate_freeze_requirements"), "candidate_freeze_requirements")
+        freeze = require_dict(
+            document.get("candidate_freeze_requirements"), "candidate_freeze_requirements"
+        )
         if freeze != {
             "after_implementation_and_test": True,
             "before_first_confirmatory_boundary": True,

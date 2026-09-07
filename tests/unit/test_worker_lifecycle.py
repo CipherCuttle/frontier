@@ -507,47 +507,45 @@ def test_cli_worker_composition_wires_experiment_orchestrator(
     import frontier.adapters.postgres.readiness as readiness_mod
     import frontier.adapters.postgres.worker_ops as worker_ops_mod
     import frontier.cli.main as cli_main
-    from frontier.cli.main import _build_worker_components
+    from frontier.cli.main import _build_worker_components  # pyright: ignore[reportPrivateUsage]
 
     class _FakeConn:
         def close(self) -> None: ...
 
-    def _fake(name: str) -> object:
-        return lambda *args, **kwargs: f"{name}({args!r})"  # type: ignore[return-value]
+    def _fake_connect(url: str) -> _FakeConn:
+        return _FakeConn()
 
-    registry = SourceRegistry(
-        sources={}, source_registry_version=sha256_digest(b"cli-worker-test")
-    )
-    monkeypatch.setattr(psycopg, "connect", lambda url: _FakeConn())
-    monkeypatch.setattr(cli_main, "load_fetch_policy", lambda root: None)
-    monkeypatch.setattr(cli_main, "load_source_registry", lambda root: registry)
-    monkeypatch.setattr(cli_main, "SecureHttpFetcher", lambda policy: None)
-    monkeypatch.setattr(cli_main, "AcquisitionService", _fake("service"))
-    monkeypatch.setattr(
-        readiness_mod, "verify_database_readiness", lambda conn: None
-    )
-    monkeypatch.setattr(
-        postgres_pkg, "PostgresEvidenceStore", _fake("store"), raising=False
-    )
-    monkeypatch.setattr(worker_ops_mod, "PostgresWorkerLease", _fake("lease"))
-    monkeypatch.setattr(
-        worker_ops_mod, "PostgresWorkerHeartbeatStore", _fake("heartbeat")
-    )
-    monkeypatch.setattr(worker_ops_mod, "PostgresWorkerOpsProbe", _fake("probe"))
-    monkeypatch.setattr(
-        attempts_mod, "PostgresExperimentAttemptRepository", _fake("attempts")
-    )
-    monkeypatch.setattr(
-        attempts_mod, "PostgresFreezeBindingResolver", _fake("resolver")
-    )
-    monkeypatch.setattr(
-        attempts_mod, "PostgresShadowRunPersister", _fake("persister")
-    )
-    monkeypatch.setattr(
-        intelligence_mod,
-        "PostgresBaselineIntelligenceRepository",
-        _fake("baseline"),
-    )
+    def _no_policy(root: Path) -> None:
+        return None
+
+    registry = SourceRegistry(sources={}, source_registry_version=sha256_digest(b"cli-worker-test"))
+
+    def _registry(root: Path) -> SourceRegistry:
+        return registry
+
+    def _no_fetcher(policy: object) -> None:
+        return None
+
+    def _no_op(*args: object, **kwargs: object) -> None:
+        return None
+
+    def _stub(*args: object, **kwargs: object) -> object:
+        return object()
+
+    monkeypatch.setattr(psycopg, "connect", _fake_connect)
+    monkeypatch.setattr(cli_main, "load_fetch_policy", _no_policy)
+    monkeypatch.setattr(cli_main, "load_source_registry", _registry)
+    monkeypatch.setattr(cli_main, "SecureHttpFetcher", _no_fetcher)
+    monkeypatch.setattr(cli_main, "AcquisitionService", _stub)
+    monkeypatch.setattr(readiness_mod, "verify_database_readiness", _no_op)
+    monkeypatch.setattr(postgres_pkg, "PostgresEvidenceStore", _stub, raising=False)
+    monkeypatch.setattr(worker_ops_mod, "PostgresWorkerLease", _stub)
+    monkeypatch.setattr(worker_ops_mod, "PostgresWorkerHeartbeatStore", _stub)
+    monkeypatch.setattr(worker_ops_mod, "PostgresWorkerOpsProbe", _stub)
+    monkeypatch.setattr(attempts_mod, "PostgresExperimentAttemptRepository", _stub)
+    monkeypatch.setattr(attempts_mod, "PostgresFreezeBindingResolver", _stub)
+    monkeypatch.setattr(attempts_mod, "PostgresShadowRunPersister", _stub)
+    monkeypatch.setattr(intelligence_mod, "PostgresBaselineIntelligenceRepository", _stub)
 
     _conn, worker = _build_worker_components(
         "postgresql://fake.invalid/frontier",
@@ -555,11 +553,12 @@ def test_cli_worker_composition_wires_experiment_orchestrator(
         worker_id="frontier-worker",
         idle_seconds=30.0,
     )
-    orchestrator = worker._experiment_orchestrator
+    orchestrator = worker._experiment_orchestrator  # pyright: ignore[reportPrivateUsage]
     assert orchestrator is not None
     assert isinstance(orchestrator, ExperimentOrchestrator)
-    assert orchestrator._run_class == "DEV"  # dev run-class default
-    assert orchestrator._canonical_context is False  # confirmatory stays gated
+    assert orchestrator._run_class == "DEV"  # pyright: ignore[reportPrivateUsage]
+    # dev run-class default; confirmatory stays gated
+    assert orchestrator._canonical_context is False  # pyright: ignore[reportPrivateUsage]
 
 
 def test_run_forever_with_orchestrator_writes_experiment_metrics() -> None:

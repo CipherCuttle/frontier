@@ -672,9 +672,7 @@ class TestFrozenDomainUniverseGate:
             outcome = OutcomeLabel.POSITIVE if index < 10 else OutcomeLabel.NEGATIVE
             observed_at = _at(index + 1)
             mixed = _anchor(f"gmix-{index}", observed_at=observed_at)
-            cross = _anchor(
-                f"gmix-{index}-kev", source_id="cisa.kev", observed_at=observed_at
-            )
+            cross = _anchor(f"gmix-{index}-kev", source_id="cisa.kev", observed_at=observed_at)
             groups.append(_group(mixed, outcome=outcome, other_anchors=(cross,)))
             observation_ids.append(mixed.observation_id)
             for domain in domains:
@@ -692,9 +690,7 @@ class TestFrozenDomainUniverseGate:
         )
         return tuple(groups), snapshot
 
-    def _evaluate_universe(
-        self, domains: tuple[str, ...], *, durable: bool
-    ):
+    def _evaluate_universe(self, domains: tuple[str, ...], *, durable: bool):
         groups, snapshot = self._application_groups(domains)
         freeze = _freeze_receipt(FROZEN_FREEZE)
         if durable:

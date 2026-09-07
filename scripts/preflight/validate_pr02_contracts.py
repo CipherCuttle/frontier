@@ -74,8 +74,7 @@ EXPECTED_SOURCES: dict[str, dict[str, Any]] = {
         "roles": ["BEHAVIORAL", "PRIMARY_EMISSION"],
         "transport": "JSON_HTTP",
         "endpoint": (
-            "https://www.cisa.gov/sites/default/files/feeds/"
-            "known_exploited_vulnerabilities.json"
+            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
         ),
         "primary": True,
         "finite": False,
@@ -246,8 +245,7 @@ def validate_schemas() -> None:
     source_schema = load(ROOT / "contracts/source/source_contract_v0.schema.json")
     endpoint_schema = source_schema["properties"]["endpoint"]
     require(
-        isinstance(endpoint_schema.get("allOf"), list)
-        and len(endpoint_schema["allOf"]) == 2,
+        isinstance(endpoint_schema.get("allOf"), list) and len(endpoint_schema["allOf"]) == 2,
         "SourceContract auth/credential conditional missing",
     )
 
@@ -380,8 +378,7 @@ def validate_source_contract(source: dict[str, Any]) -> None:
             "CISA fallback must not become independent corroboration",
         )
         require(
-            capability.get("schema_reference")
-            == "https://www.cisa.gov/sites/default/files/feeds/"
+            capability.get("schema_reference") == "https://www.cisa.gov/sites/default/files/feeds/"
             "known_exploited_vulnerabilities_schema.json",
             "CISA schema reference changed unexpectedly",
         )
@@ -472,15 +469,22 @@ def validate_registry(sources: list[dict[str, Any]]) -> None:
     )
     ids = [source["source_id"] for source in sorted(sources, key=lambda item: item["source_id"])]
     require(ids == sorted(EXPECTED_SOURCES), "enabled source set drifted")
-    require(registry.get("required_source_ids") == ids, "registry source IDs must be sorted and exact")
+    require(
+        registry.get("required_source_ids") == ids, "registry source IDs must be sorted and exact"
+    )
     paths = registry.get("source_contract_paths")
     require(isinstance(paths, list) and paths == sorted(paths), "registry paths must be sorted")
     require(len(paths) == len(sources), "registry source/path cardinality mismatch")
     version = registry.get("source_registry_version")
-    require(isinstance(version, str) and DIGEST.fullmatch(version), "registry digest text malformed")
-    digest = "sha256:" + hashlib.sha256(
-        canonical_json(sorted(sources, key=lambda item: item["source_id"])).encode("utf-8")
-    ).hexdigest()
+    require(
+        isinstance(version, str) and DIGEST.fullmatch(version), "registry digest text malformed"
+    )
+    digest = (
+        "sha256:"
+        + hashlib.sha256(
+            canonical_json(sorted(sources, key=lambda item: item["source_id"])).encode("utf-8")
+        ).hexdigest()
+    )
     require(version == digest, f"source registry digest mismatch: expected {digest}")
 
 

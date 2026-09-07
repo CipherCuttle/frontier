@@ -78,7 +78,9 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     data = json.loads(CORPUS.read_text(encoding="utf-8"))
     require(data.get("schema_version") == EXPECTED_SCHEMA, "schema version drift")
-    require(data.get("runtime_implementation_authorized") is False, "authority must predate runtime")
+    require(
+        data.get("runtime_implementation_authorized") is False, "authority must predate runtime"
+    )
     require(data.get("api_version") == EXPECTED_API_VERSION, "API version drift")
     require(data.get("response_schema_family") == EXPECTED_RESPONSE_SCHEMA, "response schema drift")
     require(data.get("view_policy_version") == EXPECTED_VIEW_POLICY, "view policy drift")
