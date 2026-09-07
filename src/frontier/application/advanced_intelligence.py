@@ -42,6 +42,14 @@ class PefRankingRun:
     receipt: ProjectionReceipt
 
 
+@dataclass(frozen=True, slots=True)
+class ShadowExperimentExecution:
+    """Paired shadow run plus the exact candidate artifact/receipt it binds."""
+
+    candidate: PefRankingRun
+    run: ShadowExperimentRun
+
+
 def run_pef_v0_ranking(
     observations: tuple[BaselineObservationInput, ...],
     *,
@@ -95,7 +103,21 @@ def _require_control_identity(
         raise ValueError("control receipt ranking policy version mismatch")
 
 
-def run_shadow_experiment(
+def _require_freeze_identity(candidate_freeze_receipt: CandidateFreezeReceipt | None) -> str | None:
+    if candidate_freeze_receipt is None:
+        return None
+    if candidate_freeze_receipt.status is not FreezeStatus.FROZEN:
+        raise ValueError("drifted candidate freeze receipt cannot bind a shadow experiment")
+    if candidate_freeze_receipt.candidate_id != PEF_CANDIDATE_ID:
+        raise ValueError("candidate freeze receipt candidate id mismatch")
+    if candidate_freeze_receipt.experiment_id != PEF_EXPERIMENT_ID:
+        raise ValueError("candidate freeze receipt experiment id mismatch")
+    if candidate_freeze_receipt.configuration_digest != PEF_CONFIGURATION_DIGEST:
+        raise ValueError("candidate freeze receipt configuration digest mismatch")
+    return candidate_freeze_receipt.receipt_id
+
+
+def run_shadow_experiment_execution(
     observations: tuple[BaselineObservationInput, ...],
     *,
     control_snapshot: BaselineSnapshot,
@@ -103,33 +125,17 @@ def run_shadow_experiment(
     generated_at: datetime,
     source_registry_version: Digest,
     candidate_freeze_receipt: CandidateFreezeReceipt | None = None,
-) -> ShadowExperimentRun:
-    """Run the control arm and the PEF_V0 candidate arm on identical inputs.
+) -> ShadowExperimentExecution:
+    """Run both arms and retain the candidate artifact needed for durable replay.
 
-    Both arms consume exactly the same observation universe, ``as_of`` (the
-    control snapshot's knowledge horizon), source registry version, health
-    state, and canonical evidence (R1): the candidate reuses the existing
-    control snapshot and never regroups or re-baselines anything (R6). The
-    control snapshot is only read, never written. If the candidate arm raises,
-    the paired run is recorded as FAILED with an explicit failure reason (R8)
-    instead of silently presenting the control arm alone. When a candidate
-    freeze receipt is supplied, it must be FROZEN and bound to this candidate
-    (R8: a DRIFTED freeze invalidates confirmatory evidence and never binds).
+    This is the persistence-oriented form of :func:`run_shadow_experiment`.
+    The paired run and candidate artifact are produced from the same invocation,
+    inputs, ``as_of`` and ``generated_at`` so an operator can append both
+    artifacts without recomputing the candidate arm later.
     """
-    if candidate_freeze_receipt is not None:
-        if candidate_freeze_receipt.status is not FreezeStatus.FROZEN:
-            raise ValueError("drifted candidate freeze receipt cannot bind a shadow experiment")
-        if candidate_freeze_receipt.candidate_id != PEF_CANDIDATE_ID:
-            raise ValueError("candidate freeze receipt candidate id mismatch")
-        if candidate_freeze_receipt.experiment_id != PEF_EXPERIMENT_ID:
-            raise ValueError("candidate freeze receipt experiment id mismatch")
-        if candidate_freeze_receipt.configuration_digest != PEF_CONFIGURATION_DIGEST:
-            raise ValueError("candidate freeze receipt configuration digest mismatch")
+    freeze_receipt_id = _require_freeze_identity(candidate_freeze_receipt)
     _require_control_identity(control_snapshot, control_receipt)
     as_of = control_snapshot.as_of
-    freeze_receipt_id = (
-        None if candidate_freeze_receipt is None else candidate_freeze_receipt.receipt_id
-    )
     try:
         candidate = run_pef_v0_ranking(
             observations,
@@ -150,19 +156,21 @@ def run_shadow_experiment(
         candidate_receipt = build_pef_receipt(
             candidate_artifact, observations=observations, control_snapshot=control_snapshot
         )
+        candidate = PefRankingRun(artifact=candidate_artifact, receipt=candidate_receipt)
         run = build_shadow_experiment_run(
             control_snapshot=control_snapshot,
             control_receipt=control_receipt,
-            candidate_artifact=candidate_artifact,
-            candidate_receipt=candidate_receipt,
+            candidate_artifact=candidate.artifact,
+            candidate_receipt=candidate.receipt,
             as_of=as_of,
             generated_at=generated_at,
             candidate_freeze_receipt_id=freeze_receipt_id,
         )
         if run.status is not ShadowRunStatus.FAILED:
             raise RuntimeError("failed candidate arm must produce a FAILED shadow run") from error
-        return run
-    return build_shadow_experiment_run(
+        return ShadowExperimentExecution(candidate=candidate, run=run)
+
+    run = build_shadow_experiment_run(
         control_snapshot=control_snapshot,
         control_receipt=control_receipt,
         candidate_artifact=candidate.artifact,
@@ -171,3 +179,35 @@ def run_shadow_experiment(
         generated_at=generated_at,
         candidate_freeze_receipt_id=freeze_receipt_id,
     )
+    return ShadowExperimentExecution(candidate=candidate, run=run)
+
+
+def run_shadow_experiment(
+    observations: tuple[BaselineObservationInput, ...],
+    *,
+    control_snapshot: BaselineSnapshot,
+    control_receipt: ProjectionReceipt,
+    generated_at: datetime,
+    source_registry_version: Digest,
+    candidate_freeze_receipt: CandidateFreezeReceipt | None = None,
+) -> ShadowExperimentRun:
+    """Run the control and PEF_V0 candidate arms on identical inputs.
+
+    Both arms consume exactly the same observation universe, ``as_of`` (the
+    control snapshot's knowledge horizon), source registry version, health
+    state, and canonical evidence (R1): the candidate reuses the existing
+    control snapshot and never regroups or re-baselines anything (R6). The
+    control snapshot is only read, never written. If the candidate arm raises,
+    the paired run is recorded as FAILED with an explicit failure reason (R8)
+    instead of silently presenting the control arm alone. When a candidate
+    freeze receipt is supplied, it must be FROZEN and bound to this candidate
+    (R8: a DRIFTED freeze invalidates confirmatory evidence and never binds).
+    """
+    return run_shadow_experiment_execution(
+        observations,
+        control_snapshot=control_snapshot,
+        control_receipt=control_receipt,
+        generated_at=generated_at,
+        source_registry_version=source_registry_version,
+        candidate_freeze_receipt=candidate_freeze_receipt,
+    ).run
