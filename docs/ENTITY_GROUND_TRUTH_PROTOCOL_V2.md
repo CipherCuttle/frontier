@@ -6,7 +6,7 @@ Parent main: `bee2b5a74a7d4df630c72330ea6c576571ffa305`
 
 Machine authority: `experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_protocol_v2_authority.json`
 
-Authority Git blob: `15419bbeec0bd0e73d03e12b3476eac299411e1a`
+Authority Git blob: `ef7a0a994707358bf315ea89bb00a167bc2e7d0d`
 
 ## Purpose
 
@@ -28,7 +28,7 @@ Instead, v2 prospectively freezes the complete construction contract before any 
   - Git blob: `e61330b6ac94ccb52817fbe4078f63bfcd242732`
   - 24 synthetic hostile cases
 - Independent recomputation test: `tests/unit/test_entity_ground_truth_protocol_v2_reproducibility.py`
-  - Git blob: `572eedd2022e8b3fe76ea339baf79c6f5d406774`
+  - Git blob: `3d0646d8fdf40c7abb6dc2a1578844ebe0888d58`
 
 ## What is now prospectively frozen
 
