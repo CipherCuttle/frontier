@@ -83,7 +83,9 @@ Structured fields such as timestamps, authority states, source roles, health, co
 
 ### 4. Point-in-time integrity applies to the agent plane
 
-A current semantic projection must not silently answer a historical `as_of` query.
+A historical `as_of` request MUST fail closed unless every derived projection used to answer it is proven valid for the requested horizon. Disclosure that a current or later projection was used is not sufficient.
+
+For a historical answer, evidence inputs, renderer state, embedding/model state when applicable, and index/retrieval state when applicable must all be horizon-valid under the separately frozen protocol. If that proof is unavailable, the agent plane must refuse that projection or fall back to point-in-time-safe canonical retrieval rather than answer from later state.
 
 Every semantic/derived projection must bind at least:
 - projection identity/version;
@@ -92,7 +94,7 @@ Every semantic/derived projection must bind at least:
 - embedding model identity/version when applicable;
 - index/retrieval identity when applicable.
 
-Historical agent evaluation must distinguish truly point-in-time retrieval from retrospective retrieval using later representations.
+Retrospective retrieval using later representations may be used only in separately labeled evaluation/analysis. It MUST NOT be returned as the answer to the historical query or represented as point-in-time-correct context.
 
 ### 5. Context selection is a form of ranking
 
