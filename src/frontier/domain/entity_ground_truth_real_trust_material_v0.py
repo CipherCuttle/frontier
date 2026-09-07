@@ -340,13 +340,9 @@ def _validate_adjudicators(
     if raw is None or len(raw) != 2 or set(expected_pop_challenges) != _ADJUDICATOR_ROLES:
         return None
     challenges = list(expected_pop_challenges.values())
-    if (
-        any(
-            not isinstance(challenge, bytes) or len(challenge) < POP_CHALLENGE_MIN_BYTES
-            for challenge in challenges
-        )
-        or len(set(challenges)) != 2
-    ):
+    if any(len(challenge) < POP_CHALLENGE_MIN_BYTES for challenge in challenges) or len(
+        set(challenges)
+    ) != 2:
         return None
 
     expected_roles = ["ADJUDICATOR_1", "ADJUDICATOR_2"]
@@ -515,7 +511,7 @@ def _validate_controller_attestations(
         if not backend.verify_external_attestation(
             kind="ROLE_CONTROLLER",
             verification_material=material,
-            payload=payload,
+            payload=cast(JsonObject, payload),
             proof=proof,
             as_of=as_of,
         ):
@@ -597,7 +593,7 @@ def _validate_provenance(
             if not backend.verify_external_attestation(
                 kind="PROVENANCE_ROOT",
                 verification_material=root_material,
-                payload=root_payload,
+                payload=cast(JsonObject, root_payload),
                 proof=root_proof,
                 as_of=as_of,
             ):
@@ -663,7 +659,7 @@ def _validate_provenance(
             if not backend.verify_external_attestation(
                 kind="PROVENANCE_EDGE",
                 verification_material=material,
-                payload=payload,
+                payload=cast(JsonObject, payload),
                 proof=proof,
                 as_of=as_of,
             ):
