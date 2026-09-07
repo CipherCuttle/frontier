@@ -814,9 +814,12 @@ def validate_v2_packet(
                 or assessment_evidence_id in assessment_map
             ):
                 return _reject("REJECT_PROTOCOL_DRIFT", "assessment-evidence-binding")
-            if assessment_direction not in {"SUPPORTS_SAME", "SUPPORTS_DIFFERENT"}:
+            if not isinstance(assessment_direction, str) or assessment_direction not in {
+                "SUPPORTS_SAME",
+                "SUPPORTS_DIFFERENT",
+            }:
                 return _reject("REJECT_PROTOCOL_DRIFT", "assessment-direction")
-            assessment_map[assessment_evidence_id] = cast(str, assessment_direction)
+            assessment_map[assessment_evidence_id] = assessment_direction
         if set(assessment_map) != evidence_id_set:
             return _reject("REJECT_PROTOCOL_DRIFT", "assessment-evidence-coverage")
         submission_subjects.append(subject_id)
