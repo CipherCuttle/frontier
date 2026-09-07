@@ -102,20 +102,29 @@ jobs:
           if not text.startswith("# ruff: noqa: E402\n"):
               text = "# ruff: noqa: E402\n" + text
           pgtest.write_text(text, encoding="utf-8")
+
+          replacements = {
+              "migrations/versions/0013_freeze_publication_authority.py": (
+                  'revision = "0013_freeze_publication_authority"',
+                  'revision = "0013_freeze_publication"',
+              ),
+              "src/frontier/adapters/postgres/readiness.py": (
+                  'EXPECTED_DATABASE_REVISION = "0013_freeze_publication_authority"',
+                  'EXPECTED_DATABASE_REVISION = "0013_freeze_publication"',
+              ),
+              "tests/integration/test_experiment_lifecycle_postgres.py": (
+                  'assert readiness.migration_revision == "0013_freeze_publication_authority"',
+                  'assert readiness.migration_revision == "0013_freeze_publication"',
+              ),
+          }
+          for filename, (old, new) in replacements.items():
+              path = Path(filename)
+              body = path.read_text(encoding="utf-8")
+              if body.count(old) != 1:
+                  raise SystemExit(f"{filename}: expected exactly one revision replacement")
+              path.write_text(body.replace(old, new), encoding="utf-8")
           PY
           uv run ruff format src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py migrations/versions/0013_freeze_publication_authority.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py src/frontier/application/candidate_freeze.py src/frontier/application/drift_sentry.py src/frontier/application/experiment_orchestration.py src/frontier/adapters/postgres/experiment_attempts.py src/frontier/adapters/postgres/readiness.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py tests/integration/test_experiment_lifecycle_postgres.py
-          python - <<'PY'
-          from pathlib import Path
-
-          adapter = Path("src/frontier/adapters/postgres/freeze_publication.py")
-          text = adapter.read_text(encoding="utf-8")
-          text = text.replace(
-              '"SELECT publication_digest FROM candidate_freeze_publications WHERE receipt_id=%s",',
-              '"SELECT publication_digest FROM candidate_freeze_publications "\n'
-              '                    "WHERE receipt_id=%s",',
-          )
-          adapter.write_text(text, encoding="utf-8")
-          PY
           uv run ruff check --fix src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py
           uv run ruff format src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py
       - name: Verify G2-02
