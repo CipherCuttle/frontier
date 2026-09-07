@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+
+import pytest
 
 from frontier.application.evaluation import (
     _enforce_resolved_sample_floor,  # pyright: ignore[reportPrivateUsage]
@@ -13,7 +16,7 @@ from frontier.domain.candidate_freeze import (
     build_candidate_freeze_receipt,
 )
 from frontier.domain.digests import Digest
-from frontier.domain.evaluation import ArmPrecision, DomainEvaluation
+from frontier.domain.evaluation import ArmPrecision, DomainEvaluation, sample_adequacy_pass
 
 FROZEN_AT = datetime(2026, 9, 7, 17, tzinfo=UTC)
 
@@ -38,6 +41,18 @@ def test_freeze_rejects_unavailable_registry_entry_digests() -> None:
     assert "source registry entry digests unavailable" in receipt.drift_reasons
 
 
+def test_frozen_receipt_invariant_rejects_missing_registry_entry_digests() -> None:
+    receipt = build_candidate_freeze_receipt(
+        _freeze_inputs(registry_entries_present=True), frozen_at=FROZEN_AT
+    )
+    assert receipt.status is FreezeStatus.FROZEN
+
+    with pytest.raises(
+        ValueError, match="FROZEN freeze receipt requires source registry entry digests"
+    ):
+        replace(receipt, registry_entry_digests=None)
+
+
 def _domain_evaluation(*, resolved: int, denominator: int) -> DomainEvaluation:
     return DomainEvaluation(
         domain="SOFTWARE_PACKAGES",
@@ -52,6 +67,17 @@ def _domain_evaluation(*, resolved: int, denominator: int) -> DomainEvaluation:
         median_lead_time_advantage_seconds=Decimal("1"),
         qualifies_sample_adequacy=True,
     )
+
+
+def test_domain_sample_adequacy_rejects_27_resolved_plus_3_unresolved() -> None:
+    evaluation = _domain_evaluation(resolved=27, denominator=30)
+    assert evaluation.resolved_label_fraction_bps == 9000
+    assert sample_adequacy_pass(evaluation) is False
+
+
+def test_domain_sample_adequacy_preserves_exact_30_resolved_floor() -> None:
+    evaluation = _domain_evaluation(resolved=30, denominator=30)
+    assert sample_adequacy_pass(evaluation) is True
 
 
 def test_confirmatory_path_rejects_27_resolved_plus_3_unresolved() -> None:
