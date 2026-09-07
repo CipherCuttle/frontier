@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -31,6 +33,9 @@ from frontier.domain.evaluation import SNAPSHOT_CADENCE_SECONDS
 from frontier.domain.receipt import ProjectionReceipt
 
 RANKING_WINDOW_SECONDS = 2_419_200
+_FREEZE_RECEIPT_PUBLICATION_PATH_RE = re.compile(
+    r"^experiments/advanced_intelligence/pef_v0/candidate_freeze_receipt_v[0-9]+\.json$"
+)
 
 
 class CandidateFreezeReceiptRepository(Protocol):
@@ -95,6 +100,84 @@ def _optional_str(value: object, *, name: str) -> str | None:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{name} must be a non-empty string or null")
     return value
+
+
+def _repo_relative_path(root: Path, path: Path) -> str:
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+    except (OSError, ValueError) as error:
+        raise ValueError("candidate freeze receipt must be inside the repository root") from error
+    return relative.as_posix()
+
+
+def _runtime_git_delta(root: Path, implementation_commit: str | None) -> tuple[tuple[str, str], ...]:
+    if implementation_commit is None:
+        raise RuntimeError("candidate freeze receipt is missing implementation commit identity")
+    try:
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", implementation_commit, "HEAD"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+        if ancestor.returncode != 0:
+            raise RuntimeError(
+                "frozen implementation commit is unavailable or not an ancestor of runtime HEAD"
+            )
+        diff = subprocess.run(
+            [
+                "git",
+                "diff",
+                "--name-status",
+                "-z",
+                "--no-renames",
+                implementation_commit,
+                "HEAD",
+                "--",
+            ],
+            cwd=root,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("candidate freeze Git identity cannot be verified") from error
+
+    fields = diff.stdout.split(b"\0")
+    if fields and fields[-1] == b"":
+        fields.pop()
+    if len(fields) % 2 != 0:
+        raise RuntimeError("candidate freeze Git delta is malformed")
+
+    delta: list[tuple[str, str]] = []
+    for index in range(0, len(fields), 2):
+        try:
+            status = fields[index].decode("ascii")
+            path = fields[index + 1].decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise RuntimeError("candidate freeze Git delta contains an undecodable path") from error
+        delta.append((status, path))
+    return tuple(delta)
+
+
+def _require_exact_receipt_publication_delta(
+    root: Path,
+    receipt: CandidateFreezeReceipt,
+    *,
+    receipt_path: Path,
+) -> None:
+    expected_path = _repo_relative_path(root, receipt_path)
+    if _FREEZE_RECEIPT_PUBLICATION_PATH_RE.fullmatch(expected_path) is None:
+        raise ValueError("candidate freeze receipt path is not a canonical versioned publication path")
+    delta = _runtime_git_delta(root, receipt.implementation_commit)
+    expected_delta = (("A", expected_path),)
+    if delta != expected_delta:
+        observed = ", ".join(f"{status}:{path}" for status, path in delta) or "none"
+        raise RuntimeError(
+            "candidate implementation tree drifted outside exact freeze receipt publication; "
+            f"expected A:{expected_path}; observed {observed}"
+        )
 
 
 def load_candidate_freeze_receipt(path: Path) -> CandidateFreezeReceipt:
@@ -196,13 +279,18 @@ def load_candidate_freeze_receipt(path: Path) -> CandidateFreezeReceipt:
     return receipt
 
 
-def require_runtime_freeze_material(root: Path, receipt: CandidateFreezeReceipt) -> None:
-    """Fail closed if any non-Git material bound by the receipt has drifted.
+def require_runtime_freeze_material(
+    root: Path,
+    receipt: CandidateFreezeReceipt,
+    *,
+    receipt_path: Path,
+) -> None:
+    """Fail closed unless runtime material is the exact frozen implementation plus its receipt.
 
-    The implementation commit/tree intentionally identify the frozen candidate
-    commit rather than the later receipt-publication commit. Runtime material
-    checks therefore recompute preregistration, lock and source-contract inputs
-    while leaving that deliberate publication separation intact.
+    The receipt binds the pre-publication implementation commit/tree. The only
+    permitted tree delta at runtime is the later durable publication of this
+    exact versioned receipt file. Any other tracked change means the frozen
+    implementation identity has changed and requires a new freeze/restart.
     """
     inputs = collect_freeze_inputs(root)
     mismatches: list[str] = []
@@ -218,6 +306,7 @@ def require_runtime_freeze_material(root: Path, receipt: CandidateFreezeReceipt)
         mismatches.append("source registry entry digests")
     if mismatches:
         raise RuntimeError("candidate freeze material drifted: " + ", ".join(mismatches))
+    _require_exact_receipt_publication_delta(root, receipt, receipt_path=receipt_path)
 
 
 def first_confirmatory_boundary(durable_freeze_at: datetime) -> datetime:
