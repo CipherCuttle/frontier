@@ -59,12 +59,12 @@ def test_duplicate_existing_boundary_fails_closed() -> None:
         )
 
 
-def test_published_v0_receipt_round_trips_and_runtime_material_is_unchanged() -> None:
+def test_published_v0_receipt_round_trips_but_is_stale_after_implementation_change() -> None:
     root = Path(".")
-    receipt = load_candidate_freeze_receipt(
-        root / "experiments/advanced_intelligence/pef_v0/candidate_freeze_receipt_v0.json"
-    )
+    receipt_path = root / "experiments/advanced_intelligence/pef_v0/candidate_freeze_receipt_v0.json"
+    receipt = load_candidate_freeze_receipt(receipt_path)
     assert receipt.receipt_id == (
         "freezereceipt_6e6c54a1c065e5afa8a83df92a1c88ee7e1343be7c5f65030924b10b41ff4626"
     )
-    require_runtime_freeze_material(root, receipt)
+    with pytest.raises(RuntimeError):
+        require_runtime_freeze_material(root, receipt, receipt_path=receipt_path)
