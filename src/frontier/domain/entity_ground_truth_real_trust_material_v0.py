@@ -340,9 +340,10 @@ def _validate_adjudicators(
     if raw is None or len(raw) != 2 or set(expected_pop_challenges) != _ADJUDICATOR_ROLES:
         return None
     challenges = list(expected_pop_challenges.values())
-    if any(len(challenge) < POP_CHALLENGE_MIN_BYTES for challenge in challenges) or len(
-        set(challenges)
-    ) != 2:
+    if (
+        any(len(challenge) < POP_CHALLENGE_MIN_BYTES for challenge in challenges)
+        or len(set(challenges)) != 2
+    ):
         return None
 
     expected_roles = ["ADJUDICATOR_1", "ADJUDICATOR_2"]
