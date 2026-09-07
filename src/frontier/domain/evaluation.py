@@ -803,7 +803,7 @@ def sample_adequacy_pass(evaluation: DomainEvaluation) -> bool:
     """
     fraction_bps = evaluation.resolved_label_fraction_bps
     return (
-        evaluation.resolved_label_fraction_denominator >= MIN_RESOLVED_OPPORTUNITIES_PER_DOMAIN
+        evaluation.resolved_label_fraction_numerator >= MIN_RESOLVED_OPPORTUNITIES_PER_DOMAIN
         and evaluation.positive_count >= MIN_POSITIVE_OPPORTUNITIES_PER_DOMAIN
         and evaluation.candidate_arm.surfaced_resolved >= MIN_SURFACED_RESOLVED_PER_ARM_PER_DOMAIN
         and evaluation.control_arm.surfaced_resolved >= MIN_SURFACED_RESOLVED_PER_ARM_PER_DOMAIN

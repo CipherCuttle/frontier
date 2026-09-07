@@ -16,7 +16,7 @@ never a failed hypothesis.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from frontier.domain.advanced_intelligence import (
@@ -30,8 +30,10 @@ from frontier.domain.advanced_intelligence import (
 from frontier.domain.candidate_freeze import CandidateFreezeReceipt, FreezeStatus
 from frontier.domain.evaluation import (
     GLOBAL_RANK_CUTOFF_K,
+    MIN_RESOLVED_OPPORTUNITIES_PER_DOMAIN,
     MINIMUM_QUALIFYING_DOMAINS,
     AnchorTracking,
+    DomainEvaluation,
     EvaluationReceipt,
     EvaluationStatus,
     OpportunityGroup,
@@ -101,6 +103,28 @@ def _confirmatory_run_binding_failure(
                 f"shadow run {run.run_id} boundary is not strictly after durable candidate freeze"
             )
     return None
+
+
+def _enforce_resolved_sample_floor(
+    evaluations: Sequence[DomainEvaluation],
+) -> tuple[DomainEvaluation, ...]:
+    """Fail closed on the preregistered minimum resolved-opportunity floor.
+
+    The frozen contract requires at least 30 *resolved* opportunities in a
+    qualifying domain. The domain helper historically compared the total
+    retained denominator instead, so unresolved coverage could satisfy the
+    nominal count. This application boundary cannot permit that stale helper
+    result into confirmatory evidence.
+    """
+    return tuple(
+        replace(evaluation, qualifies_sample_adequacy=False)
+        if (
+            evaluation.qualifies_sample_adequacy
+            and evaluation.resolved_label_fraction_numerator < MIN_RESOLVED_OPPORTUNITIES_PER_DOMAIN
+        )
+        else evaluation
+        for evaluation in evaluations
+    )
 
 
 def build_anchor_tracking(
@@ -190,8 +214,8 @@ def evaluate_shadow_experiment(
     tracking_by_anchor: dict[str, tuple[AnchorTracking, ...]] = {
         item.anchor.observation_id: build_anchor_tracking(item, ordered) for item in opportunities
     }
-    domain_evaluations = evaluate_domains(
-        opportunities, tracking_by_anchor, rank_cutoff_k=rank_cutoff_k
+    domain_evaluations = _enforce_resolved_sample_floor(
+        evaluate_domains(opportunities, tracking_by_anchor, rank_cutoff_k=rank_cutoff_k)
     )
     pooled_median = pooled_lead_time_median(
         domain_evaluations, tracking_by_anchor, opportunities, rank_cutoff_k=rank_cutoff_k
