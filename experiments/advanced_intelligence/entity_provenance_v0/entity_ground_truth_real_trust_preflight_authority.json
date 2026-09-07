@@ -1,0 +1,103 @@
+{
+  "schema_version": "frontier-entity-ground-truth-real-trust-preflight-authority-v0",
+  "phase_id": "ENTITY_GROUND_TRUTH_REAL_TRUST_PREFLIGHT_V0",
+  "authority_state": "BLOCKED_PENDING_REAL_TRUST_ROOT_MATERIAL",
+  "parent_main_commit": "bd2e910ebdc908b1002efbefda8fe030686cea99",
+  "lineage": {
+    "protocol_v2_freeze_merge_commit": "a0b419b8e7eda254834295a78edf95447d538689",
+    "offline_validator_merge_commit": "bd2e910ebdc908b1002efbefda8fe030686cea99",
+    "offline_validator_source_path": "src/frontier/domain/entity_ground_truth_protocol_v2.py",
+    "offline_validator_source_git_blob_sha1": "3a5f383f0cdc84f2f75ca968931d423b56832ee7"
+  },
+  "objective": "Freeze the fail-closed prerequisites for real human entity-ground-truth trust material without creating credentials, collecting labels, evaluating candidate quality, or changing production authority.",
+  "real_trust_material_gate": {
+    "status": "BLOCKED_PENDING_REAL_TRUST_ROOT_MATERIAL",
+    "minimum_distinct_human_adjudicators": 2,
+    "private_key_material_in_repository_forbidden": true,
+    "synthetic_test_material_can_satisfy_gate": false,
+    "placeholder_or_example_material_can_satisfy_gate": false,
+    "candidate_or_frontier_generated_identity_assertions_can_satisfy_gate": false,
+    "required_bundle_fields": [
+      "bundle_id",
+      "schema_version",
+      "created_at",
+      "identity_attestation_authority",
+      "adjudicator_subjects",
+      "adjudicator_public_keys",
+      "service_sealing_public_key",
+      "durability_publication_public_key",
+      "origin_verification_roots",
+      "revocation_policy",
+      "expiry_policy",
+      "role_separation_assertions",
+      "bundle_digest"
+    ]
+  },
+  "cryptographic_policy": {
+    "adjudicator_signature_scheme": "ED25519",
+    "service_sealing_signature_scheme": "ED25519",
+    "durability_signature_scheme": "ED25519",
+    "private_keys_repository_forbidden": true,
+    "public_keys_or_fingerprints_only_in_repository": true,
+    "key_ids_unique_across_roles": true,
+    "test_only_key_ids_forbidden": true,
+    "key_rotation_requires_new_material_bundle": true
+  },
+  "identity_policy": {
+    "repository_subject_identifiers": "OPAQUE_STABLE_SUBJECT_COMMITMENTS",
+    "real_names_required_in_repository": false,
+    "externally_verifiable_human_identity_attestation_required": true,
+    "two_adjudicator_slots_must_resolve_to_distinct_human_subjects": true,
+    "candidate_builder_or_evaluator_identity_may_not_self_attest_independence": true,
+    "frontier_model_or_runtime_may_not_generate_human_identity_attestations": true
+  },
+  "role_separation": {
+    "adjudicator_keys_distinct_from_each_other": true,
+    "adjudicator_keys_distinct_from_service_sealing_key": true,
+    "service_sealing_key_distinct_from_durability_key": true,
+    "identity_attestation_root_distinct_from_candidate_code": true
+  },
+  "collection_authority": {
+    "real_label_collection": false,
+    "candidate_quality_evaluation": false,
+    "candidate_quality_metrics": false,
+    "candidate_quality_pass_fail": false,
+    "candidate_promotion": false,
+    "canonical_entity_truth": false,
+    "persistence": false,
+    "migrations": false,
+    "workers_or_schedulers": false,
+    "api": false,
+    "terminal": false,
+    "source_registry_changes": false,
+    "production_provenance_truth": false,
+    "ranking_changes": false
+  },
+  "authorized_after_merge": {
+    "prepare_real_trust_material_bundle_candidate": true,
+    "prepare_real_trust_material_validation_tests": true,
+    "prepare_offline_real_trust_material_validator": true,
+    "real_label_collection": false,
+    "candidate_quality_evaluation": false,
+    "candidate_promotion": false,
+    "production_authority_expansion": false
+  },
+  "scientific_state": {
+    "candidate": "transparent-entity-hybrid-v0",
+    "entity_quality": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+    "quality_claim": null,
+    "promotion_status": "UNAVAILABLE"
+  },
+  "closure_requirements": {
+    "full_repository_ci": "PASS",
+    "one_bounded_hostile_review": "REQUIRED_UNLESS_EXPLICITLY_WAIVED_BY_REPOSITORY_OWNER_AND_RECORDED",
+    "critical_high_findings": "ZERO_OPEN",
+    "merge_action": "EXPLICIT_USER_AUTHORIZATION_REQUIRED"
+  },
+  "next_phase_if_merged": {
+    "phase_id": "ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0",
+    "objective": "Freeze actual externally supplied non-placeholder public trust material and opaque human-subject attestations, then validate role separation, key identity, expiry, revocation, and content addressing before any real label collection.",
+    "required_precondition": "Actual external adjudicator identity attestations and public verification material must be supplied out-of-band; Frontier may not invent, synthesize, or self-attest them.",
+    "still_forbidden": "No real label collection, candidate scoring, quality PASS/FAIL, promotion, persistence, API, workers, terminal, registry, provenance-truth, or ranking expansion until a later separately authorized phase."
+  }
+}
