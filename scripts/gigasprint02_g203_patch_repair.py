@@ -15,35 +15,20 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 def main() -> None:
     text = PATCH.read_text(encoding="utf-8")
+
+    old_durable = "    replace_once(\n        path,\n        '''        durable_freeze_at=durable_freeze_at,\\n''',\n        '''        durable_freeze_at=authority.durable_freeze_at,\\n''',\n        count=1,\n    )\n"
+    new_durable = "    replace_once(\n        path,\n        '''        generated_at=generated_at,\\n        durable_freeze_at=durable_freeze_at,\\n        rank_cutoff_k=rank_cutoff_k,\\n''',\n        '''        generated_at=generated_at,\\n        durable_freeze_at=authority.durable_freeze_at,\\n        rank_cutoff_k=rank_cutoff_k,\\n''',\n    )\n"
     text = replace_once(
         text,
-        '''    replace_once(
-        path,
-        '''        durable_freeze_at=durable_freeze_at,\n''',
-        '''        durable_freeze_at=authority.durable_freeze_at,\n''',
-        count=1,
-    )
-''',
-        '''    replace_once(
-        path,
-        '''        generated_at=generated_at,\n        durable_freeze_at=durable_freeze_at,\n        rank_cutoff_k=rank_cutoff_k,\n''',
-        '''        generated_at=generated_at,\n        durable_freeze_at=authority.durable_freeze_at,\n        rank_cutoff_k=rank_cutoff_k,\n''',
-    )
-''',
+        old_durable,
+        new_durable,
         "persisted evaluator durable authority target",
     )
-    anchor = '''    replace_once(path, old_sig, new_sig)
-    old_body = '''
-'''
-    injection = '''    replace_once(path, old_sig, new_sig)
-    replace_once(
-        path,
-        '''from frontier.domain.drift_sentry import DriftStatus\n''',
-        '''from frontier.domain.digests import Digest\nfrom frontier.domain.drift_sentry import DriftStatus\n''',
-    )
-    old_body = '''
-'''
+
+    anchor = "    replace_once(path, old_sig, new_sig)\n    old_body = '''\n"
+    injection = "    replace_once(path, old_sig, new_sig)\n    replace_once(\n        path,\n        '''from frontier.domain.drift_sentry import DriftStatus\\n''',\n        '''from frontier.domain.digests import Digest\\nfrom frontier.domain.drift_sentry import DriftStatus\\n''',\n    )\n    old_body = '''\n"
     text = replace_once(text, anchor, injection, "Digest import patch insertion")
+
     PATCH.write_text(text, encoding="utf-8")
 
 
