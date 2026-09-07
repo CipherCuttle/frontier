@@ -1,0 +1,47 @@
+name: GIGASPRINT02 G2-03 persisted evaluator authority
+on:
+  push:
+    branches:
+      - agent/gigasprint-02-prefreeze-launch-integrity
+permissions:
+  contents: read
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: frontier
+          POSTGRES_PASSWORD: frontier
+          POSTGRES_DB: frontier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frontier -d frontier"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      FRONTIER_TEST_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+      FRONTIER_DATABASE_URL: postgresql+psycopg://frontier:frontier@localhost:5432/frontier
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 16
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.10"
+      - run: uv sync --all-extras --frozen
+      - name: Apply G2-03 in ephemeral checkout
+        run: uv run python scripts/gigasprint02_g203_patch.py
+      - name: Verify G2-03
+        shell: bash
+        run: |
+          uv run ruff check src/frontier/application/evaluation.py src/frontier/application/evaluation_loaders.py src/frontier/adapters/postgres/evaluation_store.py tests/unit/test_evaluation_loaders.py tests/integration/test_evaluation_persisted_postgres.py
+          uv run pyright
+          uv run alembic upgrade head
+          uv run pytest -q tests/unit/test_evaluation_loaders.py tests/unit/test_evaluation.py tests/integration/test_evaluation_persisted_postgres.py tests/integration/test_freeze_publication_postgres.py tests/integration/test_confirmatory_claim_postgres.py tests/integration/test_drift_sentry_postgres.py
