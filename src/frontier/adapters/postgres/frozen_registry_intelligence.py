@@ -42,7 +42,9 @@ class PostgresFrozenRegistryGroupingRepository(PostgresGroupingRepository):
         super().__init__(connection)
         self._source_ids = tuple(sorted(registry.sources))
         self._roles_by_source = {
-            source_id: tuple(role.value for role in registry.require(source_id).contract.signal_roles)
+            source_id: tuple(
+                role.value for role in registry.require(source_id).contract.signal_roles
+            )
             for source_id in self._source_ids
         }
 

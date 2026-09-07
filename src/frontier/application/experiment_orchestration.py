@@ -238,6 +238,15 @@ class ExperimentOrchestrator:
     ) -> None:
         if run_class not in RUN_CLASSES:
             raise ValueError("run_class must be DEV or CONFIRMATORY")
+        if run_class == RUN_CLASS_CONFIRMATORY:
+            confirmatory_registry = getattr(
+                baseline_repository, "confirmatory_source_registry_version", None
+            )
+            if confirmatory_registry != source_registry_version:
+                raise ValueError(
+                    "CONFIRMATORY requires a baseline repository bound to the frozen "
+                    "source registry"
+                )
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
         if cadence_seconds <= 0:

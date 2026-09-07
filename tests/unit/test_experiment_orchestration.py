@@ -96,9 +96,15 @@ def _health(as_of: datetime) -> BaselineHealthInput:
 class FakeBaselineRepository:
     """In-memory BaselineIntelligenceRepository double."""
 
-    def __init__(self, observations: tuple[BaselineObservationInput, ...]) -> None:
+    def __init__(
+        self,
+        observations: tuple[BaselineObservationInput, ...],
+        *,
+        confirmatory_source_registry_version: Digest | None = None,
+    ) -> None:
         self.observations = observations
         self.published: list[tuple[BaselineSnapshot, object]] = []
+        self.confirmatory_source_registry_version = confirmatory_source_registry_version
 
     def list_baseline_observations_as_of(self, as_of: datetime) -> list[BaselineObservationInput]:
         return list(self.observations)
@@ -326,7 +332,12 @@ def _orchestrator(
     binding: StubBindingResolver | None = None,
     runner: RecordingRunner | None = None,
 ) -> tuple[ExperimentOrchestrator, FakeBaselineRepository]:
-    baseline = FakeBaselineRepository(observations if observations is not None else _observations())
+    baseline = FakeBaselineRepository(
+        observations if observations is not None else _observations(),
+        confirmatory_source_registry_version=(
+            REGISTRY if run_class == RUN_CLASS_CONFIRMATORY else None
+        ),
+    )
     orchestrator = ExperimentOrchestrator(
         attempts=attempts,
         baseline_repository=baseline,
@@ -340,6 +351,39 @@ def _orchestrator(
         clock=lambda: clock,
     )
     return orchestrator, baseline
+
+
+def test_confirmatory_construction_requires_frozen_registry_bound_baseline() -> None:
+    broad_baseline = FakeBaselineRepository(_observations())
+    with pytest.raises(
+        ValueError,
+        match="CONFIRMATORY requires a baseline repository bound to the frozen source registry",
+    ):
+        ExperimentOrchestrator(
+            attempts=FakeAttemptRepository(),
+            baseline_repository=broad_baseline,
+            persistence=FakeShadowRunPersistence(),
+            source_registry_version=REGISTRY,
+            run_class=RUN_CLASS_CONFIRMATORY,
+            canonical_context=True,
+        )
+
+    wrong_registry_baseline = FakeBaselineRepository(
+        _observations(),
+        confirmatory_source_registry_version=Digest("sha256:" + "9" * 64),
+    )
+    with pytest.raises(
+        ValueError,
+        match="CONFIRMATORY requires a baseline repository bound to the frozen source registry",
+    ):
+        ExperimentOrchestrator(
+            attempts=FakeAttemptRepository(),
+            baseline_repository=wrong_registry_baseline,
+            persistence=FakeShadowRunPersistence(),
+            source_registry_version=REGISTRY,
+            run_class=RUN_CLASS_CONFIRMATORY,
+            canonical_context=True,
+        )
 
 
 def test_derive_experiment_boundary_is_epoch_multiple_of_cadence() -> None:
