@@ -16,7 +16,7 @@ Freeze a genuinely candidate-disjoint entity ground-truth protocol before any gr
 
 The protocol must make it possible to obtain future immutable `SAME_ENTITY` / `DIFFERENT_ENTITY` human gold labels without exposing the candidate's output, reasons, or consumed Frontier identity signals to adjudicators.
 
-This authority does **not** claim that independent ground truth already exists. The 24 frozen fixtures are synthetic hostile protocol cases only. They test the rules of the labeling protocol and MUST NOT be counted as real-world candidate quality evidence.
+This authority does **not** claim that independent ground truth already exists. The 24 frozen fixtures are synthetic hostile protocol vectors only. Their test keys, trust roots, and expected outcomes test the rules of the labeling protocol and MUST NOT be counted as real-world candidate quality evidence.
 
 ## Lineage
 
@@ -30,73 +30,89 @@ This authority does **not** claim that independent ground truth already exists. 
 Frozen protocol corpus:
 
 - path: `fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v0.json`;
-- schema: `frontier-entity-ground-truth-protocol-corpus-v0`;
-- exact Git blob SHA-1: `c922306ce09c5db18c09f9d33f6ce21301252026`;
+- schema: `frontier-entity-ground-truth-protocol-corpus-v1`;
+- exact Git blob SHA-1: `664a86962b73bd1aae11feea25e41adbfbf5899a`;
 - case count: 24.
 
 Machine authority:
 
-- `experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_authority.json`.
+- `experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_authority.json`;
+- schema: `frontier-entity-ground-truth-authority-v1`.
 
 ## Scientific boundary
 
-Ground-truth independence is defined against the candidate's actual evidence surface, not against filenames or process labels.
+Ground-truth independence is defined against the candidate's actual evidence surface, not against filenames, process labels, or packet-supplied booleans.
 
-Adjudicators MUST NOT see:
+The exact internal candidate-signal boundary is:
 
-- candidate entity decision;
-- candidate reasons;
-- Frontier `native_ids`;
-- Frontier `canonical_url`;
-- Frontier `entity_name`;
-- Frontier `entity_type`;
-- Frontier `source_item_key`;
-- Frontier `ALIAS_OF` relation evidence;
-- Frontier `RENAMED_FROM` relation evidence.
+- `candidate_output`;
+- `candidate_reason`;
+- `native_ids`;
+- `canonical_url`;
+- `entity_name`;
+- `entity_type`;
+- `source_item_key`;
+- `ALIAS_OF`;
+- `RENAMED_FROM`.
 
-`source_item_key` is redacted conservatively even though it is not itself a decision branch in the selected entity candidate because it may encode a provider-native identity.
+`source_item_key` is redacted conservatively even though it is not itself a decision branch in the selected entity candidate because it may encode provider-native identity.
 
 A label is not independent merely because a human clicked it. If the human sees the candidate's answer or the candidate's identity inputs, that label is invalid for this program.
 
-## External evidence packets
+A packet MUST NOT establish candidate-disjointness by asserting `candidate_disjoint=true` or an equivalent status flag. The exact rendered adjudication view must be content-addressed and independently rescanned against the complete candidate-signal boundary.
 
-Adjudicators receive only external evidence packets. Every decisive evidence item must:
+## External evidence packets and rendered adjudication view
 
-1. be candidate-disjoint;
-2. have an immutable snapshot digest;
-3. identify an origin key and origin group;
-4. declare its evidence class and decisive direction;
-5. be preserved exactly for later audit.
+The protocol separates immutable raw evidence from the direction-neutral rendered view shown to adjudicators.
 
-V0 permits these evidence classes:
+Every evidence item must:
 
-- `EXTERNAL_EXPLICIT_IDENTITY_DECLARATION`;
-- `EXTERNAL_EXPLICIT_DISTINCTNESS_DECLARATION`;
-- `INDEPENDENT_CONTROLLED_RESOURCE_CONTINUITY`;
-- `INDEPENDENT_RELEASE_ARTIFACT_CONTINUITY`;
-- `INDEPENDENT_AUTHORSHIP_CONTEXT`.
+1. bind an immutable raw evidence snapshot with a recomputable content identity;
+2. contain no candidate dependency digest;
+3. bind a content-addressed rendered view;
+4. bind the raw snapshot, exact candidate-signal boundary, and rendered view through a content-addressed redaction receipt;
+5. participate in an immutable origin-provenance manifest whose nodes, parent links, and root identity are cryptographically verifiable against an approved capture-service trust root.
 
-At least two decisive evidence items from at least two distinct origin groups are required for an evaluable gold label. Syndicated, mirrored, copied, or otherwise common-upstream evidence shares one origin group even if it appears at multiple URLs.
+The validator, not the packet, recomputes rendered-view and redaction identities and rescans every rendered field against the exact candidate-signal boundary.
 
-If there is only one decisive origin group, the result is `ABSTAIN_INSUFFICIENT_EVIDENCE`.
+Rendered evidence MUST be direction-neutral. It MUST NOT expose:
 
-If decisive independent evidence points in conflicting directions, the result is `ABSTAIN_CONFLICTING_EVIDENCE`.
+- `decisive_direction`;
+- a preassigned `SAME_ENTITY` / `DIFFERENT_ENTITY` conclusion;
+- candidate output or reason;
+- any other adjudication-outcome metadata.
 
-Missing immutable snapshot identity, evidence derived from candidate-visible fields, or automated/model-created gold labels invalidates the packet.
+Per-item human assessments occur only inside separately sealed authenticated human submission receipts after review.
+
+At least two immutable evidence items from at least two cryptographically verified distinct origin roots are required for an evaluable gold label.
+
+`origin_group` strings or equivalent packet-supplied grouping labels are not evidence of independence. The validator must traverse verified provenance manifests to their `root_node_digest` values and collapse evidence sharing one verified root. Syndicated, mirrored, copied, or otherwise common-upstream evidence therefore remains one root even if it appears under multiple publishers or URLs.
+
+If fewer than two verified distinct roots remain, the result is `ABSTAIN_INSUFFICIENT_EVIDENCE` rather than binary gold.
+
+If sealed human item assessments identify conflicting evidence directions, the result is `ABSTAIN_CONFLICTING_EVIDENCE`.
+
+Missing immutable snapshot identity, candidate-derived evidence, failed provenance verification, failed redaction verification, or leaked candidate signals invalidates the packet.
 
 ## Human adjudication
 
-V0 requires two independent primary human adjudicators.
+V0 requires exactly two primary human submissions from cryptographically verified distinct unique-person subjects.
 
-They must:
+Each primary submission must:
 
-- be distinct people;
-- adjudicate independently;
-- remain blind to the candidate output and reasons;
-- remain blind to the redacted Frontier identity fields above;
-- remain blind to the other adjudicator's label until both submissions are frozen.
+- bind an externally signed unique-person attestation;
+- validate that attestation against an approved trust root;
+- resolve to a subject digest distinct from the other primary adjudicator;
+- be an immutable service-signed submission receipt;
+- be sealed independently before peer-label unsealing;
+- remain blind to the candidate output, reasons, and complete candidate-signal boundary;
+- remain blind to the peer label until the required submissions are sealed.
 
-Both adjudicators must independently agree on `SAME_ENTITY` or `DIFFERENT_ENTITY` for the label to become evaluable gold.
+Arbitrary `person_key` strings, self-reported `independent=true`, or self-reported peer-blindness booleans are not identity/blindness proof.
+
+The sealed-submission service assigns authoritative sequence numbers. Every required submission sequence must precede the signed peer-label-unseal receipt. The unseal receipt may reference only already sealed submission receipt digests.
+
+Both distinct verified humans must independently agree on `SAME_ENTITY` or `DIFFERENT_ENTITY` for the label to become evaluable gold.
 
 Any primary abstention produces `ABSTAIN_INSUFFICIENT_EVIDENCE`.
 
@@ -118,7 +134,11 @@ The protocol distinguishes:
 - `EVALUATION_RANDOM` — candidate-blind evaluation sampling;
 - `CHALLENGE_ONLY` — adversarial diagnostic cases.
 
-Any pair set intended for later headline quality metrics must be frozen before candidate scoring for that pair set. Candidate predictions or reasons may not influence inclusion in the `EVALUATION_RANDOM` set.
+Any pair set intended for later headline quality metrics must be bound to a content-addressed `EVALUATION_RANDOM` sample manifest that freezes the exact pair IDs, selection method, seed commitment, role, and creation time.
+
+A signed durability receipt must bind that exact sample-manifest digest strictly before the first candidate scoring receipt for the same digest. A packet-supplied `sampling_frozen_before_candidate_scoring=true` flag or equivalent assertion is not proof.
+
+Candidate predictions or reasons may not influence inclusion in the `EVALUATION_RANDOM` set. Post-scoring selection is `INVALID_PACKET / REJECT_SELECTION_LEAK`.
 
 Challenge cases are useful diagnostics but MUST NOT be pooled into headline quality metrics.
 
@@ -126,13 +146,42 @@ A valid challenge label remains diagnostic-only even when the human label itself
 
 This authority freezes the anti-leakage rule; it does not yet create a real evaluation sample or real gold label bundle.
 
-## Immutability
+## Label-bundle identity and immutability
 
-Every evidence item requires an immutable snapshot digest.
+A label bundle is an exact content-addressed object:
 
-Every real label bundle must be frozen before candidate scoring against that bundle. Post-freeze mutation creates a new label-bundle identity. Old and new label-bundle identities may not be silently pooled.
+`bundle_digest = sha256(canonical_json(exact bundle payload))`
 
-A mutable label file is not ground truth evidence.
+Its manifest binds:
+
+- `bundle_version`;
+- `sample_manifest_digest`;
+- `submission_receipt_digests`;
+- `unseal_receipt_digest`;
+- `predecessor_bundle_digest`;
+- `created_at`.
+
+A signed durability receipt binds one exact bundle digest/version. Any payload mutation creates a different bundle identity. Old and new bundle identities may not be silently pooled, substituted, or treated as one frozen file.
+
+A future separately authorized quality evaluation must bind exactly one immutable bundle digest.
+
+A mutable label file or a self-reported `label_bundle_frozen=true` flag is not ground-truth evidence.
+
+## Trust roots and real-collection gate
+
+The frozen corpus uses synthetic TEST-ONLY keys/trust roots for protocol attacks. Those keys are not authorized to create real labels.
+
+Before any real label collection begins, a separate authority must freeze the approved real trust-root/key identities for at least:
+
+- unique-person identity attestations;
+- sealed submissions and peer-label unseal;
+- evidence-origin capture/provenance manifests;
+- redaction receipts;
+- sample/bundle durability or publication receipts.
+
+Those trust-root identities may not be substituted after real collection begins.
+
+Merge of this authority does not itself authorize real-world label generation.
 
 ## No fake quality result
 
@@ -154,52 +203,59 @@ This phase MUST NOT emit:
 - canonical entity truth;
 - public entity labels.
 
+Synthetic vectors are not candidate-quality evidence.
+
 Zero evaluable labels must produce no quality claim, not an optimistic zero-error result.
 
 ## Frozen hostile protocol corpus
 
-The 24 cases attack:
+The 24 deterministic synthetic cases attack:
 
 1. valid blinded `SAME_ENTITY` control;
 2. valid blinded `DIFFERENT_ENTITY` control;
-3. candidate output leakage;
-4. candidate reason leakage;
+3. candidate-output leakage into rendered evidence;
+4. candidate-reason leakage into rendered evidence;
 5. native-ID leakage;
 6. canonical-URL leakage;
 7. entity-name leakage;
 8. entity-type leakage;
 9. source-item-key leakage;
 10. alias/rename relation leakage;
-11. a single decisive evidence item;
-12. mirrored evidence masquerading as two independent sources;
-13. candidate-derived evidence;
-14. mutable/unbound evidence without snapshot digest;
+11. fewer than two evidence items;
+12. multiple publisher leaves sharing one verified origin root;
+13. candidate-dependent raw evidence;
+14. missing raw snapshot digest;
 15. adjudicator disagreement;
 16. adjudicator abstention;
-17. the same person occupying both adjudicator slots;
-18. one adjudicator seeing the peer label before submission;
-19. model-generated/automated gold labels;
-20. candidate-aware sampling after scoring;
+17. two submissions resolving to one verified unique-person subject;
+18. a submission sealed after peer-label unseal;
+19. model-generated/automated label origin;
+20. sample-manifest durability occurring after candidate scoring;
 21. challenge-only labels entering headline metrics;
-22. mutable label bundle;
-23. conflicting independent evidence directions;
+22. label-bundle payload mutation after its content digest is frozen;
+23. conflicting sealed human item assessments;
 24. zero evaluable labels being converted into a quality claim.
 
-The corpus expected outputs freeze packet status, label status, headline-metric eligibility, required action, and the absence of any quality claim.
+Each case deterministically expands from an immutable base vector plus ordered mutation operations. Its `expected_packet_digest` binds the complete expanded packet. Stored status assertions are non-authoritative; identities and expected outcomes must be recomputed by the future bounded validators.
+
+The corpus expected outputs freeze packet status, label status, headline-metric eligibility, required action, and the absence of any candidate-quality claim.
 
 ## Implementation authority after merge
 
 Merge of this authority may authorize only:
 
-- an offline packet validator;
-- an offline deterministic blinding/redaction helper;
-- an offline adjudication-receipt validator;
-- hostile protocol tests.
+- `offline_packet_expander_validator`;
+- `offline_blinding_redaction_validator`;
+- `offline_adjudication_receipt_validator`;
+- `protocol_hostile_tests`.
 
-It does not authorize Frontier to manufacture real labels. Real labels remain external human work.
+The bounded offline implementation may exercise the synthetic vectors, test-only trust roots, deterministic expansion, cryptographic/trust-root interfaces, redaction verification, provenance-root verification, sample/bundle identity verification, and adjudication-receipt validation required by this authority.
+
+It does not authorize Frontier to manufacture real labels. Real label collection remains separately gated by frozen real trust roots and a durable real sample manifest.
 
 It does not authorize:
 
+- real-world label generation by Frontier/model;
 - candidate quality metrics;
 - candidate quality PASS/FAIL;
 - promotion;
@@ -208,8 +264,7 @@ It does not authorize:
 - worker/scheduler behavior;
 - API or terminal exposure;
 - source-registry change;
-- provenance changes;
-- ranking changes.
+- provenance or ranking changes.
 
 ## Closure discipline
 
@@ -221,4 +276,4 @@ Implementation after authority merge:
 
 `IMPLEMENT VALIDATORS -> TEST -> ONE hostile implementation review -> fix Critical/High -> ONE targeted re-review only if required -> CLOSE`
 
-A later `ENTITY_QUALITY_EVALUATION_V0` authority is allowed only after an immutable real candidate-disjoint label bundle exists. That later phase may define statistical metrics and thresholds. This phase does not.
+A later `ENTITY_QUALITY_EVALUATION_V0` authority is allowed only after an immutable real candidate-disjoint human label bundle exists. That later phase may define statistical metrics and thresholds. This phase does not.
