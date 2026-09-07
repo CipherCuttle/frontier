@@ -16,7 +16,11 @@ from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligence
 from frontier.adapters.postgres.prospective_shadow import PostgresProspectiveShadowRunRepository
 from frontier.application.prospective_shadow import run_confirmatory_shadow_boundary
 from frontier.domain.advanced_intelligence import PEF_CONFIGURATION_DIGEST, ShadowRunStatus
-from frontier.domain.candidate_freeze import FreezeInputs, FreezeStatus, build_candidate_freeze_receipt
+from frontier.domain.candidate_freeze import (
+    FreezeInputs,
+    FreezeStatus,
+    build_candidate_freeze_receipt,
+)
 from frontier.domain.digests import Digest
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -72,7 +76,10 @@ def test_confirmatory_boundary_persists_freeze_candidate_and_bound_run() -> None
         assert pef.get_artifact_json(result.execution.candidate.artifact.artifact_id) == (
             result.execution.candidate.artifact.to_canonical()
         )
-        assert shadow.get_run_json(result.execution.run.run_id) == result.execution.run.to_canonical()
+        assert (
+            shadow.get_run_json(result.execution.run.run_id)
+            == result.execution.run.to_canonical()
+        )
         assert shadow.bound_run_boundaries(
             candidate_freeze_receipt_id=receipt.receipt_id,
             start=AS_OF,
