@@ -1,0 +1,546 @@
+name: GIGASPRINT02 G2-02 authority patch
+on:
+  push:
+    branches: [agent/gigasprint-02-prefreeze-launch-integrity]
+permissions:
+  contents: write
+jobs:
+  patch-and-test:
+    if: "contains(github.event.head_commit.message, 'run G2-02 authority patch')"
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: frontier
+          POSTGRES_PASSWORD: frontier
+          POSTGRES_DB: frontier
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U frontier -d frontier"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      FRONTIER_TEST_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+      FRONTIER_DATABASE_URL: postgresql+psycopg://frontier:frontier@localhost:5432/frontier
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.14'}
+      - uses: astral-sh/setup-uv@v6
+        with: {version: '0.12.10'}
+      - run: uv sync --all-extras --frozen
+      - name: Apply G2-02
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.')
+          def rep(path, old, new, count=None):
+              f=p/path; s=f.read_text()
+              n=s.count(old)
+              if count is not None and n != count: raise SystemExit(f'{path}: expected {count} matches, got {n}')
+              if count is None and n < 1: raise SystemExit(f'{path}: old text missing')
+              f.write_text(s.replace(old,new))
+
+          (p/'src/frontier/application/freeze_publication.py').write_text('''from __future__ import annotations
+
+import json
+import re
+import subprocess
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import cast
+
+from frontier.domain.candidate_freeze import CandidateFreezeReceipt
+from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
+from frontier.domain.digests import Digest, sha256_digest
+
+FREEZE_PUBLICATION_SCHEMA_VERSION = "candidate-freeze-publication-v0"
+RANKING_WINDOW_SECONDS = 2_419_200
+_FREEZE_RECEIPT_PUBLICATION_PATH_RE = re.compile(
+    r"^experiments/advanced_intelligence/pef_v0/candidate_freeze_receipt_v[0-9]+\\.json$"
+)
+_COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateFreezePublication:
+    freeze_receipt_id: str
+    freeze_receipt_digest: Digest
+    implementation_commit: str
+    implementation_tree_digest: str
+    publication_commit: str
+    publication_committer_at: datetime
+    schema_version: str = FREEZE_PUBLICATION_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        for value, label in (
+            (self.implementation_commit, "implementation commit"),
+            (self.implementation_tree_digest, "implementation tree"),
+            (self.publication_commit, "publication commit"),
+        ):
+            if not _COMMIT_HASH_RE.fullmatch(value):
+                raise ValueError(f"{label} is not a git hash")
+        if self.publication_committer_at.tzinfo is None or self.publication_committer_at.utcoffset() is None:
+            raise ValueError("publication committer timestamp must be timezone-aware")
+        if self.schema_version != FREEZE_PUBLICATION_SCHEMA_VERSION:
+            raise ValueError("freeze publication schema mismatch")
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {
+            "freeze_receipt_digest": str(self.freeze_receipt_digest),
+            "freeze_receipt_id": self.freeze_receipt_id,
+            "implementation_commit": self.implementation_commit,
+            "implementation_tree_digest": self.implementation_tree_digest,
+            "publication_commit": self.publication_commit,
+            "publication_committer_at": canonical_timestamp(self.publication_committer_at),
+            "schema_version": self.schema_version,
+        }
+
+    @property
+    def publication_digest(self) -> Digest:
+        return sha256_digest(canonical_json_bytes(self.to_canonical()))
+
+
+def first_confirmatory_boundary(publication_committer_at: datetime) -> datetime:
+    if publication_committer_at.tzinfo is None or publication_committer_at.utcoffset() is None:
+        raise ValueError("publication_committer_at must be timezone-aware")
+    epoch = int(publication_committer_at.astimezone(UTC).timestamp())
+    return datetime.fromtimestamp((epoch // 300 + 1) * 300, tz=UTC)
+
+
+def confirmatory_window_end(publication_committer_at: datetime) -> datetime:
+    return first_confirmatory_boundary(publication_committer_at) + timedelta(
+        seconds=RANKING_WINDOW_SECONDS
+    )
+
+
+def require_confirmatory_boundary(*, as_of: datetime, publication_committer_at: datetime) -> None:
+    if as_of.tzinfo is None or as_of.utcoffset() is None:
+        raise ValueError("as_of must be timezone-aware")
+    as_of_utc = as_of.astimezone(UTC)
+    if as_of_utc.microsecond != 0 or int(as_of_utc.timestamp()) % 300 != 0:
+        raise ValueError("as_of must align to a UTC epoch multiple of 300 seconds")
+    start = first_confirmatory_boundary(publication_committer_at)
+    end = start + timedelta(seconds=RANKING_WINDOW_SECONDS)
+    if as_of_utc < start or as_of_utc >= end:
+        raise ValueError("as_of is outside the fixed preregistered ranking window")
+
+
+def _git_text(root: Path, args: list[str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, check=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("candidate freeze Git publication cannot be verified") from error
+    return result.stdout.strip()
+
+
+def _matching_receipt_path(root: Path, receipt: CandidateFreezeReceipt) -> Path:
+    base = root / "experiments/advanced_intelligence/pef_v0"
+    matches: list[Path] = []
+    for path in sorted(base.glob("candidate_freeze_receipt_v*.json")):
+        try:
+            raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if raw == receipt.to_canonical():
+            matches.append(path)
+    if len(matches) != 1:
+        raise RuntimeError("exact canonical candidate freeze receipt publication is not uniquely present")
+    return matches[0]
+
+
+def derive_freeze_publication(
+    root: Path, receipt: CandidateFreezeReceipt, *, receipt_path: Path | None = None
+) -> CandidateFreezePublication:
+    path = receipt_path or _matching_receipt_path(root, receipt)
+    try:
+        relative = path.resolve().relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError) as error:
+        raise ValueError("candidate freeze receipt must be inside the repository root") from error
+    if _FREEZE_RECEIPT_PUBLICATION_PATH_RE.fullmatch(relative) is None:
+        raise ValueError("candidate freeze receipt path is not a canonical versioned publication path")
+    if receipt.implementation_commit is None or receipt.implementation_tree_digest is None:
+        raise RuntimeError("candidate freeze receipt is missing implementation identity")
+    try:
+        raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("candidate freeze receipt publication is unreadable") from error
+    if raw != receipt.to_canonical():
+        raise RuntimeError("candidate freeze publication file does not equal the bound receipt")
+    tree = _git_text(root, ["rev-parse", f"{receipt.implementation_commit}^{{tree}}"])
+    if tree != receipt.implementation_tree_digest:
+        raise RuntimeError("candidate freeze implementation tree does not match bound commit")
+    try:
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", receipt.implementation_commit, "HEAD"],
+            cwd=root, capture_output=True, check=False, timeout=30
+        )
+        if ancestor.returncode != 0:
+            raise RuntimeError("frozen implementation is not an ancestor of runtime HEAD")
+        diff = subprocess.run(
+            ["git", "diff", "--name-status", "-z", "--no-renames", receipt.implementation_commit, "HEAD", "--"],
+            cwd=root, capture_output=True, check=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("candidate freeze Git publication cannot be verified") from error
+    fields = diff.stdout.split(b"\\0")
+    if fields and fields[-1] == b"": fields.pop()
+    if len(fields) != 2:
+        raise RuntimeError("runtime tree is not the exact one-file freeze publication delta")
+    status = fields[0].decode("ascii")
+    changed = fields[1].decode("utf-8")
+    if (status, changed) != ("A", relative):
+        raise RuntimeError("runtime tree drifted outside the exact freeze receipt publication")
+    parts = _git_text(root, ["rev-list", "--parents", "-n", "1", "HEAD"]).split()
+    if len(parts) != 3:
+        raise RuntimeError("durable freeze publication HEAD must be an exact two-parent merge commit")
+    publication_commit, first_parent, _ = parts
+    if first_parent != receipt.implementation_commit:
+        raise RuntimeError("durable freeze publication first parent is not the frozen implementation")
+    committed_at = datetime.fromisoformat(_git_text(root, ["show", "-s", "--format=%cI", "HEAD"]))
+    if committed_at.tzinfo is None or committed_at.utcoffset() is None:
+        raise RuntimeError("publication committer timestamp is not timezone-aware")
+    if committed_at < receipt.frozen_at:
+        raise RuntimeError("durable freeze publication timestamp precedes receipt creation")
+    return CandidateFreezePublication(
+        freeze_receipt_id=receipt.receipt_id,
+        freeze_receipt_digest=receipt.receipt_digest,
+        implementation_commit=receipt.implementation_commit,
+        implementation_tree_digest=receipt.implementation_tree_digest,
+        publication_commit=publication_commit,
+        publication_committer_at=committed_at,
+    )
+
+
+__all__ = [
+    "CandidateFreezePublication",
+    "FREEZE_PUBLICATION_SCHEMA_VERSION",
+    "RANKING_WINDOW_SECONDS",
+    "confirmatory_window_end",
+    "derive_freeze_publication",
+    "first_confirmatory_boundary",
+    "require_confirmatory_boundary",
+]
+''')
+
+          (p/'migrations/versions/0013_freeze_publication_authority.py').write_text('''"""Add append-only Git publication authority for candidate freezes.
+
+Revision ID: 0013_freeze_publication_authority
+Revises: 0012_opportunity_memberships
+"""
+from alembic import op
+revision = "0013_freeze_publication_authority"
+down_revision = "0012_opportunity_memberships"
+branch_labels = None
+depends_on = None
+
+def upgrade() -> None:
+    op.execute(r"""
+    CREATE TABLE candidate_freeze_publications (
+        receipt_id TEXT PRIMARY KEY REFERENCES candidate_freeze_receipts(receipt_id),
+        schema_version TEXT NOT NULL CHECK (schema_version = 'candidate-freeze-publication-v0'),
+        freeze_receipt_digest TEXT NOT NULL CHECK (freeze_receipt_digest ~ '^sha256:[0-9a-f]{64}$'),
+        implementation_commit TEXT NOT NULL CHECK (implementation_commit ~ '^[0-9a-f]{40,64}$'),
+        implementation_tree_digest TEXT NOT NULL CHECK (implementation_tree_digest ~ '^[0-9a-f]{40,64}$'),
+        publication_commit TEXT NOT NULL CHECK (publication_commit ~ '^[0-9a-f]{40,64}$'),
+        publication_committer_at TIMESTAMPTZ NOT NULL,
+        publication_digest TEXT NOT NULL CHECK (publication_digest ~ '^sha256:[0-9a-f]{64}$'),
+        publication_json JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+    );
+    CREATE FUNCTION frontier_validate_freeze_publication() RETURNS trigger LANGUAGE plpgsql AS $$
+    DECLARE r candidate_freeze_receipts%ROWTYPE;
+    BEGIN
+      SELECT * INTO r FROM candidate_freeze_receipts WHERE receipt_id = NEW.receipt_id;
+      IF NOT FOUND THEN RAISE EXCEPTION 'freeze publication receipt does not exist'; END IF;
+      IF r.status <> 'FROZEN' THEN RAISE EXCEPTION 'freeze publication requires FROZEN receipt'; END IF;
+      IF r.durable_freeze_at IS NULL THEN RAISE EXCEPTION 'freeze publication requires canonical DB durability'; END IF;
+      IF NEW.freeze_receipt_digest <> r.receipt_digest OR NEW.implementation_commit <> r.implementation_commit OR NEW.implementation_tree_digest <> r.implementation_tree_digest THEN
+        RAISE EXCEPTION 'freeze publication identity does not match receipt';
+      END IF;
+      IF NEW.publication_committer_at < r.durable_freeze_at OR NEW.publication_committer_at < r.frozen_at THEN
+        RAISE EXCEPTION 'freeze publication timestamp precedes durable receipt';
+      END IF;
+      RETURN NEW;
+    END; $$;
+    CREATE TRIGGER frontier_validate_freeze_publication_insert BEFORE INSERT ON candidate_freeze_publications
+      FOR EACH ROW EXECUTE FUNCTION frontier_validate_freeze_publication();
+    CREATE TRIGGER frontier_append_only_freeze_publications BEFORE UPDATE OR DELETE ON candidate_freeze_publications
+      FOR EACH ROW EXECUTE FUNCTION frontier_reject_canonical_mutation();
+    CREATE TRIGGER frontier_append_only_freeze_publications_truncate BEFORE TRUNCATE ON candidate_freeze_publications
+      FOR EACH STATEMENT EXECUTE FUNCTION frontier_reject_canonical_mutation();
+    """)
+
+def downgrade() -> None:
+    op.execute(r"""
+    DROP TRIGGER IF EXISTS frontier_append_only_freeze_publications_truncate ON candidate_freeze_publications;
+    DROP TRIGGER IF EXISTS frontier_append_only_freeze_publications ON candidate_freeze_publications;
+    DROP TRIGGER IF EXISTS frontier_validate_freeze_publication_insert ON candidate_freeze_publications;
+    DROP FUNCTION IF EXISTS frontier_validate_freeze_publication();
+    DROP TABLE IF EXISTS candidate_freeze_publications;
+    """)
+''')
+
+          (p/'src/frontier/adapters/postgres/freeze_publication.py').write_text('''from __future__ import annotations
+
+from datetime import datetime
+from typing import cast
+
+import psycopg
+from psycopg.types.json import Jsonb
+
+from frontier.application.freeze_publication import CandidateFreezePublication
+from frontier.domain.digests import Digest
+
+
+class PostgresCandidateFreezePublicationRepository:
+    def __init__(self, connection: psycopg.Connection[tuple[object, ...]], *, persistence_authorized: bool = False) -> None:
+        self._connection = connection
+        self._persistence_authorized = persistence_authorized
+
+    def record_publication(self, publication: CandidateFreezePublication) -> None:
+        if not self._persistence_authorized:
+            raise PermissionError("candidate freeze publication persistence is not authorized")
+        with self._connection.transaction(), self._connection.cursor() as cur:
+            cur.execute(
+                """INSERT INTO candidate_freeze_publications (
+                    receipt_id, schema_version, freeze_receipt_digest, implementation_commit,
+                    implementation_tree_digest, publication_commit, publication_committer_at,
+                    publication_digest, publication_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (receipt_id) DO NOTHING RETURNING receipt_id""",
+                (publication.freeze_receipt_id, publication.schema_version,
+                 str(publication.freeze_receipt_digest), publication.implementation_commit,
+                 publication.implementation_tree_digest, publication.publication_commit,
+                 publication.publication_committer_at, str(publication.publication_digest),
+                 Jsonb(publication.to_canonical())),
+            )
+            inserted = cur.fetchone()
+            if inserted is None:
+                cur.execute("SELECT publication_digest FROM candidate_freeze_publications WHERE receipt_id=%s", (publication.freeze_receipt_id,))
+                row = cur.fetchone()
+                if row is None or cast(str, row[0]) != str(publication.publication_digest):
+                    raise RuntimeError("freeze publication identity conflict")
+
+    def get_publication(self, receipt_id: str) -> CandidateFreezePublication | None:
+        with self._connection.cursor() as cur:
+            cur.execute("""SELECT freeze_receipt_digest, implementation_commit, implementation_tree_digest,
+                       publication_commit, publication_committer_at
+                       FROM candidate_freeze_publications WHERE receipt_id=%s""", (receipt_id,))
+            row = cur.fetchone()
+        if row is None: return None
+        return CandidateFreezePublication(
+            freeze_receipt_id=receipt_id,
+            freeze_receipt_digest=Digest(cast(str,row[0])),
+            implementation_commit=cast(str,row[1]),
+            implementation_tree_digest=cast(str,row[2]),
+            publication_commit=cast(str,row[3]),
+            publication_committer_at=cast(datetime,row[4]),
+        )
+
+__all__=["PostgresCandidateFreezePublicationRepository"]
+''')
+
+          rep('src/frontier/adapters/postgres/readiness.py','EXPECTED_DATABASE_REVISION = "0012_opportunity_memberships"','EXPECTED_DATABASE_REVISION = "0013_freeze_publication_authority"',1)
+          rep('src/frontier/adapters/postgres/readiness.py','    "candidate_freeze_receipts",\n','    "candidate_freeze_receipts",\n    "candidate_freeze_publications",\n',1)
+          rep('tests/integration/test_experiment_lifecycle_postgres.py','assert readiness.migration_revision == "0012_opportunity_memberships"','assert readiness.migration_revision == "0013_freeze_publication_authority"',1)
+
+          rep('src/frontier/application/candidate_freeze.py','def _git_identity(root: Path) -> tuple[str | None, str | None]:','def _git_identity(root: Path, *, ref: str = "HEAD") -> tuple[str | None, str | None]:',1)
+          rep('src/frontier/application/candidate_freeze.py','["git", "rev-parse", "HEAD"],','["git", "rev-parse", ref],',1)
+          rep('src/frontier/application/candidate_freeze.py','["git", "rev-parse", "HEAD^{tree}"],','["git", "rev-parse", f"{ref}^{{tree}}"],',1)
+          rep('src/frontier/application/candidate_freeze.py','def collect_freeze_inputs(root: Path) -> FreezeInputs:','def collect_freeze_inputs(root: Path, *, implementation_ref: str | None = None) -> FreezeInputs:',1)
+          rep('src/frontier/application/candidate_freeze.py','    commit, tree = _git_identity(root)\n','    commit, tree = _git_identity(root, ref=implementation_ref or "HEAD")\n',1)
+
+          rep('src/frontier/application/drift_sentry.py','from frontier.application.candidate_freeze import collect_freeze_inputs\n','from frontier.application.candidate_freeze import collect_freeze_inputs\nfrom frontier.application.freeze_publication import derive_freeze_publication\n',1)
+          rep('src/frontier/application/drift_sentry.py','    def _try_collect(self) -> FreezeInputs | None:\n        try:\n            return collect_freeze_inputs(self._root)\n        except OSError, subprocess.SubprocessError:\n            return None\n','''    def _try_collect(self, receipt: CandidateFreezeReceipt | None = None) -> FreezeInputs | None:
+        try:
+            if receipt is None or receipt.implementation_commit is None:
+                return collect_freeze_inputs(self._root)
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=self._root, capture_output=True,
+                text=True, check=True, timeout=30
+            ).stdout.strip()
+            if head == receipt.implementation_commit:
+                return collect_freeze_inputs(self._root)
+            derive_freeze_publication(self._root, receipt)
+            return collect_freeze_inputs(
+                self._root, implementation_ref=receipt.implementation_commit
+            )
+        except (OSError, subprocess.SubprocessError, RuntimeError, ValueError):
+            return None
+''',1)
+          rep('src/frontier/application/drift_sentry.py','live = inputs if inputs is not None else self._try_collect()','live = inputs if inputs is not None else self._try_collect(receipt)',1)
+          rep('src/frontier/application/drift_sentry.py','live = self._try_collect()','live = self._try_collect(receipt)',1)
+
+          rep('src/frontier/application/experiment_orchestration.py','from frontier.application.drift_sentry import DriftChecker\n','from frontier.application.drift_sentry import DriftChecker\nfrom frontier.application.freeze_publication import require_confirmatory_boundary\n',1)
+          rep('src/frontier/application/experiment_orchestration.py','''    receipt: CandidateFreezeReceipt
+    durable_freeze_at: datetime | None
+''','''    receipt: CandidateFreezeReceipt
+    durable_freeze_at: datetime | None
+    publication_commit: str | None = None
+    publication_committer_at: datetime | None = None
+''',1)
+          old='''    if not as_of > binding.durable_freeze_at:
+        return ConfirmatoryDecision(
+            False,
+            "run as_of is not strictly after durable_freeze_at",
+        )
+    if not canonical_context:
+'''
+          new='''    if binding.publication_commit is None or binding.publication_committer_at is None:
+        return ConfirmatoryDecision(False, "bound freeze receipt has no verified Git publication")
+    if binding.publication_committer_at < binding.durable_freeze_at:
+        return ConfirmatoryDecision(False, "Git publication precedes canonical DB durability")
+    try:
+        require_confirmatory_boundary(
+            as_of=as_of, publication_committer_at=binding.publication_committer_at
+        )
+    except ValueError as error:
+        return ConfirmatoryDecision(False, str(error))
+    if not canonical_context:
+'''
+          rep('src/frontier/application/experiment_orchestration.py',old,new,1)
+
+          f=p/'src/frontier/adapters/postgres/experiment_attempts.py'; s=f.read_text()
+          old='''                       original_receipt_digest, durable_freeze_at
+                FROM candidate_freeze_receipts
+                WHERE experiment_id = %s
+                ORDER BY frozen_at DESC, receipt_id DESC
+'''
+          new='''                       r.original_receipt_digest, r.durable_freeze_at,
+                       p.publication_commit, p.publication_committer_at
+                FROM candidate_freeze_receipts r
+                LEFT JOIN candidate_freeze_publications p ON p.receipt_id = r.receipt_id
+                WHERE r.experiment_id = %s
+                ORDER BY r.frozen_at DESC, r.receipt_id DESC
+'''
+          if old not in s: raise SystemExit('experiment_attempts query target missing')
+          s=s.replace(old,new)
+          s=s.replace('SELECT status, drift_reasons, preregistration_digest,\n', 'SELECT r.status, r.drift_reasons, r.preregistration_digest,\n',1)
+          for col in ['preregistration_config_digest','implementation_commit','implementation_tree_digest','dependency_lock_digest','source_registry_digest','registry_entry_digests','receipt_digest','frozen_at','verified_at']:
+              s=s.replace(f'                       {col},\n',f'                       r.{col},\n',1)
+          s=s.replace('''        return FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=None if row[13] is None else cast(datetime, row[13]),
+        )
+''','''        return FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=None if row[13] is None else cast(datetime, row[13]),
+            publication_commit=None if row[14] is None else cast(str, row[14]),
+            publication_committer_at=None if row[15] is None else cast(datetime, row[15]),
+        )
+''',1)
+          f.write_text(s)
+
+          # Update unit confirmatory fixtures with publication authority.
+          f=p/'tests/unit/test_experiment_orchestration.py'; s=f.read_text()
+          s=s.replace('FreezeBinding(receipt=receipt, durable_freeze_at=durable)', 'FreezeBinding(receipt=receipt, durable_freeze_at=durable, publication_commit=(None if binding == "NOT_DURABLE" else "9" * 40), publication_committer_at=(None if binding == "NOT_DURABLE" else BOUNDARY - timedelta(seconds=301)))')
+          s=s.replace('FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=300))','FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=600), publication_commit="9" * 40, publication_committer_at=BOUNDARY - timedelta(seconds=301))')
+          s=s.replace('good = FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=1))','good = FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=600), publication_commit="9" * 40, publication_committer_at=BOUNDARY - timedelta(seconds=301))')
+          s=s.replace('("EARLIER", True, "run as_of is not strictly after durable_freeze_at"),\n        ("EQUAL", True, "run as_of is not strictly after durable_freeze_at"),','("EARLIER", True, "Git publication precedes canonical DB durability"),\n        ("EQUAL", True, "Git publication precedes canonical DB durability"),')
+          f.write_text(s)
+
+          # Other confirmatory fixture bindings need publication facts.
+          for path in ['tests/unit/test_drift_sentry.py']:
+              f=p/path; s=f.read_text(); s=s.replace('FreezeBinding(receipt=receipt, durable_freeze_at=durable_freeze_at)','FreezeBinding(receipt=receipt, durable_freeze_at=durable_freeze_at, publication_commit="9" * 40, publication_committer_at=durable_freeze_at + timedelta(seconds=1))'); f.write_text(s)
+
+          (p/'tests/unit/test_freeze_publication.py').write_text('''from __future__ import annotations
+import json
+import subprocess
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from frontier.application.freeze_publication import (
+    confirmatory_window_end, derive_freeze_publication, first_confirmatory_boundary,
+    require_confirmatory_boundary,
+)
+from frontier.domain.candidate_freeze import FreezeInputs, build_candidate_freeze_receipt
+from frontier.domain.canonical_json import canonical_json_text
+from frontier.domain.digests import Digest
+
+PUB=datetime(2026,9,7,18,17,59,tzinfo=UTC)
+START=datetime(2026,9,7,18,20,tzinfo=UTC)
+
+def test_publication_timestamp_defines_fixed_window():
+    assert first_confirmatory_boundary(PUB)==START
+    assert first_confirmatory_boundary(START)==START+timedelta(minutes=5)
+    assert confirmatory_window_end(PUB)==START+timedelta(seconds=2_419_200)
+    require_confirmatory_boundary(as_of=START, publication_committer_at=PUB)
+
+def test_exact_publication_merge_is_derived_from_git(tmp_path: Path):
+    def git(*args: str) -> str:
+        return subprocess.run(["git",*args],cwd=tmp_path,text=True,capture_output=True,check=True).stdout.strip()
+    git("init","-b","main"); git("config","user.email","frontier@example.test"); git("config","user.name","Frontier Test")
+    (tmp_path/"base.txt").write_text("base")
+    git("add","base.txt"); git("commit","-m","implementation")
+    implementation=git("rev-parse","HEAD"); tree=git("rev-parse","HEAD^{tree}")
+    receipt=build_candidate_freeze_receipt(FreezeInputs(
+        preregistration_digest=Digest("sha256:"+"1"*64),
+        preregistration_config_digest=Digest("sha256:e2627f62deac24e5f1b09960687761ebbcc61b3fd0c8fec07fec0006dcff7dc1"),
+        implementation_commit=implementation, implementation_tree_digest=tree,
+        dependency_lock_digest=Digest("sha256:"+"2"*64), source_registry_digest=Digest("sha256:"+"3"*64),
+        registry_entry_digests=(),), frozen_at=datetime(2020,1,1,tzinfo=UTC))
+    git("checkout","-b","freeze-publication")
+    path=tmp_path/"experiments/advanced_intelligence/pef_v0/candidate_freeze_receipt_v1.json"; path.parent.mkdir(parents=True)
+    path.write_text(canonical_json_text(receipt.to_canonical())+"\n")
+    git("add",str(path.relative_to(tmp_path))); git("commit","-m","publish receipt")
+    git("checkout","main"); git("merge","--no-ff","freeze-publication","-m","merge durable freeze")
+    publication=derive_freeze_publication(tmp_path,receipt,receipt_path=path)
+    assert publication.implementation_commit==implementation
+    assert publication.publication_commit==git("rev-parse","HEAD")
+    assert publication.publication_committer_at.tzinfo is not None
+''')
+
+          (p/'tests/integration/test_freeze_publication_postgres.py').write_text('''from __future__ import annotations
+import os
+from datetime import UTC, datetime, timedelta
+import pytest
+psycopg=pytest.importorskip("psycopg")
+from frontier.adapters.postgres.advanced_intelligence import PostgresCandidateFreezeRepository
+from frontier.adapters.postgres.freeze_publication import PostgresCandidateFreezePublicationRepository
+from frontier.application.freeze_publication import CandidateFreezePublication
+from frontier.domain.candidate_freeze import FreezeInputs, build_candidate_freeze_receipt
+from frontier.domain.digests import Digest
+DB=os.getenv("FRONTIER_TEST_DATABASE_URL")
+pytestmark=pytest.mark.skipif(not DB,reason="FRONTIER_TEST_DATABASE_URL not set")
+
+def test_publication_requires_authority_and_binds_durable_receipt():
+    assert DB
+    with psycopg.connect(DB) as conn:
+        receipt=build_candidate_freeze_receipt(FreezeInputs(
+            preregistration_digest=Digest("sha256:"+"1"*64),
+            preregistration_config_digest=Digest("sha256:e2627f62deac24e5f1b09960687761ebbcc61b3fd0c8fec07fec0006dcff7dc1"),
+            implementation_commit="a"*40, implementation_tree_digest="b"*40,
+            dependency_lock_digest=Digest("sha256:"+"2"*64), source_registry_digest=Digest("sha256:"+"3"*64), registry_entry_digests=(),
+        ), frozen_at=datetime.now(UTC)-timedelta(minutes=5))
+        PostgresCandidateFreezeRepository(conn,persistence_authorized=True).record_receipt(receipt)
+        row=conn.execute("SELECT durable_freeze_at FROM candidate_freeze_receipts WHERE receipt_id=%s",(receipt.receipt_id,)).fetchone(); assert row and row[0]
+        publication=CandidateFreezePublication(
+            freeze_receipt_id=receipt.receipt_id, freeze_receipt_digest=receipt.receipt_digest,
+            implementation_commit=receipt.implementation_commit or "", implementation_tree_digest=receipt.implementation_tree_digest or "",
+            publication_commit="c"*40, publication_committer_at=row[0]+timedelta(seconds=1))
+        repo=PostgresCandidateFreezePublicationRepository(conn)
+        with pytest.raises(PermissionError): repo.record_publication(publication)
+        PostgresCandidateFreezePublicationRepository(conn,persistence_authorized=True).record_publication(publication)
+        loaded=repo.get_publication(receipt.receipt_id); assert loaded==publication
+''')
+          PY
+      - name: Verify G2-02
+        run: |
+          uv run ruff format src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py migrations/versions/0013_freeze_publication_authority.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py src/frontier/application/candidate_freeze.py src/frontier/application/drift_sentry.py src/frontier/application/experiment_orchestration.py src/frontier/adapters/postgres/experiment_attempts.py src/frontier/adapters/postgres/readiness.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py tests/integration/test_experiment_lifecycle_postgres.py
+          uv run ruff check src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py migrations/versions/0013_freeze_publication_authority.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py src/frontier/application/candidate_freeze.py src/frontier/application/drift_sentry.py src/frontier/application/experiment_orchestration.py src/frontier/adapters/postgres/experiment_attempts.py src/frontier/adapters/postgres/readiness.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py
+          uv run pyright
+          uv run alembic upgrade head
+          uv run pytest -q tests/unit/test_freeze_publication.py tests/unit/test_confirmatory_freeze_binding.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py tests/integration/test_freeze_publication_postgres.py tests/integration/test_drift_sentry_postgres.py
+      - name: Commit G2-02 and remove runner
+        run: |
+          rm .github/workflows/gigasprint02-g202.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'feat(gigasprint02): bind confirmatory window to Git publication'
+          git push origin HEAD:agent/gigasprint-02-prefreeze-launch-integrity
