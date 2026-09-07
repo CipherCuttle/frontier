@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -15,6 +16,15 @@ def replace_once(path: str, old: str, new: str) -> None:
     if count != 1:
         raise RuntimeError(f"{path}: expected one replacement target, found {count}")
     file.write_text(text.replace(old, new), encoding="utf-8")
+
+
+def regex_replace_once(path: str, pattern: str, new: str) -> None:
+    file = ROOT / path
+    text = file.read_text(encoding="utf-8")
+    replaced, count = re.subn(pattern, new, text, count=1, flags=re.MULTILINE)
+    if count != 1:
+        raise RuntimeError(f"{path}: expected one regex replacement target, found {count}")
+    file.write_text(replaced, encoding="utf-8")
 
 
 def apply_original_payload() -> None:
@@ -133,12 +143,10 @@ def format_base() -> None:
 
 
 def repair_semantics() -> None:
-    replace_once(
+    regex_replace_once(
         "tests/unit/test_experiment_orchestration.py",
-        '                publication_committer_at=(\n'
-        '                    None if binding == "NOT_DURABLE" else BOUNDARY - timedelta(seconds=301)\n'
-        '                ),\n',
-        '                publication_committer_at=(\n'
+        r'publication_committer_at=\(\s*None\s+if binding == "NOT_DURABLE"\s+else BOUNDARY - timedelta\(seconds=301\)\s*\),',
+        'publication_committer_at=(\n'
         '                    None\n'
         '                    if binding == "NOT_DURABLE"\n'
         '                    else (\n'
@@ -146,7 +154,7 @@ def repair_semantics() -> None:
         '                        if binding == "LATER"\n'
         '                        else BOUNDARY - timedelta(seconds=301)\n'
         '                    )\n'
-        '                ),\n',
+        '                ),',
     )
 
     replace_once(
