@@ -344,7 +344,10 @@ def _refresh_bundle_identity(bundle: JsonObject) -> str:
 
 
 def _test_expected_upstream_equivalence_by_content_digest(bundle: JsonObject) -> dict[str, str]:
-    """Derive positive-fixture expectations only; production callers must supply these independently."""
+    """Derive positive-fixture expectations only.
+
+    Production callers must supply these independently.
+    """
 
     manifest = _obj(bundle["origin_provenance_manifest"])
     expected: dict[str, str] = {}
