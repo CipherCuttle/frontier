@@ -2,7 +2,7 @@
 
 ## State
 
-`IMPLEMENTATION_CANDIDATE`
+`IMPLEMENTATION_CANDIDATE / BROAD_REVIEW_SPENT / THREE_P1_REPAIRED`
 
 Parent authority:
 
@@ -10,40 +10,25 @@ Parent authority:
 - preflight authority blob: `955d98348df8622a5336c40762c3cd722f589c8d`
 - bound protocol-v2 validator blob: `3a5f383f0cdc84f2f75ca968931d423b56832ee7`
 
-This phase is an implementation of the authority already granted by
+This phase implements the authority already granted by
 `ENTITY_GROUND_TRUTH_REAL_TRUST_PREFLIGHT_V0` to prepare a pure offline real-trust material
-validator and validation tests.
-
-It is **not** `ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0` itself.
-
-## Objective
-
-Provide a deterministic, fail-closed validator for a future externally supplied real-trust
-material bundle candidate without creating, synthesizing, self-attesting, or freezing any real
-trust material.
-
-The validator exists so the later material-freeze phase can reject malformed, self-declared,
-reused, stale, expired, non-independent, or incompletely bound material before any real label
-collection is even eligible for separate authorization.
+validator and hostile validation tests. It is **not** `ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0`
+itself and does not create, freeze, or authorize real trust material.
 
 ## Authority boundary
 
-This implementation may only validate a supplied candidate.
+`ACCEPT_CANDIDATE` means only that a supplied candidate satisfied this executable mechanical
+contract under caller-provided offline verification, caller-provided fresh PoP challenges, and an
+independently supplied current-head pin.
 
-A result of `ACCEPT_CANDIDATE` means only that the supplied object satisfied this executable
-candidate contract under the caller-provided offline verification backend and externally supplied
-current-head pin.
+It never grants:
 
-It does **not** mean:
-
-- real trust material is frozen;
-- synthetic fixture material is real;
-- any adjudicator identity is independently established by Frontier;
-- label collection is authorized;
-- `transparent-entity-hybrid-v0` has been evaluated;
-- entity quality is PASS/FAIL;
-- promotion is available;
-- canonical entity truth exists.
+- real-trust authority;
+- real label collection;
+- candidate quality evaluation or PASS/FAIL;
+- promotion;
+- canonical entity truth;
+- persistence, API, workers, terminal, registry, ranking, or production provenance authority.
 
 Frozen scientific state remains:
 
@@ -56,187 +41,125 @@ Frozen scientific state remains:
 2. `tests/unit/test_entity_ground_truth_real_trust_material_v0.py`
 3. `docs/ENTITY_GROUND_TRUTH_REAL_TRUST_VALIDATOR_V0.md`
 
-No persistence, migration, worker, scheduler, API, terminal, source-registry, ranking, production
-provenance-truth, label-collection, or candidate-evaluation change is authorized.
-
-## Candidate schema
-
-The top-level candidate must contain exactly the preflight-required fields:
-
-- `schema_version`
-- `bundle_id`
-- `created_at`
-- `identity_attestation_authority`
-- `adjudicator_identity_key_bindings`
-- `service_sealing_verification_object`
-- `durability_publication_verification_object`
-- `role_controller_attestations`
-- `origin_provenance_manifest`
-- `revocation_policy`
-- `expiry_policy`
-- `rotation_lineage`
-- `validity_state`
-- `bundle_digest`
-
-Unknown top-level fields fail closed rather than being silently ignored.
+No other repository surface is authorized by this phase.
 
 ## Canonicalization and content addressing
 
-The merged authority freezes RFC8785/JCS + SHA-256 and the domain separator
-`FRONTIER_ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0\u0000`.
+The validator preserves the frozen RFC8785/JCS + SHA-256 contract and accepts only the existing
+strict JCS-safe subset. `bundle_digest` is recomputed over the complete authoritative payload
+excluding only `bundle_id` and `bundle_digest`, and `bundle_id` is derived from that digest.
 
-To avoid adding a new serialization dependency or silently diverging from RFC8785, V0 accepts only
-a strict JCS-safe subset:
+A separate `material_core_digest` binds the complete material core for service-sealing and
+durability authorization without creating a circular signature inside the full bundle digest.
 
-- ASCII object keys and string values;
-- booleans, null, arrays, objects;
-- integers only within the IEEE-754 exact-integer range;
-- no binary floats;
-- no non-ASCII strings.
+## Human identity and fresh proof of possession
 
-Within that strict subset the existing Frontier canonical JSON serializer is deterministic and
-compatible with the required JCS ordering/encoding properties. Inputs outside the subset fail
-closed rather than receiving an approximate canonicalization.
+Exactly two ordered adjudicator slots are required. Each identity attestation must bind:
 
-`bundle_digest` is recomputed over the complete authoritative payload excluding only `bundle_id`
-and `bundle_digest`, with the frozen domain separator. `bundle_id` is derived from that digest.
+- role `ADJUDICATOR`;
+- opaque subject commitment;
+- adjudicator public-key fingerprint derived from the complete supplied public key;
+- the exact identity-authority verification-material digest acting as issuer identity;
+- authenticated `valid_from` and `valid_until` timestamps;
+- authenticated revocation state `ACTIVE`;
+- a non-negative authenticated revocation sequence.
 
-A second `material_core_digest` is derived inside the validity state so service-sealing and
-durability signatures can bind the complete material core without creating a circular signature
-inside the full bundle digest. The full bundle digest still covers the authorization signatures.
+The validator passes `as_of` into the injected offline external-attestation verifier and also
+mechanically requires `valid_from <= as_of < valid_until`. Unknown, expired, or revoked identity
+state fails closed.
 
-## Human subject to key binding
+Proof of possession no longer trusts a candidate-chosen nonce as freshness evidence. The caller
+must provide exactly one fresh challenge for each adjudicator role. Each challenge must be at least
+128 bits and the two challenges must differ. The candidate-carried nonce must exactly equal the
+independently caller-supplied role challenge before the ED25519 PoP is accepted. Replaying a valid
+old PoP under a new caller challenge therefore fails closed.
 
-Exactly two ordered adjudicator slots are required.
-
-Each slot must provide:
-
-- an opaque SHA-256 subject commitment;
-- a complete base64url-no-pad 32-byte ED25519 public key;
-- the derived SHA-256 public-key fingerprint;
-- an external identity attestation whose payload binds the exact opaque subject commitment and
-  exact adjudicator public-key fingerprint to role `ADJUDICATOR`;
-- the canonical attestation digest;
-- a minimum 128-bit proof challenge nonce;
-- an ED25519 proof-of-possession signature over the frozen domain-separated message fields.
-
-The two subject commitments, two public keys, and two controller commitments must all be distinct.
-
-## Offline verification backend
-
-The core validator contains no network calls and does not hard-code an external human identity
-scheme.
-
-The caller supplies an `OfflineVerificationBackend` with only two capabilities:
-
-1. ED25519 signature verification;
-2. verification of externally specified attestations against complete supplied verification
-   material.
-
-This preserves the preflight decision that adjudicator/service/durability/PoP signatures are
-ED25519 while the external human identity-attestation mechanism remains scheme-declared and
-offline-verifiable rather than falsely forced into ED25519.
-
-The test suite uses a fake backend only to exercise mechanics. Because this validator never grants
-real trust authority, a synthetic test fixture can at most produce `ACCEPT_CANDIDATE`; it cannot
-satisfy the real-material gate.
+The caller is responsible for issuing fresh unpredictable challenges and for not reusing them
+across real material-freeze attempts. Frontier does not manufacture freshness by accepting a nonce
+merely because the candidate contains it.
 
 ## Complete verification objects and role separation
 
-Fingerprints are never accepted in place of complete verification material.
+Fingerprints are never accepted in place of complete verification material. Verification bytes
+and externally attested controller commitments remain pairwise separated across:
 
-The candidate must carry complete public verification material for:
+- `ADJUDICATOR_1`
+- `ADJUDICATOR_2`
+- `SERVICE_SEALING`
+- `DURABILITY_PUBLICATION`
+- `IDENTITY_ATTESTATION_AUTHORITY`
 
-- ADJUDICATOR_1
-- ADJUDICATOR_2
-- SERVICE_SEALING
-- DURABILITY_PUBLICATION
-- IDENTITY_ATTESTATION_AUTHORITY
-
-Verification material must be byte-distinct across all five roles.
-
-Controller commitments must be pairwise distinct across the same five roles. Each external
-controller attestation binds both the role/controller commitment and the exact verification
-material digest, preventing an attestation for one controller from being replayed onto a different
-key or verification object.
+Controller attestations continue to bind the exact role, controller commitment, and verification
+material digest.
 
 ## Provenance-derived origin independence
 
-Self-declared `origin_root_id` labels do not exist in this candidate contract.
+The provenance manifest remains content-addressed and every parent edge/root assertion remains
+externally verified. Terminal roots now additionally require an externally attested
+`upstream_equivalence_commitment` bound inside the root attestation.
 
-The provenance manifest is content-addressed. Every node is content-addressed. Every parent edge
-is externally verified and binds:
+Derived independence is counted by this authenticated upstream-equivalence commitment, **not** by
+the terminal provenance node ID. Therefore two different node IDs, proofs, or verification objects
+that resolve to the same authoritative upstream equivalence commitment collapse to one origin.
+Mirrors, reposts, re-attestations, and common upstreams cannot manufacture the two-root threshold.
 
-- child content digest;
-- parent node digest;
-- relation class.
-
-Terminal upstream nodes require an external root attestation binding the content digest to
-`terminal_upstream=true`.
-
-The validator traverses verified parent edges, rejects missing parents and cycles, derives terminal
-upstream roots, and collapses common upstream roots. A candidate with fewer than two distinct
-derived terminal roots fails closed.
+Non-terminal nodes must not carry a terminal equivalence commitment. Missing parents, cycles,
+malformed attestations, duplicate evidence IDs, or fewer than two distinct derived upstream
+equivalence commitments fail closed.
 
 ## Validity, expiry, genesis, and anti-rollback
 
-V0 accepts only the genesis material lineage:
+V0 continues to accept only genesis lineage. The material bundle itself must be ACTIVE and inside
+its authenticated validity interval, with service and durability signatures over the frozen
+validity-authorization message. The caller must provide the independently expected current-head
+digest; an internally valid but stale bundle is rejected.
 
-- sequence `0`;
-- predecessor bundle digest `null`;
-- supersession statement `null`.
+## Secret and synthetic-material hygiene
 
-Any non-genesis rotation fails closed. Rotation support must not be improvised inside this phase.
+Known private/signing/recovery fields remain forbidden, as do `TEST_ONLY_*`, `PLACEHOLDER_*`, and
+`EXAMPLE_*` markers. Synthetic fixtures may exercise mechanics but can never become real trust.
 
-The candidate must be ACTIVE, within its frozen validity interval, and carry service-sealing plus
-durability ED25519 signatures over the domain-separated validity authorization message containing:
+## Broad hostile review and bounded repair
 
-- `material_core_digest`
-- `state_digest`
-- sequence
+The one broad hostile review was spent on exact head
+`465f379813310edac7a0157f7987cbe4b31cc403` and found three P1 blockers:
 
-The caller must also provide the independently expected current authority-head digest. If the
-candidate digest differs, validation rejects it as stale or unpinned.
+1. candidate-controlled PoP nonce allowed replay without a fresh external challenge;
+2. human identity attestations lacked authenticated validity/revocation enforcement at `as_of`;
+3. terminal independence counted node IDs, allowing re-attestation of one upstream to manufacture
+   multiple apparent roots.
 
-Passing the candidate's own digest back as the expected head is sufficient only for mechanical
-tests; the later real-material freeze must provide the pin independently and durably.
+The bounded repair closes exactly those three areas by requiring caller-issued PoP challenges,
+identity validity/revocation evidence with `as_of` verification, and externally attested upstream
+equivalence commitments used as the derived root identity.
 
-## Secret hygiene
+## Required hostile regression coverage
 
-The validator rejects known secret-bearing field names such as private keys, seeds, mnemonics,
-recovery keys, signing tokens, and service secrets. Exact nested schemas further reduce places in
-which unexpected data can hide.
+The focused suite must prove rejection of at least:
 
-This is a fail-closed repository safeguard, not a claim that arbitrary byte strings can be
-semantically proven public. The later real-material freeze must still establish that supplied
-verification objects are genuinely public material from the external trust providers.
-
-## Required hostile tests
-
-At minimum, tests must prove rejection of:
-
-- synthetic/test/placeholder/example markers;
+- replayed PoP under a different caller-issued challenge;
+- duplicate caller challenges;
+- expired human identity attestation;
+- revoked human identity attestation;
+- two differently attested terminal nodes sharing one upstream-equivalence commitment;
+- synthetic/test/placeholder/example material;
 - known secret-bearing fields;
 - fingerprint-only signing roles;
 - duplicate human subjects;
-- reused signing verification material;
-- reused role controllers;
-- controller attestations not bound to the exact verification material;
-- mirrored evidence falsely counted as independent roots;
-- missing or cyclic provenance parents;
-- bundle drift under an old digest;
-- a self-consistent but non-pinned/stale bundle;
+- reused signing verification material or controllers;
+- controller attestation replay onto a different role key;
+- mirrored evidence, missing parents, and provenance cycles;
+- bundle drift or a stale/unpinned current head;
 - non-genesis rotation;
-- expired or unauthenticated validity state;
+- invalid bundle validity signatures;
 - failed external attestation verification;
-- naive/as-timezone-ambiguous evaluation timestamps;
-- non-ASCII or otherwise unsupported JCS inputs.
+- naive timestamps and unsupported JCS inputs.
 
 ## Closure policy
 
 `IMPLEMENT -> FULL CI -> ONE independent hostile review -> fix Critical/High -> ONE targeted re-review only if Critical/High fixes were required -> READY_FOR_MERGE`
 
-Medium/Low findings do not restart the phase unless they undermine this phase objective, violate a
-frozen invariant, break fail-closed behavior, or invalidate the evidence.
+The broad review is spent. After this repair, run full exact-head CI and then exactly one targeted
+re-review restricted to the three original P1 closures. Do not run another broad review.
 
 Do not merge without explicit repository-owner authorization.
