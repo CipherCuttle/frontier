@@ -28,7 +28,7 @@ jobs:
           --health-retries 20
     env:
       FRONTIER_TEST_DATABASE_URL: postgresql://frontier@localhost:5432/frontier
-      FRONTIER_DATABASE_URL: postgresql://frontier@localhost:5432/frontier
+      FRONTIER_DATABASE_URL: postgresql+psycopg://frontier@localhost:5432/frontier
     steps:
       - uses: actions/checkout@v4
         with:
