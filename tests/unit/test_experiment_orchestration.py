@@ -16,6 +16,7 @@ from frontier.application.advanced_intelligence import run_shadow_experiment
 from frontier.application.experiment_orchestration import (
     RUN_CLASS_CONFIRMATORY,
     RUN_CLASS_DEV,
+    ConfirmatoryClaimResult,
     ConfirmatoryDecision,
     ExperimentAttemptRepository,
     ExperimentCycleAction,
@@ -183,6 +184,46 @@ class FakeAttemptRepository(ExperimentAttemptRepository):
             )
         )
         return True
+
+    def claim_confirmatory(
+        self,
+        attempt_id: str,
+        *,
+        expected_receipt_id: str | None,
+        owner: str,
+        lease_expires_at: datetime,
+        now: datetime,
+        deny_reason: str | None = None,
+    ) -> ConfirmatoryClaimResult:
+        attempt = self.attempts.get(attempt_id)
+        if attempt is None:
+            return ConfirmatoryClaimResult(False, False, "experiment attempt does not exist")
+        if deny_reason is not None or expected_receipt_id is None:
+            reason = deny_reason or "no candidate freeze receipt is bound"
+            if attempt.status is not ExperimentAttemptStatus.PENDING:
+                return ConfirmatoryClaimResult(False, False, "attempt is not claimable")
+            self.set_attempt(
+                ExperimentRunAttempt(
+                    experiment_id=attempt.experiment_id,
+                    as_of=attempt.as_of,
+                    attempt_no=attempt.attempt_no,
+                    status=ExperimentAttemptStatus.SKIPPED,
+                    detail=reason,
+                    schema_version=attempt.schema_version,
+                )
+            )
+            return ConfirmatoryClaimResult(False, True, reason)
+        claimed = self.claim(
+            attempt_id,
+            owner=owner,
+            lease_expires_at=lease_expires_at,
+            now=now,
+        )
+        return ConfirmatoryClaimResult(
+            claimed,
+            False,
+            None if claimed else "attempt is not claimable by this owner",
+        )
 
     def heartbeat(self, attempt_id: str, *, owner: str, at: datetime) -> bool:
         attempt = self.attempts.get(attempt_id)

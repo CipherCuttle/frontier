@@ -108,7 +108,7 @@ def test_stored_drifted_receipt_skips_the_confirmatory_attempt_in_postgres() -> 
         binding = resolver.latest_binding()
         assert binding is not None
         assert binding.durable_freeze_at is not None
-        publication_at = binding.durable_freeze_at + timedelta(seconds=1)
+        publication_at = binding.durable_freeze_at + timedelta(days=30, seconds=1)
         PostgresCandidateFreezePublicationRepository(
             conn, persistence_authorized=True
         ).record_publication(

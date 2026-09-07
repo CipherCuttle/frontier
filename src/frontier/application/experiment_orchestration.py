@@ -92,11 +92,20 @@ class FreezeBinding:
 
 @dataclass(frozen=True, slots=True)
 class ConfirmatoryDecision:
-    """Outcome of the four confirmatory binding-correctness gates."""
+    """Outcome of the confirmatory binding-correctness precheck."""
 
     allowed: bool
     reason: str
     receipt: CandidateFreezeReceipt | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmatoryClaimResult:
+    """Atomic persistence verdict for a CONFIRMATORY attempt claim."""
+
+    claimed: bool
+    skipped: bool
+    reason: str | None = None
 
 
 def evaluate_confirmatory_gates(
@@ -160,6 +169,16 @@ class ExperimentAttemptRepository(Protocol):
         lease_expires_at: datetime,
         now: datetime,
     ) -> bool: ...
+    def claim_confirmatory(
+        self,
+        attempt_id: str,
+        *,
+        expected_receipt_id: str | None,
+        owner: str,
+        lease_expires_at: datetime,
+        now: datetime,
+        deny_reason: str | None = None,
+    ) -> ConfirmatoryClaimResult: ...
     def heartbeat(self, attempt_id: str, *, owner: str, at: datetime) -> bool: ...
     def finish(
         self,
@@ -313,23 +332,61 @@ class ExperimentOrchestrator:
         )
         self._attempts.record_attempt(pending)
         lease_expires_at = at + timedelta(seconds=self._lease_seconds)
-        if not self._attempts.claim(
-            pending.attempt_id,
-            owner=self._worker_id,
-            lease_expires_at=lease_expires_at,
-            now=at,
-        ):
-            return ExperimentCycleResult(
-                boundary=boundary,
-                action=ExperimentCycleAction.DEFERRED_ACTIVE_OWNER,
-                attempt=_with_status(
-                    pending,
-                    ExperimentAttemptStatus.RUNNING,
-                    lease_owner=self._worker_id,
-                    lease_expires_at=lease_expires_at,
-                ),
-                detail="attempt claimed concurrently by another worker",
+        freeze_receipt: CandidateFreezeReceipt | None = None
+        if self._run_class == RUN_CLASS_CONFIRMATORY:
+            binding = (
+                None if self._freeze_binding is None else self._freeze_binding.latest_binding()
             )
+            decision = evaluate_confirmatory_gates(
+                binding, as_of=boundary, canonical_context=self._canonical_context
+            )
+            expected_receipt_id = None if binding is None else binding.receipt.receipt_id
+            claim = self._attempts.claim_confirmatory(
+                pending.attempt_id,
+                expected_receipt_id=expected_receipt_id,
+                owner=self._worker_id,
+                lease_expires_at=lease_expires_at,
+                now=at,
+                deny_reason=None if decision.allowed else decision.reason,
+            )
+            if claim.skipped:
+                detail = claim.reason or "confirmatory claim denied"
+                return ExperimentCycleResult(
+                    boundary=boundary,
+                    action=ExperimentCycleAction.SKIPPED_CONFIRMATORY_GATES,
+                    attempt=_with_status(pending, ExperimentAttemptStatus.SKIPPED, detail=detail),
+                    detail=detail,
+                )
+            if not claim.claimed:
+                return ExperimentCycleResult(
+                    boundary=boundary,
+                    action=ExperimentCycleAction.DEFERRED_ACTIVE_OWNER,
+                    attempt=pending,
+                    detail=claim.reason or "attempt claimed concurrently by another worker",
+                )
+            if not decision.allowed or decision.receipt is None:
+                raise RuntimeError(
+                    "confirmatory DB claim succeeded without an allowed application binding"
+                )
+            freeze_receipt = decision.receipt
+        else:
+            if not self._attempts.claim(
+                pending.attempt_id,
+                owner=self._worker_id,
+                lease_expires_at=lease_expires_at,
+                now=at,
+            ):
+                return ExperimentCycleResult(
+                    boundary=boundary,
+                    action=ExperimentCycleAction.DEFERRED_ACTIVE_OWNER,
+                    attempt=_with_status(
+                        pending,
+                        ExperimentAttemptStatus.RUNNING,
+                        lease_owner=self._worker_id,
+                        lease_expires_at=lease_expires_at,
+                    ),
+                    detail="attempt claimed concurrently by another worker",
+                )
         attempt = _with_status(
             pending,
             ExperimentAttemptStatus.RUNNING,
@@ -337,10 +394,14 @@ class ExperimentOrchestrator:
             lease_expires_at=lease_expires_at,
             heartbeat_at=at,
         )
-        return self._execute_boundary(attempt, boundary)
+        return self._execute_boundary(attempt, boundary, freeze_receipt=freeze_receipt)
 
     def _execute_boundary(
-        self, attempt: ExperimentRunAttempt, boundary: datetime
+        self,
+        attempt: ExperimentRunAttempt,
+        boundary: datetime,
+        *,
+        freeze_receipt: CandidateFreezeReceipt | None,
     ) -> ExperimentCycleResult:
         existing = self._persistence.latest_run_id_and_class_for_as_of(boundary)
         completed = (
@@ -350,29 +411,11 @@ class ExperimentOrchestrator:
         )
         if completed is not None:
             return completed
-        freeze_receipt: CandidateFreezeReceipt | None = None
         if self._run_class == RUN_CLASS_CONFIRMATORY:
-            decision = self._evaluate_confirmatory_gates(boundary)
-            if not decision.allowed:
-                self._attempts.finish(
-                    attempt.attempt_id,
-                    owner=self._worker_id,
-                    status=ExperimentAttemptStatus.SKIPPED,
-                    detail=decision.reason,
-                    at=self._clock(),
-                )
-                return ExperimentCycleResult(
-                    boundary=boundary,
-                    action=ExperimentCycleAction.SKIPPED_CONFIRMATORY_GATES,
-                    attempt=_with_status(
-                        attempt, ExperimentAttemptStatus.SKIPPED, detail=decision.reason
-                    ),
-                    detail=decision.reason,
-                )
-            freeze_receipt = decision.receipt
-            assert decision.receipt is not None  # gate semantics guarantee a FROZEN receipt
+            if freeze_receipt is None:
+                raise RuntimeError("CONFIRMATORY execution requires an atomically claimed freeze")
             if self._drift_sentry is not None:
-                drift_report = self._drift_sentry.check(decision.receipt, now=self._clock())
+                drift_report = self._drift_sentry.check(freeze_receipt, now=self._clock())
                 if drift_report.status is DriftStatus.DRIFTED:
                     detail = "DRIFTED: " + "; ".join(drift_report.reasons)
                     self._attempts.finish(
