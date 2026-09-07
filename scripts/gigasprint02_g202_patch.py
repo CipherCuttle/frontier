@@ -27,6 +27,18 @@ def regex_replace_once(path: str, pattern: str, new: str) -> None:
     file.write_text(replaced, encoding="utf-8")
 
 
+def replace_method(path: str, method_name: str, next_method_name: str, new: str) -> None:
+    file = ROOT / path
+    text = file.read_text(encoding="utf-8")
+    start_marker = f"    def {method_name}("
+    next_marker = f"\n    def {next_method_name}("
+    if text.count(start_marker) != 1:
+        raise RuntimeError(f"{path}: expected one {method_name} method")
+    start = text.index(start_marker)
+    end = text.index(next_marker, start)
+    file.write_text(text[:start] + new.rstrip() + "\n" + text[end:], encoding="utf-8")
+
+
 def apply_original_payload() -> None:
     source = subprocess.run(
         ["git", "show", f"{PAYLOAD_COMMIT}:{WORKFLOW}"],
@@ -171,70 +183,51 @@ def repair_semantics() -> None:
         '                       r.receipt_digest, r.frozen_at, r.verified_at,\n',
     )
 
-    replace_once(
+    replace_method(
         "src/frontier/application/drift_sentry.py",
-        '    def _try_collect(\n'
-        '        self, receipt: CandidateFreezeReceipt | None = None\n'
-        '    ) -> FreezeInputs | None:\n'
-        '        try:\n'
-        '            if receipt is None or receipt.implementation_commit is None:\n'
-        '                return collect_freeze_inputs(self._root)\n'
-        '            head = subprocess.run(\n'
-        '                ["git", "rev-parse", "HEAD"],\n'
-        '                cwd=self._root,\n'
-        '                capture_output=True,\n'
-        '                text=True,\n'
-        '                check=True,\n'
-        '                timeout=30,\n'
-        '            ).stdout.strip()\n'
-        '            if head == receipt.implementation_commit:\n'
-        '                return collect_freeze_inputs(self._root)\n'
-        '            derive_freeze_publication(self._root, receipt)\n'
-        '            return collect_freeze_inputs(\n'
-        '                self._root, implementation_ref=receipt.implementation_commit\n'
-        '            )\n'
-        '        except (OSError, subprocess.SubprocessError, RuntimeError, ValueError):\n'
-        '            return None\n',
-        '    def _try_collect(\n'
-        '        self, receipt: CandidateFreezeReceipt | None = None\n'
-        '    ) -> FreezeInputs | None:\n'
-        '        try:\n'
-        '            if receipt is None or receipt.implementation_commit is None:\n'
-        '                return collect_freeze_inputs(self._root)\n'
-        '            head = subprocess.run(\n'
-        '                ["git", "rev-parse", "HEAD"],\n'
-        '                cwd=self._root,\n'
-        '                capture_output=True,\n'
-        '                text=True,\n'
-        '                check=True,\n'
-        '                timeout=30,\n'
-        '            ).stdout.strip()\n'
-        '            if head == receipt.implementation_commit:\n'
-        '                return collect_freeze_inputs(self._root)\n'
-        '            try:\n'
-        '                subprocess.run(\n'
-        '                    [\n'
-        '                        "git",\n'
-        '                        "cat-file",\n'
-        '                        "-e",\n'
-        '                        f"{receipt.implementation_commit}^{{commit}}",\n'
-        '                    ],\n'
-        '                    cwd=self._root,\n'
-        '                    capture_output=True,\n'
-        '                    check=True,\n'
-        '                    timeout=30,\n'
-        '                )\n'
-        '            except subprocess.CalledProcessError:\n'
-        '                return collect_freeze_inputs(self._root)\n'
-        '            try:\n'
-        '                derive_freeze_publication(self._root, receipt)\n'
-        '            except (RuntimeError, ValueError):\n'
-        '                return collect_freeze_inputs(self._root)\n'
-        '            return collect_freeze_inputs(\n'
-        '                self._root, implementation_ref=receipt.implementation_commit\n'
-        '            )\n'
-        '        except (OSError, subprocess.SubprocessError):\n'
-        '            return None\n',
+        "_try_collect",
+        "check",
+        '''    def _try_collect(
+        self, receipt: CandidateFreezeReceipt | None = None
+    ) -> FreezeInputs | None:
+        try:
+            if receipt is None or receipt.implementation_commit is None:
+                return collect_freeze_inputs(self._root)
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=self._root,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            ).stdout.strip()
+            if head == receipt.implementation_commit:
+                return collect_freeze_inputs(self._root)
+            try:
+                subprocess.run(
+                    [
+                        "git",
+                        "cat-file",
+                        "-e",
+                        f"{receipt.implementation_commit}^{{commit}}",
+                    ],
+                    cwd=self._root,
+                    capture_output=True,
+                    check=True,
+                    timeout=30,
+                )
+            except subprocess.CalledProcessError:
+                return collect_freeze_inputs(self._root)
+            try:
+                derive_freeze_publication(self._root, receipt)
+            except (RuntimeError, ValueError):
+                return collect_freeze_inputs(self._root)
+            return collect_freeze_inputs(
+                self._root, implementation_ref=receipt.implementation_commit
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+''',
     )
 
     subprocess.run(
