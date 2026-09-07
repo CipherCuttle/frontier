@@ -1,0 +1,153 @@
+{
+  "spec_payload": {
+    "candidate_signal_classes_order": [
+      "ALIAS_OF",
+      "RENAMED_FROM",
+      "candidate_output",
+      "candidate_reason",
+      "canonical_url",
+      "entity_name",
+      "entity_type",
+      "native_ids",
+      "source_item_key"
+    ],
+    "candidate_under_future_evaluation": "transparent-entity-hybrid-v0",
+    "canonical_json": {
+      "encoding": "UTF-8",
+      "ensure_ascii": false,
+      "separators": [
+        ",",
+        ":"
+      ],
+      "sha256_prefix": "sha256:",
+      "sort_object_keys": true
+    },
+    "fixed_sequences": {
+      "bundle_durability": 10,
+      "redaction_receipt": 8,
+      "sample_durability": 9,
+      "submission_0": 1,
+      "submission_1": 2,
+      "unseal": 3
+    },
+    "fixed_times": {
+      "bundle_durable_at": "2026-09-01T12:35:00Z",
+      "evidence_captured_at": "2026-09-01T12:00:00Z",
+      "first_candidate_score_at": "2026-09-01T13:00:00Z",
+      "identity_issued_at": "2026-09-01T12:05:00Z",
+      "sample_durable_at": "2026-09-01T11:56:00Z",
+      "sample_selected_at": "2026-09-01T11:55:00Z",
+      "submission_0_at": "2026-09-01T12:20:00Z",
+      "submission_1_at": "2026-09-01T12:21:00Z",
+      "unseal_at": "2026-09-01T12:30:00Z"
+    },
+    "mutation_semantics": {
+      "ADD_CANDIDATE_DEPENDENCY": "append the internal candidate-signal-boundary digest to the selected evidence candidate_dependency_digests before raw snapshot digest binding",
+      "DROP_EVIDENCE": "remove selected evidence item from the evidence map before any evidence/view/adjudication derived objects are constructed",
+      "EMPTY_ADJUDICATION": "remove all evidence and produce empty identity_receipts and submissions arrays; unseal and label bundle still bind the empty submission set",
+      "LEAK_SIGNAL": "append newline + 'LEAK::<class>=<exact candidate boundary value>' to rendered excerpt of lexicographically first remaining evidence item for each listed class in listed order",
+      "MUTATE_LABEL_BUNDLE_AFTER_DIGEST": "after label_bundle.digest and durability receipt are frozen, replace label_bundle.payload.version with 'synthetic-v2.0.0-mutated' without recomputing digest or receipt",
+      "REMOVE_RAW_SNAPSHOT_DIGEST": "set selected evidence raw_snapshot_digest to null after raw snapshot payload construction",
+      "SET_CONFLICTING_ASSESSMENTS": "set both human labels to ABSTAIN_CONFLICTING_EVIDENCE and set assessments to E1:SUPPORTS_SAME and E2:SUPPORTS_DIFFERENT for each submission",
+      "SET_LABEL": "replace selected submission label before submission digest and signature construction",
+      "SET_SAMPLE_DURABLE_AT": "replace sample manifest durable_at with mutation durable_at before manifest digest and durability receipt construction",
+      "SET_SAMPLE_ROLE": "replace sample_role before sample manifest digest construction",
+      "SET_SUBJECT_EQUAL": "replace target identity subject_id with source identity subject_id before identity receipt/submission construction",
+      "SET_SUBMISSION_ORIGIN": "replace selected submission origin before submission digest/signature construction",
+      "SET_SUBMISSION_SEQUENCE": "replace selected submission sequence_no and submitted_at before submission digest/signature construction",
+      "SHARE_ORIGIN_ROOT": "replace target evidence origin_root_id with source evidence origin_root_id before origin receipt construction"
+    },
+    "mutation_stages": {
+      "POST_BUNDLE_DIGEST": [
+        "MUTATE_LABEL_BUNDLE_AFTER_DIGEST"
+      ],
+      "PRE_DERIVATION": [
+        "ADD_CANDIDATE_DEPENDENCY",
+        "DROP_EVIDENCE",
+        "EMPTY_ADJUDICATION",
+        "LEAK_SIGNAL",
+        "REMOVE_RAW_SNAPSHOT_DIGEST",
+        "SET_CONFLICTING_ASSESSMENTS",
+        "SET_LABEL",
+        "SET_SAMPLE_DURABLE_AT",
+        "SET_SAMPLE_ROLE",
+        "SET_SUBJECT_EQUAL",
+        "SET_SUBMISSION_ORIGIN",
+        "SET_SUBMISSION_SEQUENCE",
+        "SHARE_ORIGIN_ROOT"
+      ]
+    },
+    "non_escalation": {
+      "api_authorized": false,
+      "candidate_promotion_authorized": false,
+      "candidate_quality_metrics_authorized": false,
+      "candidate_quality_pass_fail_authorized": false,
+      "canonical_entity_truth_authorized": false,
+      "entity_quality": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+      "migration_authorized": false,
+      "persistence_authorized": false,
+      "ranking_change_authorized": false,
+      "real_label_collection_authorized": false,
+      "source_registry_change_authorized": false,
+      "terminal_authorized": false,
+      "worker_authorized": false
+    },
+    "packet_construction_order": [
+      "copy base vector and exact candidate signal boundary",
+      "apply PRE_DERIVATION mutations in listed case order",
+      "construct sample manifest payload, digest, and test-only durability receipt",
+      "construct internal candidate signal boundary payload and digest",
+      "construct evidence raw snapshot bindings and verified-origin test receipts",
+      "construct rendered adjudication view and recomputed redaction receipt",
+      "construct two test-only identity receipts and sealed submissions unless emptied",
+      "construct authoritative unseal receipt from submission digests",
+      "construct immutable label bundle payload, digest, and test-only durability receipt",
+      "apply POST_BUNDLE_DIGEST mutations in listed case order",
+      "construct final expanded packet object",
+      "compute expected_packet_digest over canonical JSON of the complete expanded packet"
+    ],
+    "protocol_id": "ENTITY_GROUND_TRUTH_PROTOCOL_V2",
+    "schema_version": "frontier-entity-ground-truth-protocol-builder-spec-v2",
+    "synthetic_only": true,
+    "test_mac": {
+      "algorithm": "TEST_ONLY_SHA256_KEYED_CONCAT_V2",
+      "construction": "sha256(utf8(key_material + ':' + payload_digest))",
+      "keys": {
+        "durability": {
+          "key_id": "TEST_ONLY_DURABILITY_SERVICE_KEY_V2",
+          "key_material": "test-only-durability-secret-v2"
+        },
+        "identity": {
+          "key_id": "TEST_ONLY_ENTITY_GROUND_TRUTH_IDENTITY_KEY_V2",
+          "key_material": "test-only-identity-secret-v2"
+        },
+        "origin": {
+          "key_id": "TEST_ONLY_ORIGIN_CAPTURE_SERVICE_KEY_V2",
+          "key_material": "test-only-origin-secret-v2"
+        },
+        "redaction": {
+          "key_id": "TEST_ONLY_REDACTION_SERVICE_KEY_V2",
+          "key_material": "test-only-redaction-secret-v2"
+        },
+        "submission": {
+          "key_id": "TEST_ONLY_SEALED_SUBMISSION_SERVICE_KEY_V2",
+          "key_material": "test-only-submission-secret-v2"
+        }
+      },
+      "real_label_authority": false,
+      "security_status": "TEST_ONLY_NOT_A_REAL_SIGNATURE_SCHEME"
+    },
+    "validation_invariants_described_not_executed_here": {
+      "candidate_disjointness": "rendered adjudication view must contain none of the exact candidate signal values",
+      "candidate_independence": "raw evidence candidate_dependency_digests must not contain the internal candidate-signal-boundary digest",
+      "direction_neutrality": "rendered evidence contains no label or per-item direction assessment fields",
+      "human_independence": "exactly two distinct verified human subject_ids for evaluable labels",
+      "label_bundle_freeze": "stored label bundle digest and durability receipt must recompute over the exact current payload",
+      "origin_independence": "at least two decisive evidence items must resolve to distinct verified origin roots; shared roots collapse",
+      "real_label_gate": "all V2 fixtures and keys are synthetic test-only and can never authorize real labels",
+      "sample_freeze": "EVALUATION_RANDOM sample durable_at must be strictly earlier than first_candidate_score_at",
+      "sealed_ordering": "both submission sequence numbers must be less than unseal sequence and peer_label_visible must be false"
+    }
+  },
+  "spec_payload_digest": "sha256:443135bdcd0702ddae1ef224db243ce376e8ab1c2ffd57f1d3b50498f15cbe95"
+}

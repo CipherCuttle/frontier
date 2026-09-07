@@ -1,0 +1,248 @@
+{
+  "$defs": {
+    "bound_object_with_durability": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "durability_receipt": {
+          "$ref": "#/$defs/signed_bound_object"
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "payload",
+        "digest",
+        "durability_receipt"
+      ],
+      "type": "object"
+    },
+    "signed_bound_object": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "key_id": {
+          "pattern": "^TEST_ONLY_",
+          "type": "string"
+        },
+        "payload": {
+          "type": "object"
+        },
+        "test_mac": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "payload",
+        "digest",
+        "key_id",
+        "test_mac"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "frontier://schemas/entity-ground-truth-expanded-packet-v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adjudication": {
+      "additionalProperties": false,
+      "properties": {
+        "identity_receipts": {
+          "items": {
+            "$ref": "#/$defs/signed_bound_object"
+          },
+          "type": "array"
+        },
+        "submissions": {
+          "items": {
+            "$ref": "#/$defs/signed_bound_object"
+          },
+          "type": "array"
+        },
+        "unseal_receipt": {
+          "$ref": "#/$defs/signed_bound_object"
+        }
+      },
+      "required": [
+        "identity_receipts",
+        "submissions",
+        "unseal_receipt"
+      ],
+      "type": "object"
+    },
+    "builder_spec_payload_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "case_id": {
+      "pattern": "^EGT2-[0-9]{3}$",
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_dependency_digests": {
+            "items": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "origin_receipt": {
+            "$ref": "#/$defs/signed_bound_object"
+          },
+          "raw_snapshot": {
+            "type": "object"
+          },
+          "raw_snapshot_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "evidence_id",
+          "raw_snapshot",
+          "raw_snapshot_digest",
+          "candidate_dependency_digests",
+          "origin_receipt"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "internal_candidate_signal_boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "signal_classes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "signals": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "signals",
+            "signal_classes"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "payload",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "label_bundle": {
+      "$ref": "#/$defs/bound_object_with_durability"
+    },
+    "non_escalation": {
+      "type": "object"
+    },
+    "packet_schema_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "protocol_id": {
+      "const": "ENTITY_GROUND_TRUTH_PROTOCOL_V2"
+    },
+    "rendered_adjudication_view": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "evidence_id": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "evidence_id",
+              "title",
+              "excerpt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "redaction_receipt": {
+          "$ref": "#/$defs/signed_bound_object"
+        }
+      },
+      "required": [
+        "items",
+        "digest",
+        "redaction_receipt"
+      ],
+      "type": "object"
+    },
+    "sample_manifest": {
+      "$ref": "#/$defs/bound_object_with_durability"
+    },
+    "schema_version": {
+      "const": "frontier-entity-ground-truth-expanded-packet-v2"
+    },
+    "synthetic_only": {
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_id",
+    "case_id",
+    "synthetic_only",
+    "builder_spec_payload_digest",
+    "packet_schema_digest",
+    "internal_candidate_signal_boundary",
+    "sample_manifest",
+    "evidence",
+    "rendered_adjudication_view",
+    "adjudication",
+    "label_bundle",
+    "non_escalation"
+  ],
+  "title": "Frontier Entity Ground Truth Expanded Synthetic Packet V2",
+  "type": "object"
+}
