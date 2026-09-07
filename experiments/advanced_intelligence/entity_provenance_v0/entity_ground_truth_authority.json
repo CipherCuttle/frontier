@@ -1,0 +1,105 @@
+{
+  "adjudication_protocol": {
+    "agreement_rule": "Exactly two primary human submissions from distinct cryptographically verified unique-person subjects must independently agree on SAME_ENTITY or DIFFERENT_ENTITY.",
+    "disagreement_rule": "ABSTAIN_DISAGREEMENT; V0 does not majority-force or tie-break a disagreement into binary gold.",
+    "evaluable_gold_labels": ["SAME_ENTITY", "DIFFERENT_ENTITY"],
+    "insufficient_evidence_rule": "Any primary human abstention, fewer than two verified independent origin roots, or fewer than two immutable evidence items yields an explicit abstention rather than binary gold.",
+    "peer_blindness_proof": "Every primary submission is an immutable service-signed receipt. The sealed-submission service assigns an authoritative sequence. Every required submission sequence must precede the signed peer-label-unseal receipt, and the unseal receipt may reference only already sealed submission receipt digests.",
+    "unique_person_proof": "Each submission binds an externally signed unique-person attestation. Validators cryptographically verify the attestation against an approved trust root and require two distinct subject digests; arbitrary person_key strings or self-reported booleans are forbidden as identity proof."
+  },
+  "authority_state": "FROZEN_ENTITY_GROUND_TRUTH_AUTHORITY_CANDIDATE",
+  "candidate_blinding": {
+    "candidate_outputs_hidden": true,
+    "candidate_reasons_hidden": true,
+    "internal_candidate_signal_boundary": ["candidate_output", "candidate_reason", "native_ids", "canonical_url", "entity_name", "entity_type", "source_item_key", "ALIAS_OF", "RENAMED_FROM"],
+    "rendered_view_contract": "The exact adjudication view is content-addressed. An offline validator recomputes every rendered-view digest and scans every rendered field against the exact internal candidate-signal boundary. A packet cannot declare itself candidate-disjoint.",
+    "redaction_receipt_contract": "Each adjudication view is bound to its immutable raw evidence snapshot and candidate-signal boundary by a content-addressed redaction receipt. The validator independently rescans the rendered view; packet-supplied scan status is not authoritative.",
+    "direction_neutrality": "Rendered evidence may contain factual evidence but MUST NOT contain decisive_direction, preassigned SAME_ENTITY/DIFFERENT_ENTITY conclusions, or other adjudication-outcome metadata. Per-item assessments exist only inside sealed authenticated human submission receipts after review."
+  },
+  "closure": {
+    "next_if_closed": "Implement only the bounded offline packet expander/validator, blinding/redaction validator, signature/trust-root interfaces, and adjudication-receipt validator against synthetic vectors. Real label collection still requires separately frozen real trust roots and a durable real sample manifest.",
+    "required": [
+      "all 24 synthetic protocol cases deterministically expand to their exact expected_packet_digest",
+      "candidate-disjointness is recomputed from exact content-addressed rendered views rather than self-asserted",
+      "origin independence is derived from cryptographically verified immutable provenance-root manifests and common roots collapse",
+      "rendered evidence contains no preassigned adjudication direction",
+      "distinct adjudicators are proven through cryptographically verified unique-person attestations and sealed submission ordering",
+      "EVALUATION_RANDOM sampling is bound to a content-addressed manifest durably published before first scoring",
+      "label bundles are versioned content-addressed manifests with predecessor identity and durability receipts",
+      "synthetic trust roots remain test-only and cannot authorize real labels",
+      "merge leaves entity quality INSUFFICIENT_INDEPENDENT_GROUND_TRUTH and grants no metrics/PASS/FAIL/promotion"
+    ]
+  },
+  "evidence_protocol": {
+    "candidate_dependency_rule": "Immutable raw evidence provenance may not depend on the candidate-signal boundary or candidate output. Any candidate dependency digest invalidates the packet.",
+    "content_addressing": "Raw snapshot metadata, rendered view, redaction receipt, origin-provenance nodes/manifest, sample manifest/receipts, identity attestations, sealed submissions, unseal receipt, and label-bundle manifest/receipt all have recomputable content identities.",
+    "immutable_snapshot_required": true,
+    "minimum_evidence_items": 2,
+    "minimum_verified_distinct_origin_roots": 2,
+    "origin_independence_rule": "origin_group strings are forbidden. Each evidence item carries a signed immutable origin-provenance manifest from an approved capture-service trust root. Validators verify every node digest and parent link, traverse to root_node_digest, and collapse all evidence sharing the same verified root.",
+    "synthetic_mirror_attack": "EGT-012 deterministically produces two publisher leaves with the same verified provenance root; it must collapse to one origin and abstain.",
+    "conflicting_human_item_assessments": "ABSTAIN_CONFLICTING_EVIDENCE"
+  },
+  "implementation_authority_on_merge": {
+    "api": false,
+    "candidate_promotion": false,
+    "candidate_quality_metrics": false,
+    "candidate_quality_pass_fail": false,
+    "canonical_entity_authority": false,
+    "migration": false,
+    "offline_adjudication_receipt_validator": true,
+    "offline_blinding_redaction_validator": true,
+    "offline_packet_expander_validator": true,
+    "persistence": false,
+    "protocol_hostile_tests": true,
+    "real_world_label_generation_by_frontier": false,
+    "source_registry_change": false,
+    "terminal": false,
+    "worker_scheduling": false
+  },
+  "label_bundle_protocol": {
+    "identity": "bundle_digest = sha256(canonical_json(exact bundle payload))",
+    "manifest_fields": ["bundle_version", "sample_manifest_digest", "submission_receipt_digests", "unseal_receipt_digest", "predecessor_bundle_digest", "created_at"],
+    "mutation_rule": "Any payload mutation creates a different bundle digest. A signed durability receipt binds one exact bundle digest/version. Old and new bundle identities cannot be silently pooled or substituted.",
+    "later_evaluation_binding": "A future separately authorized quality evaluation must bind exactly one immutable bundle digest.",
+    "synthetic_attack": "EGT-022 mutates the bundle payload after its stored digest is frozen and must fail closed."
+  },
+  "lineage": {
+    "selected_entity_candidate": "transparent-entity-hybrid-v0",
+    "shadow_evaluation_authority_merge_commit": "0638aaca0e1025ea256306172712f46b94515bc7",
+    "shadow_evaluation_corpus_blob_sha1": "58c91348a6f81f31d99aadf50a1c32fb22ac0882",
+    "shadow_evaluation_implementation_merge_commit": "fbf69ecd9f0bf810011e71e8dd2c1627e0b02011",
+    "shadow_expected_reports_blob_sha1": "d0fa4e4ff82eeb70f551e4274eb856b5f5e9f3d4",
+    "source_registry_digest": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee"
+  },
+  "parent_main_commit": "fbf69ecd9f0bf810011e71e8dd2c1627e0b02011",
+  "phase_id": "ENTITY_GROUND_TRUTH_V0",
+  "protocol_corpus": {
+    "case_count": 24,
+    "git_blob_sha1": "664a86962b73bd1aae11feea25e41adbfbf5899a",
+    "note": "Synthetic hostile protocol vectors only. Their test keys/trust roots and expected outcomes are not real-world entity ground truth and cannot be counted as candidate quality evidence.",
+    "path": "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v0.json",
+    "schema_version": "frontier-entity-ground-truth-protocol-corpus-v1"
+  },
+  "sample_protocol": {
+    "challenge_rule": "CHALLENGE_ONLY labels are diagnostic only and cannot enter headline quality metrics.",
+    "evaluation_random_freeze": "A content-addressed EVALUATION_RANDOM sample manifest freezes exact pair IDs, selection method, seed commitment, role, and creation time. A signed durability receipt must bind that exact manifest digest strictly before the first candidate scoring receipt for the same digest.",
+    "post_score_selection": "INVALID_PACKET / REJECT_SELECTION_LEAK",
+    "synthetic_attack": "EGT-020 keeps all identities internally consistent but places durable_at after first scored_at and must fail closed."
+  },
+  "schema_version": "frontier-entity-ground-truth-authority-v1",
+  "scientific_boundary": {
+    "current_entity_quality_status": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+    "goal": "Earn a future candidate-disjoint human gold-label substrate without circular reuse of candidate outputs or Frontier identity inputs.",
+    "quality_evaluation_authorized": false,
+    "quality_status_after_authority_merge": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+    "promotion_authorized": false,
+    "synthetic_vectors_are_quality_evidence": false
+  },
+  "trust_root_protocol": {
+    "cryptographic_verification_required": true,
+    "real_collection_gate": "Before any real label collection, approved trust roots/keys for unique-person identity, sealed submissions/unseal, evidence-origin capture, redaction, and durability/publication must be separately frozen. Their identities may not be substituted after collection begins.",
+    "synthetic_keys": ["TEST_ONLY_ENTITY_GROUND_TRUTH_IDENTITY_KEY_V0", "TEST_ONLY_SEALED_SUBMISSION_SERVICE_KEY_V0", "TEST_ONLY_ORIGIN_CAPTURE_SERVICE_KEY_V0", "TEST_ONLY_REDACTION_SERVICE_KEY_V0", "TEST_ONLY_DURABILITY_SERVICE_KEY_V0"],
+    "synthetic_keys_authorized_for_real_labels": false
+  }
+}
