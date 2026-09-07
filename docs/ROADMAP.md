@@ -1,237 +1,236 @@
 # FRONTIER Roadmap
 
-Status: CURRENT_IMPLEMENTATION_STATE_V0
+Status: CURRENT_IMPLEMENTATION_STATE_V1
 
-Snapshot parent: `main@239171e0a8819a98306031b6c292952125c77957`.
+Snapshot parent: `main@bb105d03cacba0d7bee4b3f871c1a1e5231fb3f0`.
 
-Promotion rule for this file: merge of the roadmap promotion following PR #14 records `TERMINAL_V0` as CLOSED and makes `ADVANCED_INTELLIGENCE_EXPERIMENTS` the next product phase. The exact merged tree `main@239171e0a8819a98306031b6c292952125c77957` is the parent authority for that transition.
+This file records the canonical repository implementation state and current priority after merge of
+PR #30. It does not override `docs/CONSTITUTION.md`, accepted ADRs, frozen phase authorities, or
+scientific non-escalation rules. If this roadmap conflicts with higher authority, implementation
+fails closed until governance is repaired.
 
-This file records implementation state and next-phase priority. It does not override the Constitution or accepted ADRs. If this roadmap conflicts with higher authority, implementation fails closed until governance is repaired.
+Do not infer product phase from GitHub pull-request number. Governance, preflight, repair, and
+implementation PRs intentionally make repository numbering diverge from product sequencing.
 
-Do not infer implementation phase from GitHub pull-request number. Preflight and governance PRs make GitHub numbering diverge from product-phase sequencing.
+## Current system state
 
-## Closed foundation
+FRONTIER is now an evidence-native, point-in-time emerging-technology intelligence system with:
 
-| Work | GitHub PR | Status | Result |
+- seven live source lanes: `arxiv.cs-ai`, `cisa.kev`, `gdelt.frontier`, `github.ml-repos`,
+  `hf.models`, `hn.frontpage`, and `pypi.updates`;
+- hostile bounded acquisition, append-only canonical evidence, deterministic replay, and explicit
+  source health/coverage semantics;
+- deterministic episode grouping with explicit `GROUP`, `NO_GROUP`, and `AMBIGUOUS` behavior;
+- a permanent naive prospective baseline with retained COMPLETE snapshots and receipts;
+- a GET-only FastAPI public read plane and deterministic OpenAPI/TypeScript client contracts;
+- a dense keyboard-first React/Vite operator terminal over the read plane;
+- production-oriented cadence telemetry, database readiness, backup/restore recovery drills, and
+  application-store capacity measurements;
+- merged experimental intelligence infrastructure for PEF_V0 ranking, shadow runs,
+  candidate-freeze receipts, preregistered evaluation receipts, feature vectors, analysis,
+  experimental read models, and an EXPERIMENTAL terminal lens;
+- a bounded entity/provenance experimental lab, canonical-to-experimental bridge, and shadow
+  evaluation path;
+- a prospectively frozen, reproducible `ENTITY_GROUND_TRUTH_PROTOCOL_V2` plus pure offline
+  validator;
+- a fail-closed real-trust preflight and pure offline real-trust material candidate validator.
+
+The canonical direction remains:
+
+`LIVE SOURCES -> HOSTILE ACQUISITION -> APPEND-ONLY EVIDENCE -> PIT SEMANTICS -> EPISODES -> BASELINE / EXPERIMENTS -> RECEIPTS -> READ PLANE -> CLIENTS`
+
+Experimental or agent-facing layers do not acquire canonical truth authority merely by being
+implemented, merged, retrieved, ranked, or displayed.
+
+## Merged implementation history
+
+| Work | GitHub PR(s) | State | Result |
 |---|---:|---|---|
-| Canonical governance / architecture authority | #1 | CLOSED | Constitution V0, P01-P08, source policy, ADR-0001..0012 |
-| Canonical evidence substrate | #2 | CLOSED | append-only PostgreSQL evidence, deterministic identity/replay, point-in-time knowledge horizon |
-| PR-02 hostile preflight authority | #3 | CLOSED | 56 acquisition / transport / normalization / provenance attack fixtures |
-| PR-02 executable fetch/source contracts | #4 | CLOSED | machine-readable fetch, source, policy and registry contracts |
-| Live acquisition V0 | #5 | CLOSED | secure `frontier-fetch`, PyPI Latest Updates, CISA KEV, source health, trusted canonical writes |
-| Roadmap / implementation-state authority | #6 | CLOSED | living roadmap, stale bootstrap repair, D007 unprotected-main debt |
-| Source diversity V0 | #7 | CLOSED | HN ATTENTION, GDELT DISCOVERY, Hugging Face PRIMARY_EMISSION; five-source registry |
-| Grouping baseline V0 | #8 | CLOSED | frozen 22-case grouping authority, guarded-hybrid-v0, explicit ambiguity, PIT-safe receipts, pairwise-safe episode groups |
-| Baseline intelligence V0 | #10 | CLOSED | frozen naive episode-activity baseline, PIT-safe windows, explicit health/coverage, deterministic ranking, retained COMPLETE snapshots + receipts |
-| Public read plane V0 | #12 | CLOSED | read-only FastAPI over retained COMPLETE baseline snapshots, auditable RADAR/NOW/TRENDING views, PIT-safe evidence drill-down, deterministic OpenAPI/TypeScript contract |
-| Terminal V0 | #14 | CLOSED | dense keyboard-first React/Vite operator terminal over the public read plane, snapshot-safe evidence/health drill-down, explicit audit/uncertainty/coverage |
+| Canonical governance / evidence / acquisition foundation | #1-#7 | CLOSED | Constitution, ADRs, append-only evidence, hostile fetch/source contracts, five-source live acquisition and source diversity |
+| Grouping baseline | #8 | CLOSED | deterministic guarded grouping with explicit ambiguity and PIT-safe receipts |
+| Baseline intelligence | #10 | CLOSED | permanent naive prospective activity comparator, COMPLETE snapshots and receipts |
+| Public read plane | #12 | CLOSED | GET-only FastAPI, auditable RADAR/NOW/TRENDING, evidence/health drill-down, generated contracts |
+| Operator terminal | #14 | CLOSED | dense keyboard-first React/Vite client preserving server authority and snapshot identity |
+| Advanced-intelligence authority | #16 | CLOSED | frozen comparator/evaluation contract; no promotion granted |
+| Domain expansion + operations | #17 | CLOSED | arXiv + GitHub lanes, seven-source registry, readiness, recovery and capacity workflows |
+| Experimental intelligence implementation | #18 | CLOSED | PEF_V0, shadow execution, freeze/evaluation receipts, feature vectors, analysis, experimental read plane/lens |
+| Entity/provenance lab | #19 | CLOSED | transparent experimental entity/provenance candidates on frozen synthetic corpus |
+| Canonical -> experimental entity/provenance bridge | #20-#21 | CLOSED | one-way bounded bridge and offline coverage diagnostics |
+| Entity/provenance shadow evaluation | #22-#23 | CLOSED | frozen hostile evaluation authority + offline diagnostic evaluator; no promotion |
+| Entity ground-truth V0 authority | #24 | CLOSED | candidate-disjoint human adjudication protocol authority; real quality remains unproven |
+| Agent Context Plane roadmap direction | #25 | CLOSED / PARKED | architecture direction locked; no implementation authority |
+| Ground-truth v1 reproducibility repair | #26 | CLOSED | v1 missing-builder defect failed closed; v1 left immutable |
+| Ground-truth protocol v2 freeze | #27 | CLOSED | prospective deterministic builder/spec, packet schema, 24 hostile cases and exact digests |
+| Ground-truth protocol v2 offline validator | #28 | CLOSED | pure offline packet expansion + semantic validator; synthetic conformance only |
+| Real-trust preflight | #29 | CLOSED | fail-closed prerequisites for real externally supplied trust material |
+| Real-trust material candidate validator | #30 | CLOSED | pure offline validator for externally supplied candidate material; no real material frozen |
 
-## Current system capability after PR #14 promotion
+## Scientific and authority state
 
-FRONTIER can:
-- acquire five zero-paid / no-mandatory-key live source lanes;
-- observe authoritative primary emission through PyPI, CISA KEV and Hugging Face model metadata;
-- observe Hacker News as an `ATTENTION` surface without promoting linked claims into factual truth;
-- observe GDELT as a `DISCOVERY` surface without treating syndication as independent corroboration;
-- keep the hostile fetch role DB-blind;
-- reject forbidden/private network targets and bounded-resource violations;
-- preserve first-durable `observed_at`, collection causality and multidimensional source health;
-- mark capped finite result windows as incomplete rather than silently healthy;
-- distinguish discovery/attention timestamps from publisher publication time and FRONTIER knowledge time;
-- replay and verify canonical evidence deterministically;
-- group observations into deterministic, versioned episode projections with explicit `GROUP`, `NO_GROUP`, and `AMBIGUOUS` semantics;
-- prevent a direct `NO_GROUP` or `AMBIGUOUS` pair from entering one episode through transitive bridge merging;
-- keep observation identity, episode interpretation, provenance-root independence, and entity identity separate;
-- compute the permanent naive prospective episode-activity baseline using fixed 1h/6h/24h windows, velocity and acceleration;
-- exclude BACKFILL and recovered backlog from live activity while retaining them as evidence;
-- retain explicit aggregate transport/freshness/coverage/schema state without converting missing coverage into zero activity;
-- keep evidence-root diversity and confirmation unavailable rather than fabricating independence;
-- publish deterministic COMPLETE baseline snapshots and projection receipts atomically and append-only;
-- retain prospective baseline snapshots for future advanced-model comparison;
-- serve a GET-only public FastAPI read plane over retained COMPLETE baseline snapshots;
-- expose stable baseline-derived RADAR, NOW and TRENDING views without transport-layer reranking;
-- bind public intelligence responses to snapshot, receipt, version and `as_of` identity;
-- reject receipt-schema, deterministic receipt-ID and payload-digest drift at the public trust boundary;
-- expose episode and observation evidence drill-down with point-in-time-safe collection and relation metadata;
-- surface aggregate and per-source health without converting degraded/missing coverage into optimistic certainty;
-- generate deterministic OpenAPI and TypeScript client artifacts from the public contract;
-- render a dense keyboard-first TypeScript/React operator terminal over the public read plane;
-- preserve server baseline rank and explicit local-filter state without client-side reranking;
-- keep unavailable confirmation/provenance-root/entity semantics explicitly unavailable in the terminal;
-- expose keyboard-reachable evidence, health, audit identity and command help without hover-only critical information;
-- reject stale async episode/health completions when the active workspace snapshot changes, preventing mixed-snapshot evidence display.
+The following remain authoritative after PR #30:
 
-FRONTIER still cannot:
-- infer cross-source factual-root independence or true syndication ancestry;
-- authorize advanced ranking beyond the frozen naive comparator;
-- infer richer entity identity, factual confirmation or provenance-root ancestry.
+- entity candidate: `transparent-entity-hybrid-v0`;
+- entity quality: `INSUFFICIENT_INDEPENDENT_GROUND_TRUTH`;
+- provenance quality: `BLOCKED_NO_EXPLICIT_DERIVATION_EVIDENCE`;
+- promotion: `UNAVAILABLE`;
+- real label collection: **NOT AUTHORIZED**;
+- candidate quality PASS/FAIL: **NOT AUTHORIZED**;
+- canonical entity truth: **NOT AUTHORIZED**;
+- production provenance truth: **NOT AUTHORIZED**;
+- experimental ranking merge: **NOT promotion**.
 
-## Immediate repository-control gap
+Synthetic protocol fixtures, test roots, test signatures, model output, source multiplicity,
+agreement, mirrors, bridge-native IDs, or validator acceptance cannot be upgraded into independent
+real-world ground truth.
 
-GitHub still reports `main` unprotected after PR #14. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
+## Current hard blocker — real entity ground truth
 
-## Priority sequence
+The entity-ground-truth chain has reached an external-material boundary.
 
-### 0. Repository control hardening
+Next phase when its prerequisites actually exist:
 
-Goal: protect canonical `main` from accidental/direct writes while preserving the reviewed PR workflow.
+`ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0`
 
-Required outcome:
-- branch protection or ruleset for `main`;
-- required verification check(s) where supported;
-- PR-based merge path retained;
-- no bypass assumption embedded in automation.
+That phase requires genuine externally supplied, non-placeholder public trust material, including
+at minimum:
 
-This is operational governance, not a product phase, and remains open as D007.
+- two distinct real human adjudicator identity attestations bound to exact public keys;
+- subject-controlled proof-of-possession under those bound adjudicator keys;
+- complete public verification material for adjudicator, service-sealing, durability-publication,
+  and identity-attestation roles;
+- independently attested controller separation across the required roles;
+- independently anchored terminal content -> upstream-equivalence expectations;
+- content-addressed provenance material;
+- authenticated validity/revocation state and current-head binding.
 
-### 1. SOURCE_DIVERSITY_V0 — CLOSED
+FRONTIER, its tests, its model tooling, and repository automation may not invent, synthesize,
+self-attest, or substitute those prerequisites. Until they are supplied out-of-band, this lane is:
 
-Goal: create structurally different live evidence roles so emergence, attention, discovery, syndication and coverage can be tested empirically.
+`BLOCKED_PENDING_REAL_TRUST_ROOT_MATERIAL`
 
-Delivered lanes:
-- Hacker News official front-page RSS as `ATTENTION`;
-- GDELT DOC ArticleList as `DISCOVERY`;
-- Hugging Face public Hub model metadata as `PRIMARY_EMISSION`;
-- existing PyPI and CISA KEV source semantics preserved.
+The block is a scientific/trust-boundary condition, not a missing implementation task.
 
-Frozen phase semantics:
-- multiple attention/discovery observations do not become multiple factual confirmations;
-- GDELT discovery time is not publisher time or FRONTIER knowledge time;
-- capped result windows degrade completeness;
-- absence of usable source timestamps yields freshness `UNKNOWN`;
-- volatile Hugging Face popularity counters do not contaminate canonical model-emission identity;
-- no advanced ranking, entity authority or embedding dependency was introduced.
+## Advanced intelligence status
 
-### 2. GROUPING_BASELINE_V0 — CLOSED
+`ADVANCED_INTELLIGENCE_EXPERIMENTS` is no longer a future implementation phase. Its V0 authority
+and experimental infrastructure are merged.
 
-Goal: establish the simplest defensible observation grouping/dedupe layer needed to say that multiple observations concern the same episode without pretending to know true ancestry.
+However:
 
-Delivered method:
-- froze a representative 22-case corpus spanning primary-emission, attention, discovery, syndication, correction/retraction, shared-index, revision, Unicode and ambiguous-alias cases before runtime selection;
-- compared canonical URL, exact semantic text, normalized title, token Jaccard, SimHash, MinHash, TF-IDF and a guarded transparent hybrid;
-- selected `guarded-hybrid-v0` at pair precision `1.000000`, group recall `0.900000`, false-group count `0` on the frozen corpus;
-- preserved propagation/attention observations separately from evidence independence;
-- retained explicit `NO_GROUP` / `AMBIGUOUS` outcomes;
-- made grouping deterministic, versioned, point-in-time safe and receipt-backed;
-- repaired hostile-review H-001 so final episode groups merge only when every cross-component pair is directly `GROUP`, preventing transitive uncertainty/negative-evidence collapse.
+- PEF_V0 remains `EXPERIMENTAL_SHADOW` unless a separately authorized promotion chain succeeds;
+- candidate-freeze and evaluation machinery do not themselves create evidence of candidate value;
+- entity/provenance experimental results remain diagnostic where independent ground truth or direct
+  derivation evidence is unavailable;
+- no advanced model may silently replace the permanent naive baseline.
 
-Closure evidence:
-- one hostile review;
-- one High repaired narrowly;
-- one targeted re-review PASS with no new Critical/High findings;
-- exact merged-tree verification on `main@4c70e92c6ceb42a009a63d6f71c0d2eba90ddd77`;
-- Ruff/Pyright/architecture/preflights PASS;
-- `58 passed`.
+The permanent baseline remains the control for future prospective evaluation.
 
-No embeddings, provenance-root inference, entity resolution, trend scoring, public API or frontend were introduced.
+## Agent Context Plane — direction locked, implementation parked
 
-### 3. BASELINE_INTELLIGENCE_V0 — CLOSED
+`docs/ROADMAP_AGENT_CONTEXT_PLANE_V0.md` remains the authority for this future direction.
 
-Goal: run the permanent naive prospective baseline before sophisticated ranking.
+Canonical one-way boundary:
 
-Delivered:
-- deterministic episode activity projection at a fixed `as_of`;
-- half-open 1h, 6h, 24h, previous-6h and preprevious-6h windows using only `observed_at`;
-- integer mention count, velocity and acceleration metrics;
-- BACKFILL and recovered-after-gap observations retained but excluded from live activity windows;
-- deterministic ranking policy `naive-episode-activity-v0`;
-- explicit source-role diversity without false provenance-root or confirmation claims;
-- aggregate transport, freshness, coverage and schema state;
-- immutable retained COMPLETE snapshots plus projection receipts in PostgreSQL;
-- atomic candidate publication with conflict/failure preserving the prior COMPLETE snapshot;
-- prospective retained outputs for later advanced-model comparison.
+`CANONICAL FRONTIER -> READ-ONLY AGENT CONTEXT PROJECTION -> RETRIEVAL/CONTEXT -> TRANSPORT ADAPTERS -> EXTERNAL AGENTS`
 
-Closure evidence:
-- exact final reviewed head `cecb69b5877e8470a62b61054cd4760a1fea4de0`;
-- one hostile review: Critical 0 / High 0;
-- exact-head `verify` and hostile-fixture workflows PASS;
-- squash merge `main@458e0c5e2284eb221c6d92785082ce1c6359c1a0`;
-- post-merge `verify` and hostile-fixture workflows PASS.
+Preferred earned sequence remains:
 
-No advanced/learned ranking, provenance-root inference, entity resolution, API or frontend was introduced.
+1. `AGENT_CONTEXT_PROTOCOL_V0`
+2. `AGENT_RETRIEVAL_EXPERIMENT_V0`
+3. `AGENT_CONTEXT_SELECTION_V0`
+4. `AGENT_TRANSPORT_ADAPTER_V0`
 
-### 4. PUBLIC_READ_PLANE_V0 — CLOSED
+This roadmap reconciliation does **not** authorize any of those implementations.
 
-Goal: expose derived intelligence read models without allowing the public API to mutate canonical intelligence state.
+Before Agent Context implementation begins, its existing gate still requires:
 
-Delivered:
-- FastAPI GET-only public transport over retained COMPLETE `baseline-intelligence-v0` snapshots;
-- deterministic OpenAPI and generated TypeScript client contract;
-- RADAR = all baseline episodes, NOW = `mentions_1h > 0`, TRENDING = `velocity_6h_delta > 0`, always preserving frozen baseline rank;
-- snapshot/receipt/version/`as_of` identity on every intelligence response;
-- strict public PostgreSQL read-only session enforcement;
-- exact episode-membership drill-down and historical observation filtering;
-- point-in-time-safe collection occurrence and relation metadata, including masking collection completion learned after the selected horizon;
-- explicit aggregate and per-source health visibility;
-- fail-closed COMPLETE snapshot, receipt, version and canonical payload integrity checks;
-- deterministic receipt schema and receipt-ID reconstruction at the public trust boundary;
-- healthy local/CI p95 read target below the P03 `<250ms` candidate bound.
+- the real independent entity-ground-truth/evaluation path required by current authority to be
+  handled as separately authorized work;
+- the canonical roadmap to reflect actual merged implementation state;
+- `AGENT_CONTEXT_PROTOCOL_V0` to receive its own bounded authority and hostile corpus.
 
-Closure evidence:
-- exact final repaired/re-reviewed head `4af2ba90310e6a66ff559be62c2ad501385dde96`;
-- one hostile closure review found H-001 HIGH: receipt schema and deterministic receipt identity were not fully verified;
-- one bounded H-001 repair added frozen receipt-schema enforcement, deterministic receipt-ID reconstruction and corruption coverage;
-- one targeted re-review PASS with Critical 0 / High 0;
-- exact-head `verify`, `preflight-fixtures` and `preflight-contracts` PASS;
-- squash merge `main@1783c6b10ef92caab72c6e340f0e6bd8562a0ac5`;
-- post-merge push-triggered `verify`, `preflight-fixtures` and `preflight-contracts` PASS.
+This reconciliation satisfies only the roadmap-state prerequisite. The external real-ground-truth
+prerequisite remains blocked, so Agent Context implementation remains parked.
 
-No advanced/learned ranking, provenance-root inference, entity resolution, factual confirmation authority or canonical mutation path was introduced.
+## Repository control state
 
-### 5. TERMINAL_V0 — CLOSED
+The old roadmap statement that `main` is unprotected is no longer operationally accurate.
 
-Goal: implement the first dense operator terminal against real read models.
+GitHub currently has active repository ruleset `main-pr-verify-gate` applying to `refs/heads/main`
+with:
 
-Delivered:
-- TypeScript strict + React 19 + Vite terminal consuming the generated public-read client/types;
-- GET-only remote transport with no canonical write path;
-- RADAR / NOW / TRENDING rendered in frozen server baseline order;
-- explicit local filtering that hides rows without creating a new rank;
-- keyboard-first lens selection, row navigation, inspector, health, audit, help, filter and refresh workflows;
-- snapshot/receipt/version/`as_of` audit identity exposed without hover-only access;
-- explicit `UNAVAILABLE` confirmation and provenance-root states without source-count overclaim;
-- aggregate and per-source transport/freshness/coverage/schema health kept visible and multidimensional;
-- exact snapshot-bound episode evidence drill-down;
-- stale async episode/health response rejection so a prior snapshot cannot repopulate dependent panels after the active workspace binding changes.
+- pull-request workflow required;
+- required status check `verify`;
+- no bypass actors;
+- current user bypass reported as `never`.
 
-Closure evidence:
-- exact initial reviewed candidate `54ebc501ad93ef7627d9eabf7c670417d49c66cc`;
-- one hostile closure review found H-001 HIGH: in-flight prior-snapshot episode/health responses could complete after a snapshot transition and repopulate old evidence beneath the new workspace;
-- one bounded H-001 repair added active-snapshot response guards plus focused episode/health race regression coverage;
-- exact repaired candidate `e1aa59f956a53e7026716c09ecc589952eb509ec`;
-- one targeted re-review PASS with Critical 0 / High 0;
-- exact-head `verify` and `preflight-fixtures` PASS;
-- squash merge `main@239171e0a8819a98306031b6c292952125c77957`;
-- post-merge push-triggered `verify` run `33983297570` PASS and `preflight-fixtures` run `33983297562` PASS.
+`docs/DEBT_REGISTER.md` remains the canonical debt authority. This roadmap therefore records the
+observed control as satisfied evidence but does not silently close or delete D007; debt-register
+closure, if still required there, must be performed explicitly against that evidence.
 
-No advanced/learned ranking, provenance-root inference, entity resolution, factual confirmation authority or canonical mutation path was introduced.
+## Current priority sequence
 
-### 6. ADVANCED_INTELLIGENCE_EXPERIMENTS — NEXT PRODUCT PHASE
+### 0. ROADMAP_RECONCILIATION_POST_REAL_TRUST_VALIDATOR_V0 — CURRENT GOVERNANCE WORK
 
-Only after the prospective baseline exists and the read plane can expose it without semantic mutation:
-- emergence vs confirmation models;
-- manipulation/reflexivity features;
-- persistence/novelty models;
-- richer episode/entity resolution;
-- provenance inference;
-- advanced ranking.
+Goal: reconcile the canonical roadmap from its stale post-#14 snapshot to the actual merged state
+through PR #30.
 
-An advanced model receives authority only if it demonstrates prospective value over the naive baseline at comparable precision across multiple domains, as required by P03.
+Scope is governance/documentation only. No runtime, schema, source, ranking, entity/provenance
+truth, API, terminal, embedding, vector, MCP, or model authority is created by this transition.
 
-### 7. DOMAIN EXPANSION + OPERATIONS
+### 1. ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0 — BLOCKED ON EXTERNAL INPUT
 
-Broaden toward the full mission using source-policy gates: AI/model hubs, research, GitHub activity, package ecosystems, security, regulatory, crypto and markets.
+When genuine external material exists, freeze and validate it against the merged real-trust
+preflight and offline validator. Do not use synthetic substitutes.
 
-In parallel, close production-operability requirements: observability, retention, backup + restore verification, capacity/load measurement, source freshness SLOs, deployment, and recovery drills.
+Even successful material validation will not by itself authorize real label collection, candidate
+quality PASS/FAIL, promotion, or canonical entity truth. Those require later separately frozen
+authority.
+
+### 2. REAL INDEPENDENT ENTITY-GROUND-TRUTH / QUALITY EVALUATION — FUTURE AUTHORITY
+
+After valid real trust material is frozen, separately authorize real collection/evaluation with the
+candidate-disjoint, blinded, PIT-safe, content-addressed protocol. Keep evaluation evidence and
+promotion authority distinct.
+
+### 3. AGENT_CONTEXT_PROTOCOL_V0 — PARKED
+
+Once its gates are satisfied, freeze a deterministic read-only resource protocol before runtime
+implementation. Structured canonical semantics remain primary; historical `as_of` must fail closed
+unless every derived projection is horizon-valid; generated interpretation has no V0 authority.
+
+### 4. AGENT_RETRIEVAL_EXPERIMENT_V0 — PARKED
+
+Structured/lexical retrieval is the permanent simple comparator. Semantic/hybrid retrieval must
+prove incremental value before pgvector or any larger vector infrastructure is authorized.
+
+### 5. AGENT_CONTEXT_SELECTION_V0 — PARKED
+
+Treat token-bounded context selection as an auditable ranking/selection algorithm with explicit
+identity, truncation, point-in-time binding, and non-escalation rules.
+
+### 6. AGENT_TRANSPORT_ADAPTER_V0 — PARKED
+
+Keep application/domain contracts transport-neutral. HTTP/OpenAPI remains valid. MCP may be added
+only as an adapter after separate authority; MCP does not become architecture or truth authority.
+
+### 7. DOMAIN EXPANSION + OPERATIONS — CONTINUOUS / BOUNDED
+
+Continue source and operational work only through source-policy, trust-boundary, reproducibility,
+capacity, recovery, and health/coverage gates. New domains or infrastructure do not inherit truth,
+confirmation, or ranking authority merely by being connected.
 
 ## Carried debt
 
-`docs/DEBT_REGISTER.md` remains the authority for accepted debt. No roadmap phase may silently resolve or discard a debt item; closure requires evidence against its trigger.
+`docs/DEBT_REGISTER.md` remains the authority for accepted debt. No roadmap phase may silently
+resolve, discard, or relabel a debt item; closure requires evidence against its recorded trigger and
+an explicit debt-authority transition.
 
 ## Completion discipline
 
-Each bounded implementation phase follows:
+Each bounded implementation or governance phase follows:
 
 `IMPLEMENT -> TEST -> ONE hostile review -> repair Critical/High -> ONE targeted re-review only if Critical/High repair was required -> CLOSE -> MOVE FORWARD`
 
-Medium/Low findings do not restart a phase unless they undermine its objective, evidence, frozen authority, security/integrity or fail-closed semantics.
+Medium/Low findings do not restart a phase unless they undermine the phase objective, evidence,
+frozen authority, security/integrity, or fail-closed semantics.
