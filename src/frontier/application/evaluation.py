@@ -120,8 +120,7 @@ def _enforce_resolved_sample_floor(
         replace(evaluation, qualifies_sample_adequacy=False)
         if (
             evaluation.qualifies_sample_adequacy
-            and evaluation.resolved_label_fraction_numerator
-            < MIN_RESOLVED_OPPORTUNITIES_PER_DOMAIN
+            and evaluation.resolved_label_fraction_numerator < MIN_RESOLVED_OPPORTUNITIES_PER_DOMAIN
         )
         else evaluation
         for evaluation in evaluations
