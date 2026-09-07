@@ -43,6 +43,19 @@ def main() -> None:
         ")\n",
         "publication domain import",
     )
+    text = replace_once(
+        text,
+        '''def _future_boundary() -> datetime:
+    """A due boundary strictly after the canonical durability stamp (now)."""
+    now = datetime.now(UTC) + timedelta(days=365)
+    epoch = int(now.timestamp())
+    return datetime.fromtimestamp(epoch - (epoch % 300), tz=UTC)
+
+
+''',
+        "",
+        "obsolete future boundary helper",
+    )
     old = '''    receipt = _stored_frozen_receipt()
     boundary = _future_boundary()
     with psycopg.connect(DB_URL) as conn:
