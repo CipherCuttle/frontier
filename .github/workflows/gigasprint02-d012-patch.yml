@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore(gigasprint02): bootstrap guarded D012 repair'
+    if: "${{ github.event.head_commit.message == 'chore(gigasprint02): bootstrap guarded D012 repair' }}"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
