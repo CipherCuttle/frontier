@@ -33,36 +33,33 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str) -> None:
+          def replace_exact(path: str, old: str, new: str, *, expected: int = 1) -> None:
               p = Path(path)
               text = p.read_text()
               count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected exactly one old fragment, found {count}")
-              p.write_text(text.replace(old, new, 1))
+              if count != expected:
+                  raise SystemExit(
+                      f"{path}: expected exactly {expected} old fragment(s), found {count}"
+                  )
+              p.write_text(text.replace(old, new))
 
-          replace_once(
+          replace_exact(
               "src/frontier/adapters/postgres/advanced_intelligence.py",
               '''class PostgresCandidateFreezeRepository:\n    """Append-only persistence for candidate freeze receipts (R8)."""\n\n    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:\n        self._connection = connection\n\n    def record_receipt(self, receipt: CandidateFreezeReceipt) -> None:\n        if receipt.candidate_id != PEF_CANDIDATE_ID:\n''',
               '''class PostgresCandidateFreezeRepository:\n    """Append-only persistence for candidate freeze receipts (R8).\n\n    Writes are fail-closed by default. Read-only callers may construct the\n    repository normally, but any code path that persists a candidate freeze\n    must opt in explicitly after its own human/operator authorization gate.\n    This keeps the safety boundary below the CLI so a future non-CLI caller\n    cannot accidentally persist a real freeze merely by reaching this adapter.\n    """\n\n    def __init__(\n        self,\n        connection: psycopg.Connection[tuple[object, ...]],\n        *,\n        persistence_authorized: bool = False,\n    ) -> None:\n        self._connection = connection\n        self._persistence_authorized = persistence_authorized\n\n    def record_receipt(self, receipt: CandidateFreezeReceipt) -> None:\n        if not self._persistence_authorized:\n            raise PermissionError("candidate freeze persistence is not authorized")\n        if receipt.candidate_id != PEF_CANDIDATE_ID:\n''',
           )
 
-          replace_once(
+          replace_exact(
               "src/frontier/cli/main.py",
               '''        PostgresCandidateFreezeRepository(conn).record_receipt(receipt)\n''',
               '''        PostgresCandidateFreezeRepository(\n            conn, persistence_authorized=True\n        ).record_receipt(receipt)\n''',
           )
 
-          replace_once(
+          replace_exact(
               "tests/integration/test_candidate_freeze_postgres.py",
               '''        repository = PostgresCandidateFreezeRepository(conn)\n        repository.record_receipt(receipt)\n''',
               '''        repository = PostgresCandidateFreezeRepository(\n            conn, persistence_authorized=True\n        )\n        repository.record_receipt(receipt)\n''',
-          )
-
-          replace_once(
-              "tests/integration/test_candidate_freeze_postgres.py",
-              '''        repository = PostgresCandidateFreezeRepository(conn)\n        repository.record_receipt(receipt)\n        assert repository.latest_receipt_id() == receipt.receipt_id\n        assert receipt.receipt_id.startswith(FREEZE_RECEIPT_ID_PREFIX)\n''',
-              '''        repository = PostgresCandidateFreezeRepository(\n            conn, persistence_authorized=True\n        )\n        repository.record_receipt(receipt)\n        assert repository.latest_receipt_id() == receipt.receipt_id\n        assert receipt.receipt_id.startswith(FREEZE_RECEIPT_ID_PREFIX)\n''',
+              expected=2,
           )
 
           test_path = Path("tests/integration/test_candidate_freeze_postgres.py")
