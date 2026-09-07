@@ -223,6 +223,34 @@ def _build_worker_components(
         fetcher=fetcher,
         repository=store,
     )
+    # WP2 operational wiring: the shipped worker drives one prospective
+    # experiment boundary per cycle via the canonical PG repositories (the
+    # same objects every other canonical-DB path builds). DEV run-class is
+    # the default; the CONFIRMATORY path stays gated (canonical_context is
+    # False here, and the four binding gates fail closed regardless). This
+    # wiring is always present because the worker requires the canonical DB
+    # store to exist at all.
+    from frontier.adapters.postgres.experiment_attempts import (
+        PostgresExperimentAttemptRepository,
+        PostgresFreezeBindingResolver,
+        PostgresShadowRunPersister,
+    )
+    from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligenceRepository
+    from frontier.application.experiment_orchestration import (
+        RUN_CLASS_DEV,
+        ExperimentOrchestrator,
+    )
+
+    orchestrator = ExperimentOrchestrator(
+        attempts=PostgresExperimentAttemptRepository(conn),
+        baseline_repository=PostgresBaselineIntelligenceRepository(conn),
+        persistence=PostgresShadowRunPersister(conn),
+        source_registry_version=registry.source_registry_version,
+        freeze_binding=PostgresFreezeBindingResolver(conn),
+        run_class=RUN_CLASS_DEV,
+        canonical_context=False,
+        worker_id=worker_id,
+    )
     worker = AcquisitionWorker(
         registry=registry,
         repository=store,
@@ -232,6 +260,7 @@ def _build_worker_components(
         lease=PostgresWorkerLease(conn),
         heartbeat_store=PostgresWorkerHeartbeatStore(conn),
         ops_probe=PostgresWorkerOpsProbe(conn),
+        experiment_orchestrator=orchestrator,
         is_transient_connection_error=lambda error: isinstance(error, psycopg.OperationalError),
     )
     return conn, worker

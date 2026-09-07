@@ -12,8 +12,11 @@ import asyncio
 import contextlib
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 from uuid import uuid4
+
+import pytest
 
 from frontier.adapters.acquisition.config import RegisteredSource, SourceRegistry
 from frontier.application.acquisition import AcquisitionResult
@@ -488,6 +491,75 @@ def test_duplicate_cycle_invocation_cannot_double_execute_boundary() -> None:
     assert attempts.recorded == 1
     # And every cycle still beats the heartbeat.
     assert len(heartbeat.calls) == 2
+
+
+def test_cli_worker_composition_wires_experiment_orchestrator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (H-01): the shipped CLI worker composition builds the WP2
+    orchestrator from the canonical PG repositories and passes it to the
+    AcquisitionWorker (it is never None in production wiring)."""
+    import psycopg
+
+    import frontier.adapters.postgres as postgres_pkg
+    import frontier.adapters.postgres.experiment_attempts as attempts_mod
+    import frontier.adapters.postgres.intelligence as intelligence_mod
+    import frontier.adapters.postgres.readiness as readiness_mod
+    import frontier.adapters.postgres.worker_ops as worker_ops_mod
+    import frontier.cli.main as cli_main
+    from frontier.cli.main import _build_worker_components
+
+    class _FakeConn:
+        def close(self) -> None: ...
+
+    def _fake(name: str) -> object:
+        return lambda *args, **kwargs: f"{name}({args!r})"  # type: ignore[return-value]
+
+    registry = SourceRegistry(
+        sources={}, source_registry_version=sha256_digest(b"cli-worker-test")
+    )
+    monkeypatch.setattr(psycopg, "connect", lambda url: _FakeConn())
+    monkeypatch.setattr(cli_main, "load_fetch_policy", lambda root: None)
+    monkeypatch.setattr(cli_main, "load_source_registry", lambda root: registry)
+    monkeypatch.setattr(cli_main, "SecureHttpFetcher", lambda policy: None)
+    monkeypatch.setattr(cli_main, "AcquisitionService", _fake("service"))
+    monkeypatch.setattr(
+        readiness_mod, "verify_database_readiness", lambda conn: None
+    )
+    monkeypatch.setattr(
+        postgres_pkg, "PostgresEvidenceStore", _fake("store"), raising=False
+    )
+    monkeypatch.setattr(worker_ops_mod, "PostgresWorkerLease", _fake("lease"))
+    monkeypatch.setattr(
+        worker_ops_mod, "PostgresWorkerHeartbeatStore", _fake("heartbeat")
+    )
+    monkeypatch.setattr(worker_ops_mod, "PostgresWorkerOpsProbe", _fake("probe"))
+    monkeypatch.setattr(
+        attempts_mod, "PostgresExperimentAttemptRepository", _fake("attempts")
+    )
+    monkeypatch.setattr(
+        attempts_mod, "PostgresFreezeBindingResolver", _fake("resolver")
+    )
+    monkeypatch.setattr(
+        attempts_mod, "PostgresShadowRunPersister", _fake("persister")
+    )
+    monkeypatch.setattr(
+        intelligence_mod,
+        "PostgresBaselineIntelligenceRepository",
+        _fake("baseline"),
+    )
+
+    _conn, worker = _build_worker_components(
+        "postgresql://fake.invalid/frontier",
+        Path("."),
+        worker_id="frontier-worker",
+        idle_seconds=30.0,
+    )
+    orchestrator = worker._experiment_orchestrator
+    assert orchestrator is not None
+    assert isinstance(orchestrator, ExperimentOrchestrator)
+    assert orchestrator._run_class == "DEV"  # dev run-class default
+    assert orchestrator._canonical_context is False  # confirmatory stays gated
 
 
 def test_run_forever_with_orchestrator_writes_experiment_metrics() -> None:
