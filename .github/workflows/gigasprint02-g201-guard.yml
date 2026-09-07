@@ -41,7 +41,7 @@ jobs:
           replace_once(
               "src/frontier/application/experiment_orchestration.py",
               '''        if run_class not in RUN_CLASSES:\n            raise ValueError("run_class must be DEV or CONFIRMATORY")\n        if lease_seconds <= 0:\n''',
-              '''        if run_class not in RUN_CLASSES:\n            raise ValueError("run_class must be DEV or CONFIRMATORY")\n        if run_class == RUN_CLASS_CONFIRMATORY:\n            confirmatory_registry = getattr(\n                baseline_repository, "confirmatory_source_registry_version", None\n            )\n            if confirmatory_registry != source_registry_version:\n                raise ValueError(\n                    "CONFIRMATORY requires a baseline repository bound to the frozen source registry"\n                )\n        if lease_seconds <= 0:\n''',
+              '''        if run_class not in RUN_CLASSES:\n            raise ValueError("run_class must be DEV or CONFIRMATORY")\n        if run_class == RUN_CLASS_CONFIRMATORY:\n            confirmatory_registry = getattr(\n                baseline_repository, "confirmatory_source_registry_version", None\n            )\n            if confirmatory_registry != source_registry_version:\n                raise ValueError(\n                    "CONFIRMATORY requires a baseline repository bound to the frozen "\n                    "source registry"\n                )\n        if lease_seconds <= 0:\n''',
           )
 
           replace_once(
