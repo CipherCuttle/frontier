@@ -115,6 +115,16 @@ metrics, per-source retry backlog, source freshness versus the registry
 candidate run `as_of`, drift state, and row counts of the experiment
 tables (artifact growth indicator).
 
+## Experiment operations
+
+Prospective-experiment operator workflows are documented separately in
+[`docs/CANDIDATE_FREEZE_WORKFLOW.md`](CANDIDATE_FREEZE_WORKFLOW.md): candidate freeze
+receipts via `frontier freeze derive` (dry) and `frontier freeze --persist` (real freeze
+is human-authorized and post-merge only), drift verification via
+`frontier freeze verify`, and canonical durability truth via
+`frontier freeze durability` (a `NOT_DURABLE` freeze can never gate confirmatory runs).
+Experiment observability reuses the read-only `frontier ops status` surface above.
+
 ## Recovery drill
 
 The repository contains an isolated PostgreSQL backup/restore recovery drill:

@@ -2,7 +2,7 @@
 
 Status: CURRENT_IMPLEMENTATION_STATE_V0
 
-Snapshot parent: `main@239171e0a8819a98306031b6c292952125c77957`.
+Snapshot parent: `main@db9a56e4be66085def287682fa94bbe599bb58f5` (PR #18 merge, sprint-1 intelligence; the base authority for GIGASPRINT_01). The prior promotion parent `main@239171e0a8819a98306031b6c292952125c77957` remains the historical authority of the PR #14 TERMINAL_V0 transition below.
 
 Promotion rule for this file: merge of the roadmap promotion following PR #14 records `TERMINAL_V0` as CLOSED and makes `ADVANCED_INTELLIGENCE_EXPERIMENTS` the next product phase. The exact merged tree `main@239171e0a8819a98306031b6c292952125c77957` is the parent authority for that transition.
 
@@ -66,23 +66,23 @@ FRONTIER still cannot:
 - authorize advanced ranking beyond the frozen naive comparator;
 - infer richer entity identity, factual confirmation or provenance-root ancestry.
 
-## Immediate repository-control gap
+## Repository control
 
-GitHub still reports `main` unprotected after PR #14. Exact-head merges and CI reduce risk but do not replace branch/ruleset protection. This remains D007 until protection is enabled and verified.
+D007 CLOSED. Canonical `main` is protected by the branch ruleset `main-pr-verify-gate` (id 22366099, enforcement active): a pull request is required with the required status check `verify`. Direct admin bypass remains theoretically possible; the ruleset trigger is monitored per the debt register.
 
 ## Priority sequence
 
-### 0. Repository control hardening
+### 0. Repository control hardening — CLOSED
 
 Goal: protect canonical `main` from accidental/direct writes while preserving the reviewed PR workflow.
 
-Required outcome:
-- branch protection or ruleset for `main`;
-- required verification check(s) where supported;
+Delivered outcome:
+- branch ruleset `main-pr-verify-gate` (id 22366099, enforcement active) for `main`;
+- required status check `verify`;
 - PR-based merge path retained;
-- no bypass assumption embedded in automation.
+- protection verified through the API (see D007 in `docs/DEBT_REGISTER.md`).
 
-This is operational governance, not a product phase, and remains open as D007.
+This was operational governance, not a product phase; D007 is CLOSED.
 
 ### 1. SOURCE_DIVERSITY_V0 — CLOSED
 
@@ -206,19 +206,36 @@ Closure evidence:
 
 No advanced/learned ranking, provenance-root inference, entity resolution, factual confirmation authority or canonical mutation path was introduced.
 
-### 6. ADVANCED_INTELLIGENCE_EXPERIMENTS — NEXT PRODUCT PHASE
+### 6. ADVANCED_INTELLIGENCE_EXPERIMENTS — MERGED (sprint-1, PR #18)
 
-Only after the prospective baseline exists and the read plane can expose it without semantic mutation:
-- emergence vs confirmation models;
-- manipulation/reflexivity features;
-- persistence/novelty models;
-- richer episode/entity resolution;
-- provenance inference;
-- advanced ranking.
+Merged to `main` as `main@db9a56e4be66085def287682fa94bbe599bb58f5` (PR #18). Delivered against the prospective baseline and read plane, without semantic mutation of either:
+- preregistered PEF_V0 deterministic candidate ranking (`experiments/advanced_intelligence/pef_v0/preregistration.json`);
+- shadow experiment engine executing control vs candidate on the identical episode universe, with baseline snapshots untouched;
+- durable candidate-freeze receipts with fail-closed drift detection;
+- digest-bound evaluation machinery (top-K paired precision, Newcombe hybrid margin, opportunity anchors, immutable receipts);
+- transparent feature vectors and experimental analysis artifacts under a structural truth-key guard;
+- read-only `/v0/experimental/*` read plane and terminal EXPERIMENTAL lens;
+- migrations 0004–0009 for all new artifact/receipt/vector stores.
 
-An advanced model receives authority only if it demonstrates prospective value over the naive baseline at comparable precision across multiple domains, as required by P03.
+An advanced model receives authority only if it demonstrates prospective value over the naive baseline at comparable precision across multiple domains, as required by P03. Confirmatory authority has NOT been granted to PEF_V0; it remains EXPERIMENTAL_SHADOW.
 
-### 7. DOMAIN EXPANSION + OPERATIONS
+### 7. GIGASPRINT_01 — PROSPECTIVE INTELLIGENCE OPERATIONALIZATION — IMPLEMENTED_ON_BRANCH
+
+Implemented on branch `agent/gigasprint-01-prospective-intelligence` (head `f51683b7dd345e3258cfb29a18eeeef7fce92b4c`, base `main@db9a56e4be66085def287682fa94bbe599bb58f5`), pending independent review and merge authorization. Delivered:
+- durable prospective opportunity/outcome and experiment-attempt state (migrations 0010–0012);
+- paired prospective experiment orchestration with adopt-or-expire attempt lifecycle;
+- persisted paired-snapshot evaluation loaders and a coherent scientific evaluation status model;
+- drift sentry validating frozen identity before confirmatory work;
+- per-episode experimental read plane and terminal experiment war room;
+- worker heartbeat, advisory-lock lease, graceful shutdown and `frontier ops status`;
+- backup/restore proof extended to experimental scientific tables;
+- G10 hostile-mutation replay gauntlet for frozen-candidate determinism;
+- full experiment lifecycle proof on live PostgreSQL via `e2e-postgres.yml` (fresh-DB-per-file isolation, PR/nightly);
+- candidate freeze operator workflow (`frontier freeze derive|verify|durability`).
+
+Status is IMPLEMENTED_ON_BRANCH only: no roadmap authority is claimed until the branch passes independent review and merge authorization. See `docs/GIGASPRINT_01_PR_NOTES.md`.
+
+### 8. DOMAIN EXPANSION + OPERATIONS
 
 Broaden toward the full mission using source-policy gates: AI/model hubs, research, GitHub activity, package ecosystems, security, regulatory, crypto and markets.
 
