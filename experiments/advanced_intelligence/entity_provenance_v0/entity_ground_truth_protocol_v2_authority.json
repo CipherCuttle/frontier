@@ -1,0 +1,99 @@
+{
+  "schema_version": "frontier-entity-ground-truth-protocol-v2-authority-v0",
+  "phase_id": "ENTITY_GROUND_TRUTH_PROTOCOL_V2_FREEZE",
+  "authority_state": "FROZEN_PROTOCOL_V2_CANDIDATE",
+  "parent_main_commit": "bee2b5a74a7d4df630c72330ea6c576571ffa305",
+  "repair_lineage": {
+    "repair_merge_commit": "bee2b5a74a7d4df630c72330ea6c576571ffa305",
+    "repair_pr": 26,
+    "repaired_defect": "BLOCKED_MISSING_FROZEN_BUILDER",
+    "v1_authority_path": "experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_authority.json",
+    "v1_authority_git_blob_sha1": "4aa25903a9f8ee6d016111bbe48483661f327a79",
+    "v1_corpus_path": "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v0.json",
+    "v1_corpus_git_blob_sha1": "664a86962b73bd1aae11feea25e41adbfbf5899a",
+    "v1_reinterpretation_authorized": false
+  },
+  "frozen_v2_artifacts": {
+    "builder_spec": {
+      "path": "experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_protocol_builder_v2.json",
+      "git_blob_sha1": "fca9669c08396de9bb49a218e26a59e47fb87c8e",
+      "spec_payload_digest": "sha256:443135bdcd0702ddae1ef224db243ce376e8ab1c2ffd57f1d3b50498f15cbe95"
+    },
+    "expanded_packet_schema": {
+      "path": "experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_expanded_packet_v2.schema.json",
+      "git_blob_sha1": "8ed77a799070dd9e4720069c09a16bb4437e34b2",
+      "canonical_json_digest": "sha256:c6fb80c8b5a46a18c2fc631243130fcd41456bcb1754b097d90576f27e1822e1"
+    },
+    "hostile_corpus": {
+      "path": "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v2.json",
+      "git_blob_sha1": "e61330b6ac94ccb52817fbe4078f63bfcd242732",
+      "schema_version": "frontier-entity-ground-truth-protocol-corpus-v2",
+      "case_count": 24,
+      "synthetic_only": true
+    },
+    "independent_recomputation_test": {
+      "path": "tests/unit/test_entity_ground_truth_protocol_v2_reproducibility.py",
+      "git_blob_sha1": "572eedd2022e8b3fe76ea339baf79c6f5d406774",
+      "requirement": "CI independently reconstructs every complete expanded packet from the frozen v2 builder specification plus corpus and requires exact equality with all 24 expected_packet_digest commitments."
+    }
+  },
+  "prospective_freeze_contract": {
+    "builder_frozen_before_runtime_conformance": true,
+    "packet_schema_frozen_before_runtime_conformance": true,
+    "hostile_expected_digests_frozen_before_runtime_conformance": true,
+    "test_only_crypto_contract_frozen": true,
+    "timestamps_sequences_and_nested_digest_order_frozen": true,
+    "ordered_mutation_semantics_frozen": true,
+    "v1_artifacts_preserved_unchanged": true,
+    "post_hoc_v1_digest_fitting_forbidden": true
+  },
+  "synthetic_trust_boundary": {
+    "security_status": "TEST_ONLY_NOT_A_REAL_SIGNATURE_SCHEME",
+    "all_key_ids_must_begin_with": "TEST_ONLY_",
+    "fixture_secrets_are_public_test_material": true,
+    "real_identity_or_origin_authentication": false,
+    "real_label_authority": false,
+    "real_trust_roots_must_be_separately_frozen_before_real_collection": true
+  },
+  "authorized_after_this_freeze_merges": {
+    "offline_packet_expander_validator": true,
+    "offline_blinding_redaction_validator": true,
+    "offline_adjudication_receipt_validator": true,
+    "protocol_hostile_tests": true,
+    "in_memory_only": true,
+    "v2_exact_digest_conformance_required": true,
+    "real_label_collection": false,
+    "candidate_quality_metrics": false,
+    "candidate_quality_pass_fail": false,
+    "candidate_promotion": false,
+    "canonical_entity_truth": false,
+    "persistence": false,
+    "migrations": false,
+    "workers_or_schedulers": false,
+    "api": false,
+    "terminal": false,
+    "source_registry_changes": false,
+    "provenance_production_truth": false,
+    "ranking_changes": false
+  },
+  "scientific_state": {
+    "candidate": "transparent-entity-hybrid-v0",
+    "entity_quality": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+    "protocol_v2_status": "SYNTHETIC_PROTOCOL_FREEZE_ONLY",
+    "quality_claim": null,
+    "promotion_status": "UNAVAILABLE"
+  },
+  "closure_requirements": {
+    "full_repository_ci": "PASS",
+    "independent_digest_recomputation": "24_OF_24_EXACT_MATCH",
+    "v1_blob_identity_preservation": "REQUIRED",
+    "one_bounded_hostile_review": "REQUIRED_UNLESS_EXPLICITLY_WAIVED_BY_REPOSITORY_OWNER_AND_RECORDED",
+    "critical_high_findings": "ZERO_OPEN",
+    "merge_action": "EXPLICIT_USER_AUTHORIZATION_REQUIRED"
+  },
+  "next_phase_if_merged": {
+    "phase_id": "ENTITY_GROUND_TRUTH_PROTOCOL_V2_OFFLINE_VALIDATOR",
+    "objective": "Implement only the pure offline/in-memory expander and semantic validators that consume the frozen v2 artifacts and reproduce the 24 committed packet digests without altering scientific quality state.",
+    "forbidden": "No real collection, candidate scoring, quality conclusion, promotion, persistence, API, worker, terminal, registry or ranking expansion."
+  }
+}
