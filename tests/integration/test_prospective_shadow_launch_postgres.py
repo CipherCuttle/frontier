@@ -77,8 +77,7 @@ def test_confirmatory_boundary_persists_freeze_candidate_and_bound_run() -> None
             result.execution.candidate.artifact.to_canonical()
         )
         assert (
-            shadow.get_run_json(result.execution.run.run_id)
-            == result.execution.run.to_canonical()
+            shadow.get_run_json(result.execution.run.run_id) == result.execution.run.to_canonical()
         )
         assert shadow.bound_run_boundaries(
             candidate_freeze_receipt_id=receipt.receipt_id,
