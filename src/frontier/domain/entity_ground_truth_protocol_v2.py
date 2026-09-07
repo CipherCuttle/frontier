@@ -131,6 +131,20 @@ def _definition_parts(
     if corpus.get("synthetic_only") is not True:
         raise ProtocolV2DefinitionError("corpus must remain synthetic-only")
 
+    signal_classes = spec.get("candidate_signal_classes_order")
+    candidate_boundary = corpus.get("candidate_signal_boundary")
+    if not isinstance(signal_classes, list) or not all(
+        isinstance(value, str) for value in signal_classes
+    ):
+        raise ProtocolV2DefinitionError("candidate signal class definition drift")
+    if not isinstance(candidate_boundary, dict) or not all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in candidate_boundary.items()
+    ):
+        raise ProtocolV2DefinitionError("candidate signal boundary definition drift")
+    if set(candidate_boundary) != set(cast(list[str], signal_classes)):
+        raise ProtocolV2DefinitionError("candidate signal boundary coverage drift")
+
     crypto = cast(JsonObject, spec.get("test_mac"))
     if crypto.get("security_status") != TEST_CRYPTO_STATUS:
         raise ProtocolV2DefinitionError("test crypto security status drift")
@@ -545,8 +559,11 @@ def validate_v2_packet(
         return _reject("REJECT_PROTOCOL_DRIFT", "candidate-boundary-content")
     signals_obj = cast(dict[str, str], signals)
     signal_class_list = cast(list[str], signal_classes)
+    frozen_signals = cast(dict[str, str], corpus["candidate_signal_boundary"])
     if signal_class_list != cast(list[str], spec["candidate_signal_classes_order"]):
         return _reject("REJECT_PROTOCOL_DRIFT", "candidate-boundary-order")
+    if signals_obj != frozen_signals:
+        return _reject("REJECT_PROTOCOL_DRIFT", "candidate-boundary-values")
     boundary_digest = cast(str, boundary["digest"])
 
     sample_manifest_obj = packet.get("sample_manifest")
@@ -575,12 +592,15 @@ def validate_v2_packet(
     evidence = cast(list[JsonObject], evidence_obj)
     verified_origin_roots: list[str] = []
     evidence_ids: list[str] = []
+    origin_root_by_evidence_id: dict[str, str] = {}
     for item in evidence:
         evidence_id = item.get("evidence_id")
         raw_snapshot = item.get("raw_snapshot")
         raw_digest = item.get("raw_snapshot_digest")
         if not isinstance(evidence_id, str):
             return _reject("REJECT_UNBOUND_EVIDENCE", "evidence-id-shape")
+        if evidence_id in origin_root_by_evidence_id:
+            return _reject("REJECT_UNBOUND_EVIDENCE", "duplicate-evidence-id")
         if not isinstance(raw_snapshot, dict) or not isinstance(raw_digest, str):
             return _reject("REJECT_UNBOUND_EVIDENCE", "raw-snapshot-unbound")
         if protocol_digest(cast(JsonObject, raw_snapshot)) != raw_digest:
@@ -611,6 +631,7 @@ def validate_v2_packet(
             return _reject("REJECT_UNBOUND_EVIDENCE", "origin-root-shape")
         evidence_ids.append(evidence_id)
         verified_origin_roots.append(origin_root)
+        origin_root_by_evidence_id[evidence_id] = origin_root
 
     rendered_obj = packet.get("rendered_adjudication_view")
     if not isinstance(rendered_obj, dict):
@@ -643,7 +664,7 @@ def validate_v2_packet(
     matched = [
         signal_class
         for signal_class in signal_class_list
-        if str(signals_obj[signal_class]) in rendered_text
+        if frozen_signals[signal_class] in rendered_text
     ]
     if redaction_payload.get("scanned_signal_classes") != signal_class_list:
         return _reject("REJECT_PROTOCOL_DRIFT", "redaction-scan-boundary")
@@ -740,6 +761,8 @@ def validate_v2_packet(
 
     labels: list[str] = []
     submission_subjects: list[str] = []
+    assessment_maps: list[dict[str, str]] = []
+    evidence_id_set = set(evidence_ids)
     for submission in submissions:
         if not _signed_valid(submission, keys["submission"]):
             return _reject("REJECT_ADJUDICATOR_NONINDEPENDENCE", "submission-binding")
@@ -762,13 +785,35 @@ def validate_v2_packet(
             )
         subject_id = payload.get("subject_id")
         label = payload.get("label")
+        assessments_obj = payload.get("assessments")
         if not isinstance(subject_id, str) or not isinstance(label, str):
             return _reject(
                 "REJECT_ADJUDICATOR_NONINDEPENDENCE",
                 "submission-content-shape",
             )
+        if not isinstance(assessments_obj, list):
+            return _reject("REJECT_PROTOCOL_DRIFT", "assessment-list-shape")
+        assessment_map: dict[str, str] = {}
+        for assessment in assessments_obj:
+            if not isinstance(assessment, dict):
+                return _reject("REJECT_PROTOCOL_DRIFT", "assessment-item-shape")
+            assessment_obj = cast(JsonObject, assessment)
+            assessment_evidence_id = assessment_obj.get("evidence_id")
+            assessment_direction = assessment_obj.get("assessment")
+            if (
+                not isinstance(assessment_evidence_id, str)
+                or assessment_evidence_id not in evidence_id_set
+                or assessment_evidence_id in assessment_map
+            ):
+                return _reject("REJECT_PROTOCOL_DRIFT", "assessment-evidence-binding")
+            if assessment_direction not in {"SUPPORTS_SAME", "SUPPORTS_DIFFERENT"}:
+                return _reject("REJECT_PROTOCOL_DRIFT", "assessment-direction")
+            assessment_map[assessment_evidence_id] = cast(str, assessment_direction)
+        if set(assessment_map) != evidence_id_set:
+            return _reject("REJECT_PROTOCOL_DRIFT", "assessment-evidence-coverage")
         submission_subjects.append(subject_id)
         labels.append(label)
+        assessment_maps.append(assessment_map)
 
     if set(submission_subjects) != set(identity_subjects):
         return _reject(
@@ -785,6 +830,19 @@ def validate_v2_packet(
             required_action="ABSTAIN",
             headline_metric_eligible=False,
             violations=("insufficient-independent-origin-roots",),
+        )
+
+    assessment_directions = {
+        direction
+        for assessment_map in assessment_maps
+        for direction in assessment_map.values()
+    }
+    if assessment_directions == {"SUPPORTS_SAME", "SUPPORTS_DIFFERENT"}:
+        return PacketValidation(
+            packet_status=PacketStatus.ACCEPT,
+            label_status=LabelStatus.ABSTAIN_CONFLICTING_EVIDENCE,
+            required_action="ABSTAIN",
+            headline_metric_eligible=False,
         )
 
     if any(label == "ABSTAIN_CONFLICTING_EVIDENCE" for label in labels):
@@ -811,10 +869,14 @@ def validate_v2_packet(
 
     if labels[0] == "SAME_ENTITY":
         label_status = LabelStatus.ADJUDICATED_SAME_ENTITY
+        required_assessment = "SUPPORTS_SAME"
     elif labels[0] == "DIFFERENT_ENTITY":
         label_status = LabelStatus.ADJUDICATED_DIFFERENT_ENTITY
+        required_assessment = "SUPPORTS_DIFFERENT"
     else:
         return _reject("REJECT_PROTOCOL_DRIFT", "unknown-adjudication-label")
+    if assessment_directions != {required_assessment}:
+        return _reject("REJECT_PROTOCOL_DRIFT", "label-assessment-inconsistency")
 
     headline = sample_role == "EVALUATION_RANDOM"
     return PacketValidation(
