@@ -110,7 +110,9 @@ def _repo_relative_path(root: Path, path: Path) -> str:
     return relative.as_posix()
 
 
-def _runtime_git_delta(root: Path, implementation_commit: str | None) -> tuple[tuple[str, str], ...]:
+def _runtime_git_delta(
+    root: Path, implementation_commit: str | None
+) -> tuple[tuple[str, str], ...]:
     if implementation_commit is None:
         raise RuntimeError("candidate freeze receipt is missing implementation commit identity")
     try:
@@ -169,7 +171,9 @@ def _require_exact_receipt_publication_delta(
 ) -> None:
     expected_path = _repo_relative_path(root, receipt_path)
     if _FREEZE_RECEIPT_PUBLICATION_PATH_RE.fullmatch(expected_path) is None:
-        raise ValueError("candidate freeze receipt path is not a canonical versioned publication path")
+        raise ValueError(
+            "candidate freeze receipt path is not a canonical versioned publication path"
+        )
     delta = _runtime_git_delta(root, receipt.implementation_commit)
     expected_delta = (("A", expected_path),)
     if delta != expected_delta:
