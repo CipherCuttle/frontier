@@ -20,6 +20,7 @@ from frontier.adapters.postgres.frozen_registry_intelligence import (
 from frontier.domain.collection import CollectionReason, CollectionRun
 from frontier.domain.digests import sha256_digest
 from frontier.domain.health import HealthValue, SourceHealthObservation
+from frontier.domain.observation import Observation, ObservationCandidate
 from frontier.domain.relation import ObservationRelation, RelationAuthority, RelationType
 from frontier.domain.source import AcquisitionClass, SignalRole, SourceContract, SourceTransport
 
@@ -30,10 +31,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def _insert_candidate(
     evidence: PostgresEvidenceStore,
-    candidate: object,
+    candidate: ObservationCandidate,
     *,
     source_id: str,
-):
+) -> Observation:
     durable_candidate = replace(candidate, source_id=source_id)
     run = CollectionRun(
         run_id=uuid4(),
@@ -82,15 +83,9 @@ def test_frozen_registry_replay_ignores_mutable_db_source_state() -> None:
         evidence = PostgresEvidenceStore(conn)
         evidence.upsert_source(frozen_source)
         evidence.upsert_source(extra_source)
-        frozen_a = _insert_candidate(
-            evidence, batch.candidates[0], source_id=frozen_source_id
-        )
-        frozen_b = _insert_candidate(
-            evidence, batch.candidates[1], source_id=frozen_source_id
-        )
-        contaminant = _insert_candidate(
-            evidence, batch.candidates[2], source_id=extra_source_id
-        )
+        frozen_a = _insert_candidate(evidence, batch.candidates[0], source_id=frozen_source_id)
+        frozen_b = _insert_candidate(evidence, batch.candidates[1], source_id=frozen_source_id)
+        contaminant = _insert_candidate(evidence, batch.candidates[2], source_id=extra_source_id)
         as_of = max(
             frozen_a.observed_at,
             frozen_b.observed_at,
