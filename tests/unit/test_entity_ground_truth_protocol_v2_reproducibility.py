@@ -94,23 +94,28 @@ def _expand_case(
     spec: dict[str, Any],
     schema_digest: str,
 ) -> dict[str, Any]:
-    base = copy.deepcopy(corpus["base_vectors"][case["base_vector"]])
-    evidence_map = copy.deepcopy(base["evidence"])
-    boundary = copy.deepcopy(corpus["candidate_signal_boundary"])
-    signal_classes = list(spec["candidate_signal_classes_order"])
+    base_vectors = cast(dict[str, dict[str, Any]], corpus["base_vectors"])
+    base_vector_name = cast(str, case["base_vector"])
+    base = copy.deepcopy(base_vectors[base_vector_name])
+    evidence_map = cast(dict[str, dict[str, Any]], copy.deepcopy(base["evidence"]))
+    boundary = cast(dict[str, str], copy.deepcopy(corpus["candidate_signal_boundary"]))
+    signal_classes = list(cast(list[str], spec["candidate_signal_classes_order"]))
     boundary_payload = {
         "signals": boundary,
         "signal_classes": signal_classes,
     }
     boundary_digest = _digest(boundary_payload)
 
-    times = spec["fixed_times"]
-    sequences_fixed = spec["fixed_sequences"]
-    keys = spec["test_mac"]["keys"]
+    times = cast(dict[str, str], spec["fixed_times"])
+    sequences_fixed = cast(dict[str, int], spec["fixed_sequences"])
+    test_mac_spec = cast(dict[str, Any], spec["test_mac"])
+    keys = cast(dict[str, dict[str, str]], test_mac_spec["keys"])
 
-    sample_role = base["sample_role"]
+    sample_role = cast(str, base["sample_role"])
     sample_durable_at = times["sample_durable_at"]
-    labels = list(base["labels"])
+    labels = list(cast(list[str], base["labels"]))
+    pair_id = cast(str, base["pair_id"])
+    default_assessment = cast(str, base["default_assessment"])
     subject_ids = [
         "human-subject-synthetic-A",
         "human-subject-synthetic-B",
@@ -128,7 +133,8 @@ def _expand_case(
     empty_adjudication = False
     leaks: list[str] = []
 
-    for mutation in case["mutations"]:
+    mutations = cast(list[dict[str, Any]], case["mutations"])
+    for mutation in mutations:
         op = mutation["op"]
         if op == "DROP_EVIDENCE":
             evidence_map.pop(mutation["evidence_id"], None)
@@ -139,11 +145,14 @@ def _expand_case(
             target_id = mutation["target_evidence_id"]
             evidence_map[target_id]["origin_root_id"] = evidence_map[source_id]["origin_root_id"]
         elif op == "ADD_CANDIDATE_DEPENDENCY":
-            evidence_map[mutation["evidence_id"]]["candidate_dependency_digests"].append(
-                boundary_digest
+            evidence_id = cast(str, mutation["evidence_id"])
+            dependencies = cast(
+                list[str], evidence_map[evidence_id]["candidate_dependency_digests"]
             )
+            dependencies.append(boundary_digest)
         elif op == "REMOVE_RAW_SNAPSHOT_DIGEST":
-            evidence_map[mutation["evidence_id"]]["force_null_raw_snapshot_digest"] = True
+            evidence_id = cast(str, mutation["evidence_id"])
+            evidence_map[evidence_id]["force_null_raw_snapshot_digest"] = True
         elif op == "SET_LABEL":
             labels[mutation["adjudicator_index"]] = mutation["label"]
         elif op == "SET_SUBJECT_EQUAL":
@@ -180,7 +189,7 @@ def _expand_case(
         "schema_version": "frontier-entity-ground-truth-sample-manifest-v2",
         "manifest_id": f"SAMPLE-MANIFEST-{case_id}",
         "case_id": case_id,
-        "pair_id": base["pair_id"],
+        "pair_id": pair_id,
         "sample_role": sample_role,
         "selected_at": times["sample_selected_at"],
         "durable_at": sample_durable_at,
@@ -199,7 +208,7 @@ def _expand_case(
     rendered_items: list[dict[str, str]] = []
     for evidence_id in sorted(evidence_map):
         evidence = evidence_map[evidence_id]
-        raw_snapshot = copy.deepcopy(evidence["raw_snapshot"])
+        raw_snapshot = cast(dict[str, Any], copy.deepcopy(evidence["raw_snapshot"]))
         raw_snapshot_digest: str | None = _digest(raw_snapshot)
         if evidence.get("force_null_raw_snapshot_digest"):
             raw_snapshot_digest = None
@@ -207,8 +216,8 @@ def _expand_case(
         origin_payload = {
             "schema_version": "frontier-entity-ground-truth-origin-receipt-v2",
             "evidence_id": evidence_id,
-            "origin_root_id": evidence["origin_root_id"],
-            "captured_at": raw_snapshot["captured_at"],
+            "origin_root_id": cast(str, evidence["origin_root_id"]),
+            "captured_at": cast(str, raw_snapshot["captured_at"]),
             "service": "TEST_ONLY_ORIGIN_CAPTURE_SERVICE_V2",
             "synthetic_only": True,
         }
@@ -217,11 +226,13 @@ def _expand_case(
                 "evidence_id": evidence_id,
                 "raw_snapshot": raw_snapshot,
                 "raw_snapshot_digest": raw_snapshot_digest,
-                "candidate_dependency_digests": list(evidence["candidate_dependency_digests"]),
+                "candidate_dependency_digests": list(
+                    cast(list[str], evidence["candidate_dependency_digests"])
+                ),
                 "origin_receipt": _signed(origin_payload, keys["origin"]),
             }
         )
-        rendered_fields = evidence["rendered_fields"]
+        rendered_fields = cast(dict[str, str], evidence["rendered_fields"])
         rendered_items.append(
             {
                 "evidence_id": evidence_id,
@@ -283,7 +294,7 @@ def _expand_case(
 
         for index in range(2):
             if assessments_mode == "CONFLICTING":
-                assessments = [
+                assessments: list[dict[str, Any]] = [
                     {
                         "evidence_id": evidence_id,
                         "assessment": (
@@ -296,7 +307,7 @@ def _expand_case(
                 assessments = [
                     {
                         "evidence_id": evidence_id,
-                        "assessment": base["default_assessment"],
+                        "assessment": default_assessment,
                     }
                     for evidence_id in sorted(evidence_map)
                 ]
@@ -345,7 +356,7 @@ def _expand_case(
         keys["durability"],
     )
 
-    for mutation in case["mutations"]:
+    for mutation in mutations:
         if mutation["op"] == "MUTATE_LABEL_BUNDLE_AFTER_DIGEST":
             label_bundle["payload"]["version"] = "synthetic-v2.0.0-mutated"
 
@@ -369,7 +380,9 @@ def _expand_case(
             "unseal_receipt": unseal_receipt,
         },
         "label_bundle": label_bundle,
-        "non_escalation": copy.deepcopy(spec["non_escalation"]),
+        "non_escalation": cast(
+            dict[str, Any], copy.deepcopy(spec["non_escalation"])
+        ),
     }
 
 
@@ -393,7 +406,8 @@ def test_v2_corpus_preserves_24_attack_categories_and_non_escalation() -> None:
     corpus = _load(CORPUS_PATH)
     assert corpus["case_count"] == 24
     assert len(corpus["cases"]) == 24
-    assert len({case["category"] for case in corpus["cases"]}) == 24
+    cases = cast(list[dict[str, Any]], corpus["cases"])
+    assert len({cast(str, case["category"]) for case in cases}) == 24
     assert corpus["synthetic_only"] is True
 
     scientific = corpus["scientific_contract"]
@@ -416,11 +430,12 @@ def test_every_v2_expected_packet_digest_recomputes_independently() -> None:
     schema_digest = _digest(schema)
 
     recomputed: dict[str, str] = {}
-    for case in corpus["cases"]:
+    cases = cast(list[dict[str, Any]], corpus["cases"])
+    for case in cases:
         packet = _expand_case(case, corpus, spec, schema_digest)
         packet_digest = _digest(packet)
-        assert packet_digest == case["expected_packet_digest"]
-        recomputed[case["id"]] = packet_digest
+        assert packet_digest == cast(str, case["expected_packet_digest"])
+        recomputed[cast(str, case["id"])] = packet_digest
 
     assert len(recomputed) == corpus["case_count"]
     assert len(set(recomputed.values())) == corpus["case_count"]
