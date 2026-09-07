@@ -1,0 +1,121 @@
+name: GIGASPRINT02 D012 fixture repair
+
+on:
+  push:
+    branches:
+      - agent/gigasprint-02-prefreeze-launch-integrity
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    if: "${{ github.event.head_commit.message == 'chore(gigasprint02): repair D012 fixture callers' }}"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: frontier
+          POSTGRES_PASSWORD: frontier
+          POSTGRES_DB: frontier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frontier -d frontier"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      FRONTIER_TEST_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+      FRONTIER_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/gigasprint-02-prefreeze-launch-integrity
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.10"
+          enable-cache: true
+
+      - name: Repair fixture-only freeze writes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          roots = [Path("tests"), Path("scripts/ops/verify_backup_restore.py")]
+          replacements = {
+              "PostgresCandidateFreezeRepository(conn).record_receipt(":
+                  "PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(",
+              "PostgresCandidateFreezeRepository(connection).record_receipt(":
+                  "PostgresCandidateFreezeRepository(connection, persistence_authorized=True).record_receipt(",
+          }
+          changed = []
+          total = 0
+          files = list(Path("tests").rglob("*.py")) + [Path("scripts/ops/verify_backup_restore.py")]
+          for path in files:
+              text = path.read_text()
+              original = text
+              for old, new in replacements.items():
+                  count = text.count(old)
+                  total += count
+                  text = text.replace(old, new)
+              if text != original:
+                  path.write_text(text)
+                  changed.append(str(path))
+
+          expected = {
+              "tests/integration/test_drift_sentry_postgres.py",
+              "tests/integration/test_evaluation_persisted_postgres.py",
+              "tests/integration/test_evaluation_receipts_postgres.py",
+              "tests/integration/test_experiment_lifecycle_postgres.py",
+              "tests/replay/test_experiment_gauntlet_postgres.py",
+              "scripts/ops/verify_backup_restore.py",
+          }
+          if set(changed) != expected:
+              raise SystemExit(f"fixture repair scope mismatch: changed={changed!r}")
+          if total != 12:
+              raise SystemExit(f"expected exactly 12 stale inline fixture writes, found {total}")
+
+          # Fail if any direct inline fixture write remains without the capability.
+          stale = []
+          for path in files:
+              for no, line in enumerate(path.read_text().splitlines(), 1):
+                  if (
+                      "PostgresCandidateFreezeRepository(" in line
+                      and ").record_receipt(" in line
+                      and "persistence_authorized=True" not in line
+                  ):
+                      stale.append(f"{path}:{no}:{line.strip()}")
+          if stale:
+              raise SystemExit("stale inline freeze writes remain:\n" + "\n".join(stale))
+          print("fixture-only D012 callers repaired:")
+          print("\n".join(changed))
+          PY
+
+      - name: Verify affected PostgreSQL fixtures
+        shell: bash
+        run: |
+          uv lock --check
+          uv sync --all-extras --frozen
+          uv run alembic upgrade head
+          uv run ruff format --check tests/integration/test_drift_sentry_postgres.py tests/integration/test_evaluation_persisted_postgres.py tests/integration/test_evaluation_receipts_postgres.py tests/integration/test_experiment_lifecycle_postgres.py tests/replay/test_experiment_gauntlet_postgres.py scripts/ops/verify_backup_restore.py
+          uv run ruff check tests/integration/test_drift_sentry_postgres.py tests/integration/test_evaluation_persisted_postgres.py tests/integration/test_evaluation_receipts_postgres.py tests/integration/test_experiment_lifecycle_postgres.py tests/replay/test_experiment_gauntlet_postgres.py scripts/ops/verify_backup_restore.py
+          uv run pytest -q tests/integration/test_drift_sentry_postgres.py tests/integration/test_evaluation_persisted_postgres.py tests/integration/test_evaluation_receipts_postgres.py tests/replay/test_experiment_gauntlet_postgres.py
+
+      - name: Commit fixture repair and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/gigasprint02-d012-fixture-repair.yml
+          git add tests/integration/test_drift_sentry_postgres.py tests/integration/test_evaluation_persisted_postgres.py tests/integration/test_evaluation_receipts_postgres.py tests/integration/test_experiment_lifecycle_postgres.py tests/replay/test_experiment_gauntlet_postgres.py scripts/ops/verify_backup_restore.py
+          git commit -m "test(freeze): authorize explicit fixture persistence"
+          git push origin HEAD:agent/gigasprint-02-prefreeze-launch-integrity
