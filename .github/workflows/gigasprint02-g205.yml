@@ -40,6 +40,11 @@ jobs:
         run: uv run python scripts/gigasprint02_g205_patch_repair.py
       - name: Apply G2-05
         run: uv run python scripts/gigasprint02_g205_patch.py
+      - name: Type live PostgreSQL proof
+        run: |
+          uv run python scripts/gigasprint02_g205_type_repair.py
+          uv run ruff format tests/integration/test_confirmatory_claim_postgres.py
+          uv run ruff check --fix tests/integration/test_confirmatory_claim_postgres.py
       - name: Verify G2-05
         shell: bash
         run: |
@@ -50,7 +55,7 @@ jobs:
       - name: Commit G2-05 and remove temporary runner
         shell: bash
         run: |
-          rm .github/workflows/gigasprint02-g205.yml scripts/gigasprint02_g205_patch.py scripts/gigasprint02_g205_patch_repair.py
+          rm .github/workflows/gigasprint02-g205.yml scripts/gigasprint02_g205_patch.py scripts/gigasprint02_g205_patch_repair.py scripts/gigasprint02_g205_type_repair.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
