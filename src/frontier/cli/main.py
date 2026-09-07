@@ -4,7 +4,8 @@ import argparse
 import asyncio
 import json
 import os
-from datetime import datetime
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,7 +13,16 @@ from frontier.adapters.acquisition.config import load_fetch_policy, load_source_
 from frontier.adapters.acquisition.fetcher import SecureHttpFetcher
 from frontier.adapters.fixture.normalizer import load_fixture_candidate
 from frontier.application.acquisition import AcquisitionService
+from frontier.application.prospective_shadow import (
+    confirmatory_window_end,
+    due_confirmatory_boundaries,
+    first_confirmatory_boundary,
+    load_candidate_freeze_receipt,
+    require_runtime_freeze_material,
+    run_confirmatory_shadow_boundary,
+)
 from frontier.application.worker import AcquisitionWorker, PollCycleResult
+from frontier.domain.advanced_intelligence import ShadowRunStatus
 from frontier.domain.canonical_json import canonical_json_text
 from frontier.domain.collection import CollectionReason, CollectionRun, CollectionRunStatus
 from frontier.domain.observation import Observation
@@ -196,6 +206,122 @@ def run_worker(database_url: str, config_root: Path, *, once: bool, idle_seconds
     return 0
 
 
+def _parse_timestamp(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("expected an ISO-8601 timestamp") from error
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise argparse.ArgumentTypeError("timestamp must be timezone-aware")
+    return parsed
+
+
+def _freeze_path(config_root: Path, value: Path) -> Path:
+    return value if value.is_absolute() else config_root / value
+
+
+def _shadow_payload(result: object) -> dict[str, object]:
+    from frontier.application.prospective_shadow import ProspectiveShadowBoundaryResult
+
+    if not isinstance(result, ProspectiveShadowBoundaryResult):
+        raise TypeError("unexpected prospective shadow result")
+    run = result.execution.run
+    return {
+        "as_of": run.as_of.isoformat(),
+        "candidate_artifact_id": result.execution.candidate.artifact.artifact_id,
+        "candidate_freeze_receipt_id": result.freeze_receipt.receipt_id,
+        "control_snapshot_id": result.control.snapshot.snapshot_id,
+        "run_id": run.run_id,
+        "status": run.status.value,
+    }
+
+
+def run_pef_shadow_worker(
+    database_url: str,
+    config_root: Path,
+    *,
+    freeze_receipt_path: Path,
+    durable_freeze_at: datetime,
+    once: bool,
+    idle_seconds: float,
+) -> int:
+    import psycopg
+
+    from frontier.adapters.postgres.advanced_intelligence import (
+        PostgresCandidateFreezeRepository,
+        PostgresPefArtifactRepository,
+    )
+    from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligenceRepository
+    from frontier.adapters.postgres.prospective_shadow import (
+        PostgresProspectiveShadowRunRepository,
+    )
+    from frontier.adapters.postgres.readiness import verify_database_readiness
+
+    if idle_seconds <= 0:
+        raise ValueError("idle_seconds must be positive")
+    receipt = load_candidate_freeze_receipt(_freeze_path(config_root, freeze_receipt_path))
+    start = first_confirmatory_boundary(durable_freeze_at)
+    end = confirmatory_window_end(durable_freeze_at)
+
+    with psycopg.connect(database_url) as conn:
+        verify_database_readiness(conn)
+        baseline = PostgresBaselineIntelligenceRepository(conn)
+        pef = PostgresPefArtifactRepository(conn)
+        shadow = PostgresProspectiveShadowRunRepository(conn)
+        freeze = PostgresCandidateFreezeRepository(conn)
+
+        while True:
+            require_runtime_freeze_material(config_root, receipt)
+            registry = load_source_registry(config_root)
+            existing = shadow.bound_run_boundaries(
+                candidate_freeze_receipt_id=receipt.receipt_id,
+                start=start,
+                end=end,
+            )
+            now = datetime.now(UTC)
+            due = due_confirmatory_boundaries(
+                durable_freeze_at=durable_freeze_at,
+                now=now,
+                existing_boundaries=existing,
+            )
+            if due:
+                boundary = due[0]
+                result = run_confirmatory_shadow_boundary(
+                    baseline_repository=baseline,
+                    pef_repository=pef,
+                    shadow_repository=shadow,
+                    freeze_repository=freeze,
+                    freeze_receipt=receipt,
+                    durable_freeze_at=durable_freeze_at,
+                    as_of=boundary,
+                    generated_at=now,
+                    source_registry_version=registry.source_registry_version,
+                )
+                print(json.dumps(_shadow_payload(result), sort_keys=True), flush=True)
+                if result.execution.run.status is ShadowRunStatus.FAILED:
+                    return 2
+                if once:
+                    return 0
+                continue
+
+            if once:
+                print(
+                    json.dumps(
+                        {
+                            "candidate_freeze_receipt_id": receipt.receipt_id,
+                            "next_window_end": end.isoformat(),
+                            "status": "NO_DUE_BOUNDARY",
+                            "window_start": start.isoformat(),
+                        },
+                        sort_keys=True,
+                    )
+                )
+                return 0
+            if now >= end:
+                return 0
+            time.sleep(idle_seconds)
+
+
 def _database_url(args: argparse.Namespace, parser: argparse.ArgumentParser) -> str:
     value = (
         args.database_url
@@ -233,6 +359,14 @@ def main() -> int:
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--idle-seconds", type=float, default=30.0)
 
+    pef_shadow = sub.add_parser("pef-shadow")
+    pef_shadow.add_argument("--database-url")
+    pef_shadow.add_argument("--config-root", type=Path, default=Path("."))
+    pef_shadow.add_argument("--freeze-receipt", type=Path, required=True)
+    pef_shadow.add_argument("--durable-freeze-at", type=_parse_timestamp, required=True)
+    pef_shadow.add_argument("--once", action="store_true")
+    pef_shadow.add_argument("--idle-seconds", type=float, default=5.0)
+
     args = parser.parse_args()
     if args.command == "replay-fixture":
         return replay_fixture(args.fixture)
@@ -243,6 +377,15 @@ def main() -> int:
         return acquire_source(args.source_id, database_url, args.config_root)
     if args.command == "doctor":
         return doctor_database(database_url, args.config_root)
+    if args.command == "pef-shadow":
+        return run_pef_shadow_worker(
+            database_url,
+            args.config_root,
+            freeze_receipt_path=args.freeze_receipt,
+            durable_freeze_at=args.durable_freeze_at,
+            once=args.once,
+            idle_seconds=args.idle_seconds,
+        )
     return run_worker(
         database_url,
         args.config_root,
