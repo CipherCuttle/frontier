@@ -314,3 +314,38 @@ eb32122 fix(experiment): synchronize PEF preregistration validator with latest p
    after freeze-identity continuity is demonstrated across runs (R7 discipline).
 5. Consider pinning CI Python to a stable 3.14.x to prevent recurrence of the pydantic
    import drift (DEBT-3).
+
+---
+
+# GIGASPRINT_01 addendum (`agent/gigasprint-01-prospective-intelligence`, head `f51683b7dd345e3258cfb29a18eeeef7fce92b4c`, base `main@db9a56e4…`)
+
+Status of the sprint-1 ledger entries after GIGASPRINT_01 (historical sections above are unchanged):
+
+- **DEBT-2 — CLOSED** (commit `0b91cb2`): the experimental read plane now exposes
+  per-episode candidate ranks and experiment status (`/v0/experimental/*` per-episode
+  comparison endpoints + regenerated contracts/TS client; terminal experiment war room
+  in `3bc730b`).
+- **DEBT-5 — CLOSED** (commit `48c319e`): `evaluate_shadow_experiment_from_persisted()`
+  wires evaluation directly to persisted shadow-run artifacts via
+  `src/frontier/application/evaluation_loaders.py`; live-DB coverage added in
+  `tests/integration/test_evaluation_persisted_postgres.py`.
+- **DEBT-1 — materially reduced, local-skip note retained**: the `e2e-postgres.yml`
+  workflow (WP12b, commit `f51683b`) runs the full DB-bound suite with fresh-DB-per-file
+  isolation on PR/nightly; the 10 PG suites previously skipped locally are proven live
+  in CI. Suites still skip locally without `FRONTIER_TEST_DATABASE_URL` — that note
+  stands.
+- **D007 (debt register) — CLOSED**: `main` protected by ruleset `main-pr-verify-gate`
+  (id 22366099, enforcement active; PR required + required check `verify`), recorded in
+  commit `0196a56`.
+- **D002 (debt register) — still OPEN by design**: GIGASPRINT_01 added zero specialist
+  infrastructure; worker singleton coordination uses a Postgres-native advisory lock,
+  supporting the Postgres-only assumption without converting it into authority.
+- **New durable defects registered (see `docs/DEBT_REGISTER.md` D008–D010)**:
+  - D008 (LOW): `test_postgres_store.py` idempotency tests use fixed observation
+    identities — repeated runs against the same non-fresh DB hit dedup; harmless under
+    per-file fresh-DB isolation.
+  - D009 (MEDIUM if ever contractual): `pef_ranking_artifacts.artifact_json` lacks a
+    top-level `generated_at`; the read plane falls back to `as_of`.
+  - D010 (MEDIUM/LOW): `frontier worker` composes only the acquisition orchestrator;
+    the experiment orchestrator is supported by `run_once` but not wired into the
+    default worker composition (heartbeat handles `experiment=None` gracefully).

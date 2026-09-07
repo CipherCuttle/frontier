@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import cast
 
 import psycopg
@@ -223,7 +224,9 @@ class PostgresShadowRunRepository:
     def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
         self._connection = connection
 
-    def record_run(self, run: ShadowExperimentRun) -> None:
+    def record_run(self, run: ShadowExperimentRun, *, run_class: str = "DEV") -> None:
+        if run_class not in ("DEV", "CONFIRMATORY"):
+            raise ValueError("shadow run run_class must be DEV or CONFIRMATORY")
         if run.experiment_id != PEF_EXPERIMENT_ID:
             raise ValueError("shadow run experiment id mismatch")
         if run.candidate_id != PEF_CANDIDATE_ID:
@@ -248,8 +251,8 @@ class PostgresShadowRunRepository:
                     status, as_of, control_snapshot_id, control_receipt_id,
                     candidate_artifact_id, candidate_output_digest,
                     coverage_state, episode_universe_digest, run_digest,
-                    failure_reason, run_json
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    failure_reason, run_class, run_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (run_id) DO NOTHING
                 RETURNING run_id
                 """,
@@ -271,6 +274,7 @@ class PostgresShadowRunRepository:
                     str(run.episode_universe_digest),
                     str(run.run_digest),
                     run.failure_reason,
+                    run_class,
                     Jsonb(run.to_canonical()),
                 ),
             )
@@ -288,6 +292,22 @@ class PostgresShadowRunRepository:
                     or cast(str, existing[1]) != run.status.value
                 ):
                     raise RuntimeError("shadow run identity conflict with different digest")
+
+    def latest_run_id_and_class_for_as_of(self, as_of: datetime) -> tuple[str, str, str] | None:
+        """Read (run_id, run_class, status) of the retained run for one boundary."""
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT run_id, run_class, status
+                FROM shadow_experiment_runs
+                WHERE as_of = %s
+                ORDER BY run_id DESC
+                LIMIT 1
+                """,
+                (as_of,),
+            )
+            row = cur.fetchone()
+        return None if row is None else (cast(str, row[0]), cast(str, row[1]), cast(str, row[2]))
 
     def latest_run_id(self) -> str | None:
         with self._connection.cursor() as cur:

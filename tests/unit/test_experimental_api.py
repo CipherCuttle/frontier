@@ -10,11 +10,17 @@ from httpx import Response
 from frontier.adapters.api.public_read import create_public_read_app
 from frontier.application.experimental_read import ExperimentalReadService
 from frontier.application.public_read import PublicReadService
+from frontier.domain.experiment_status import ExperimentStatusInputs
 from frontier.domain.experimental_analysis import ExperimentalAnalysisKind
 from frontier.domain.experimental_read import (
     AnalysisArtifactSummary,
+    EpisodeComparison,
+    EvaluationDetail,
+    EvaluationHistoryEntry,
     FeatureBatchSummary,
     PefArtifactSummary,
+    RunHistoryEntry,
+    ShadowRunDetail,
     ShadowRunSummary,
 )
 
@@ -122,6 +128,11 @@ EXPERIMENTAL_PATHS = {
     "/v0/experimental/evaluation-receipts",
     "/v0/experimental/feature-batches",
     "/v0/experimental/analysis/{kind}",
+    "/v0/experimental/episodes/{episode_id}/comparison",
+    "/v0/experimental/runs/{run_id}",
+    "/v0/experimental/evaluations/{evaluation_id}",
+    "/v0/experimental/status",
+    "/v0/experimental/history",
 }
 
 
@@ -187,6 +198,33 @@ class _FakeExperimentalRepository:
                 ExperimentalAnalysisKind.CORROBORATION
             )
         }
+
+    # WP7 (G5) read-plane methods: unit fixtures fail closed by default.
+    def episode_comparison(
+        self, *, episode_id: str, run_id: str | None = None, as_of: datetime | None = None
+    ) -> EpisodeComparison | None:
+        raise RuntimeError("database unavailable")
+
+    def run_detail(self, *, run_id: str, as_of: datetime | None = None) -> ShadowRunDetail | None:
+        raise RuntimeError("database unavailable")
+
+    def evaluation_detail(
+        self, *, evaluation_id: str, as_of: datetime | None = None
+    ) -> EvaluationDetail | None:
+        raise RuntimeError("database unavailable")
+
+    def experiment_history(
+        self, *, limit: int, as_of: datetime | None = None
+    ) -> tuple[RunHistoryEntry, ...]:
+        raise RuntimeError("database unavailable")
+
+    def evaluation_history(
+        self, *, limit: int, as_of: datetime | None = None
+    ) -> tuple[EvaluationHistoryEntry, ...]:
+        raise RuntimeError("database unavailable")
+
+    def experiment_status_inputs(self) -> ExperimentStatusInputs:
+        raise RuntimeError("database unavailable")
 
 
 def _client(repository: _FakeExperimentalRepository) -> _GetClient:

@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type {
   EpisodeResponse,
+  ExperimentalEpisodeComparisonResponse,
+  ExperimentalHistoryResponse,
   ExperimentalOverviewResponse,
   ExperimentalShadowRunResponse,
+  ExperimentalStatusResponse,
 } from "./api";
 import {
+  bindingFromOverview,
+  buildExperimentCommandCenter,
   buildExperimentHistory,
   buildFeatureExplanations,
+  buildRankDeltasFromComparisons,
+  buildWarRoomHistory,
   computeRankDeltas,
   displayRankDelta,
   EXPERIMENTAL_LENS_LABEL,
   EXPERIMENTAL_LENS_NOTE,
+  experimentalStateKind,
   filterEpisodes,
   resolveKeyboardCommand,
   resolveSectionAvailability,
@@ -44,6 +52,41 @@ function episode(rank: number, sourceId = `source-${rank}`): EpisodeResponse {
   };
 }
 
+function comparison(
+  episodeId: string,
+  overrides: Partial<ExperimentalEpisodeComparisonResponse> = {},
+): ExperimentalEpisodeComparisonResponse {
+  return {
+    as_of: "2026-09-05T12:00:00.000000Z",
+    authority_state: "EXPERIMENTAL_SHADOW",
+    availability: "AVAILABLE",
+    baseline_rank: 1,
+    baseline_rank_state: "AVAILABLE",
+    candidate_components: null,
+    candidate_components_state: "UNAVAILABLE",
+    candidate_freeze_receipt_id: "freezereceipt_fixture",
+    candidate_rank: 3,
+    candidate_rank_state: "AVAILABLE",
+    control_snapshot_id: "snapshot_control",
+    episode_id: episodeId,
+    evaluation_receipt_id: "eval_fixture",
+    evaluation_receipt_status: "COMPLETE",
+    evaluation_state: "AVAILABLE",
+    feature_availability: "NO_DATA",
+    feature_interpretation: null,
+    feature_interpretation_state: "UNAVAILABLE",
+    feature_values: [],
+    interpretation: "EXPERIMENTAL_SHADOW comparison",
+    rank_delta: 2,
+    rank_delta_state: "AVAILABLE",
+    run_failure_reason: null,
+    run_id: "shadowrun_fixture",
+    run_status: "RAN",
+    schema_version: "experimental-read-response-v0",
+    ...overrides,
+  };
+}
+
 describe("terminal semantic helpers", () => {
   it("preserves baseline rank and relative order through local filtering", () => {
     const input = [episode(1, "alpha"), episode(2, "beta"), episode(3, "alpha-secondary")];
@@ -65,6 +108,8 @@ describe("terminal semantic helpers", () => {
     expect(resolveKeyboardCommand("3", document.body)).toEqual({ kind: "lens", lens: "TRENDING" });
     expect(resolveKeyboardCommand("x", document.body)).toEqual({ kind: "lens", lens: "EXPERIMENTAL" });
     expect(resolveKeyboardCommand("X", document.body)).toEqual({ kind: "lens", lens: "EXPERIMENTAL" });
+    expect(resolveKeyboardCommand("e", document.body)).toEqual({ kind: "panel", panel: "experiment" });
+    expect(resolveKeyboardCommand("E", document.body)).toEqual({ kind: "panel", panel: "experiment" });
     expect(resolveKeyboardCommand("j", document.body)).toEqual({ kind: "next" });
     expect(resolveKeyboardCommand("k", document.body)).toEqual({ kind: "previous" });
     expect(resolveKeyboardCommand("h", document.body)).toEqual({ kind: "panel", panel: "health" });
@@ -77,6 +122,7 @@ describe("terminal semantic helpers", () => {
     expect(resolveKeyboardCommand("1", input)).toBeNull();
     expect(resolveKeyboardCommand("j", input)).toBeNull();
     expect(resolveKeyboardCommand("x", input)).toBeNull();
+    expect(resolveKeyboardCommand("e", input)).toBeNull();
     expect(resolveKeyboardCommand("Escape", input)).toEqual({ kind: "escape" });
   });
 });
@@ -90,9 +136,11 @@ describe("EXPERIMENTAL lens model (slice H)", () => {
     ]);
     const deltas = computeRankDeltas(baseline, candidateRanks);
     expect(deltas).toHaveLength(3);
-    expect(deltas[0]).toEqual({ episodeId: "episode-001", baselineRank: 1, experimentalRank: 3, delta: 2 });
-    expect(deltas[1]).toEqual({ episodeId: "episode-002", baselineRank: 2, experimentalRank: 1, delta: -1 });
-    expect(deltas[2]).toEqual({ episodeId: "episode-003", baselineRank: 3, experimentalRank: null, delta: null });
+    expect(deltas[0]).toMatchObject({ episodeId: "episode-001", baselineRank: 1, experimentalRank: 3, delta: 2 });
+    expect(deltas[1]).toMatchObject({ episodeId: "episode-002", baselineRank: 2, experimentalRank: 1, delta: -1 });
+    expect(deltas[2]).toMatchObject({ episodeId: "episode-003", baselineRank: 3, experimentalRank: null });
+    expect(deltas.at(2)?.delta).toBeNull();
+    expect(deltas.at(2)?.deltaState).toBe("UNAVAILABLE");
     expect(displayRankDelta(2)).toBe("+2");
     expect(displayRankDelta(-1)).toBe("-1");
     expect(displayRankDelta(0)).toBe("±0");
@@ -102,8 +150,58 @@ describe("EXPERIMENTAL lens model (slice H)", () => {
     const baseline = [episode(1), episode(2)];
     const deltas = computeRankDeltas(baseline, null);
     expect(deltas.every((delta) => delta.experimentalRank === null && delta.delta === null)).toBe(true);
+    expect(deltas.every((delta) => delta.deltaState === "UNAVAILABLE")).toBe(true);
     expect(deltas.map((delta) => delta.baselineRank)).toEqual([1, 2]);
     expect(displayRankDelta(null)).toBe("UNKNOWN");
+    // UNKNOWN candidate ranks render the delta UNAVAILABLE — never a coerced 0.
+    expect(displayRankDelta(null, "UNAVAILABLE")).toBe("UNAVAILABLE");
+    expect(displayRankDelta(null, "INSUFFICIENT_SAMPLE")).toBe("INSUFFICIENT_SAMPLE");
+    expect(displayRankDelta(null, "AVAILABLE")).toBe("UNKNOWN");
+  });
+
+  it("builds deltas from the WP7 comparison surface without client-side delta math", () => {
+    const baseline = [episode(1), episode(2), episode(3)];
+    const comparisons = new Map<string, ExperimentalEpisodeComparisonResponse>([
+      ["episode-001", comparison("episode-001", { candidate_rank: 3, rank_delta: 2 })],
+      [
+        "episode-002",
+        comparison("episode-002", {
+          candidate_rank: null,
+          candidate_rank_state: "UNAVAILABLE",
+          rank_delta: null,
+          rank_delta_state: "UNAVAILABLE",
+        }),
+      ],
+    ]);
+    const deltas = buildRankDeltasFromComparisons(baseline, comparisons);
+    expect(deltas[0]).toMatchObject({
+      episodeId: "episode-001",
+      baselineRank: 1,
+      experimentalRank: 3,
+      experimentalRankState: "AVAILABLE",
+      delta: 2,
+      deltaState: "AVAILABLE",
+    });
+    // Candidate rank missing on the read plane: delta UNAVAILABLE, not 0.
+    expect(deltas[1]).toMatchObject({
+      episodeId: "episode-002",
+      experimentalRank: null,
+      experimentalRankState: "UNAVAILABLE",
+      delta: null,
+      deltaState: "UNAVAILABLE",
+    });
+    expect(displayRankDelta(deltas.at(1)?.delta ?? null, deltas.at(1)?.deltaState)).toBe("UNAVAILABLE");
+    // Baseline rank always comes from the baseline plane, not the candidate data.
+    expect(deltas.map((delta) => delta.baselineRank)).toEqual([1, 2, 3]);
+    // A comparison fetch that failed entirely renders UNKNOWN rank / UNAVAILABLE delta.
+    expect(buildRankDeltasFromComparisons(baseline, new Map())[2]).toMatchObject({
+      episodeId: "episode-003",
+      experimentalRank: null,
+      experimentalRankState: "UNKNOWN",
+      delta: null,
+      deltaState: "UNAVAILABLE",
+    });
+    expect(displayRankDelta(null, "UNKNOWN")).toBe("UNKNOWN");
   });
 
   it("resolves section availability fail-closed to UNKNOWN (R4)", () => {
@@ -114,6 +212,22 @@ describe("EXPERIMENTAL lens model (slice H)", () => {
     expect(resolveSectionAvailability(availability, "feature_batch")).toBe("UNKNOWN");
     expect(resolveSectionAvailability(null, "shadow_run")).toBe("UNKNOWN");
     expect(resolveSectionAvailability({ shadow_run: "WEIRD" }, "shadow_run")).toBe("UNKNOWN");
+  });
+
+  it("classifies the explicit war-room state matrix distinctly and fail-closed", () => {
+    expect(experimentalStateKind("UNKNOWN")).toBe("UNKNOWN");
+    expect(experimentalStateKind("NO_DATA")).toBe("NO_DATA");
+    expect(experimentalStateKind("UNAVAILABLE")).toBe("UNAVAILABLE");
+    // Preregistered evaluation statuses render verbatim.
+    expect(experimentalStateKind("FAILED")).toBe("FAILED");
+    expect(experimentalStateKind("DEGRADED")).toBe("DEGRADED");
+    expect(experimentalStateKind("INSUFFICIENT_SAMPLE")).toBe("INSUFFICIENT_SAMPLE");
+    expect(experimentalStateKind("INVALID_DRIFT")).toBe("INVALID_DRIFT");
+    expect(experimentalStateKind("COMPLETE")).toBe("COMPLETE");
+    // Unknown or missing strings fail closed to UNKNOWN — never to AVAILABLE.
+    expect(experimentalStateKind("SOME_NOVEL_STATUS")).toBe("UNKNOWN");
+    expect(experimentalStateKind(null)).toBe("UNKNOWN");
+    expect(experimentalStateKind(undefined)).toBe("UNKNOWN");
   });
 
   it("labels the experimental lens and never escalates its epistemic authority (R7)", () => {
@@ -204,6 +318,192 @@ describe("EXPERIMENTAL lens model (slice H)", () => {
     for (const feature of ranBatch) {
       expect(feature.value).toBe("UNKNOWN (values not exposed; 42 vectors in batch)");
       expect(feature.status).toBe("UNKNOWN");
+    }
+  });
+});
+
+describe("WP8 experiment war-room model", () => {
+  it("derives the experiment identity binding from the overview, never guessing", () => {
+    const shadowRun: ExperimentalShadowRunResponse = {
+      algorithm_version: "pef-v0",
+      as_of: "2026-09-05T12:00:00.000000Z",
+      authority_state: "EXPERIMENTAL_SHADOW",
+      candidate_artifact_id: "pefart_fixture",
+      candidate_freeze_receipt_id: "freezereceipt_fixture",
+      candidate_id: "pef_v0",
+      candidate_output_digest: "sha256:cand",
+      configuration_digest: "sha256:cfg",
+      control_receipt_id: "receipt_control",
+      control_snapshot_id: "snapshot_control",
+      episode_universe_digest: "sha256:universe",
+      experiment_id: "exp_pef_v0",
+      failure_reason: null,
+      generated_at: "2026-09-05T12:00:01.000000Z",
+      run_digest: "sha256:run",
+      run_id: "shadowrun_fixture",
+      schema_version: "experimental-read-response-v0",
+      status: "RAN",
+    };
+    expect(
+      bindingFromOverview({
+        ...({} as ExperimentalOverviewResponse),
+        latest_shadow_run: shadowRun,
+      }),
+    ).toEqual({
+      runId: "shadowrun_fixture",
+      freezeReceiptId: "freezereceipt_fixture",
+      evaluationReceiptId: null,
+    });
+    expect(bindingFromOverview(null)).toEqual({
+      runId: null,
+      freezeReceiptId: null,
+      evaluationReceiptId: null,
+    });
+  });
+
+  it("maps the WP7 history surface newest-first without reordering", () => {
+    const history: ExperimentalHistoryResponse = {
+      availability: "AVAILABLE",
+      candidate_id: "pef_v0",
+      evaluations: [
+        { as_of: "2026-09-05T12:30:00.000000Z", evaluation_id: "eval_new", status: "INSUFFICIENT_SAMPLE" },
+        { as_of: "2026-09-05T12:00:00.000000Z", evaluation_id: "eval_old", status: "FAILED" },
+      ],
+      experiment_id: "exp_pef_v0",
+      limit: 20,
+      runs: [
+        { as_of: "2026-09-05T12:30:00.000000Z", run_class: "PROSPECTIVE", run_digest: "sha256:new", run_id: "run_new", status: "RAN" },
+        { as_of: "2026-09-05T12:00:00.000000Z", run_class: null, run_digest: "sha256:old", run_id: "run_old", status: "FAILED" },
+      ],
+    };
+    const entries = buildWarRoomHistory(history);
+    expect(entries.map((entry) => entry.id)).toEqual(["run_new", "run_old", "eval_new", "eval_old"]);
+    expect(entries[0]).toMatchObject({ kind: "run", status: "RAN", runClass: "PROSPECTIVE" });
+    expect(entries[3]).toMatchObject({ kind: "evaluation", status: "FAILED", runClass: null });
+    expect(buildWarRoomHistory(null)).toEqual([]);
+  });
+
+  it("parses the WP7 status surface into the explicit command-center matrix", () => {
+    const status: ExperimentalStatusResponse = {
+      availability: "AVAILABLE",
+      authority_state: "EXPERIMENTAL_SHADOW",
+      interpretation: "EXPERIMENTAL_SHADOW status surface",
+      schema_version: "experiment-status-v0",
+      status: {
+        experiment_id: "exp_pef_v0",
+        candidate_id: "pef_v0",
+        candidate_freeze_state: "BOUND",
+        candidate_freeze_receipt_id: "freezereceipt_fixture",
+        implementation_state: "AVAILABLE",
+        implementation_commit: "abc123",
+        source_registry_state: "AVAILABLE",
+        source_registry_digest: "sha256:registry",
+        window_state: "OPEN",
+        window_start: "2026-09-05T00:00:00.000000Z",
+        latest_boundary_as_of: "2026-09-05T12:00:00.000000Z",
+        latest_attempt_status: null,
+        latest_run_id: "shadowrun_fixture",
+        latest_run_status: "RAN",
+        run_state: "AVAILABLE",
+        coverage_state: "DEGRADED",
+        qualifying_opportunity_counts: [
+          {
+            anchor_count: 5,
+            domain: "vuln_disclosure",
+            excluded_count: 0,
+            pending_count: 2,
+            resolved_negative_count: 0,
+            resolved_positive_count: 1,
+            unknown_count: 1,
+            unresolved_coverage_count: 1,
+          },
+        ],
+        sample_adequacy_thresholds: { minimum_qualifying_domains: 2 },
+        domain_evaluation_rows: [
+          {
+            candidate_positive_surfaced_resolved: 1,
+            candidate_precision: "0.500000",
+            candidate_surfaced_resolved: 2,
+            control_positive_surfaced_resolved: 2,
+            control_precision: "1.000000",
+            control_surfaced_resolved: 2,
+            difference_lower_bound: "-1.000000",
+            domain: "vuln_disclosure",
+            median_lead_time_advantage_seconds: "3600",
+            noninferiority_pass: true,
+            qualifies_sample_adequacy: true,
+          },
+        ],
+        candidate_precision: {
+          positive_surfaced_resolved: 1,
+          precision: "0.500000",
+          state: "AVAILABLE",
+          surfaced_resolved: 2,
+        },
+        baseline_precision: {
+          positive_surfaced_resolved: 2,
+          precision: "1.000000",
+          state: "AVAILABLE",
+          surfaced_resolved: 2,
+        },
+        noninferiority: { lower_bound: "-1.000000", margin: "0.100000", state: "PASS" },
+        lead_time: {
+          baseline_median_lead_time_seconds: null,
+          candidate_median_lead_time_seconds: null,
+          delta_median_advantage_seconds: "3600",
+          state: "AVAILABLE",
+        },
+        evaluation_receipt_state: "AVAILABLE",
+        evaluation_receipt_status: "COMPLETE",
+        drift_state: "OK",
+      },
+    };
+    const center = buildExperimentCommandCenter(status);
+    expect(center.availability).toBe("AVAILABLE");
+    expect(center.experimentId).toBe("exp_pef_v0");
+    expect(center.freeze).toMatchObject({
+      state: "BOUND",
+      receiptId: "freezereceipt_fixture",
+      implementationState: "AVAILABLE",
+      sourceRegistryState: "AVAILABLE",
+    });
+    expect(center.window).toMatchObject({ state: "OPEN", start: "2026-09-05T00:00:00.000000Z" });
+    expect(center.run).toMatchObject({ state: "AVAILABLE", runId: "shadowrun_fixture" });
+    expect(center.health.coverageState).toBe("DEGRADED");
+    expect(center.samples.qualifying).toHaveLength(1);
+    expect(center.samples.thresholds).toEqual({ minimum_qualifying_domains: 2 });
+    expect(center.domains).toHaveLength(1);
+    expect(center.domains[0]).toMatchObject({
+      domain: "vuln_disclosure",
+      candidatePrecision: "0.500000",
+      noninferiorityPass: true,
+      qualifiesSampleAdequacy: true,
+    });
+    expect(center.precision.candidate).toMatchObject({ state: "AVAILABLE", precision: "0.500000", surfacedResolved: 2 });
+    expect(center.precision.baseline).toMatchObject({ state: "AVAILABLE", precision: "1.000000" });
+    expect(center.lead).toEqual({ state: "AVAILABLE", deltaSeconds: "3600" });
+    expect(center.drift.state).toBe("OK");
+    expect(center.noninferiority).toMatchObject({ state: "PASS", lowerBound: "-1.000000", margin: "0.100000" });
+    expect(center.evaluation).toEqual({ state: "AVAILABLE", status: "COMPLETE" });
+  });
+
+  it("degrades every command-center cell to explicit UNKNOWN without a status surface", () => {
+    for (const response of [null, { availability: "NO_DATA", status: null } as ExperimentalStatusResponse]) {
+      const center = buildExperimentCommandCenter(response);
+      expect(center.availability).toBe(response === null ? "UNKNOWN" : "NO_DATA");
+      expect(center.experimentId).toBeNull();
+      expect(center.freeze).toMatchObject({ state: "UNKNOWN", receiptId: null });
+      expect(center.window).toMatchObject({ state: "UNKNOWN", start: null });
+      expect(center.run).toMatchObject({ state: "UNKNOWN", runId: null });
+      expect(center.health.coverageState).toBe("UNKNOWN");
+      expect(center.samples).toMatchObject({ qualifying: [], thresholds: null });
+      expect(center.domains).toEqual([]);
+      expect(center.precision.candidate).toMatchObject({ state: "UNKNOWN", precision: null });
+      expect(center.precision.baseline).toMatchObject({ state: "UNKNOWN", precision: null });
+      expect(center.lead).toEqual({ state: "UNKNOWN", deltaSeconds: null });
+      expect(center.drift.state).toBe("UNKNOWN");
+      expect(center.noninferiority).toMatchObject({ state: "UNKNOWN", lowerBound: null });
+      expect(center.evaluation).toMatchObject({ state: "UNKNOWN", status: null });
     }
   });
 });

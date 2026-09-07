@@ -11,9 +11,12 @@ import {
   experimentalAvailability,
   type EpisodeEvidenceResponse,
   type EpisodeResponse,
+  type ExperimentalEpisodeComparisonResponse,
   type ExperimentalFeatureBatchSectionResponse,
+  type ExperimentalHistoryResponse,
   type ExperimentalOverviewResponse,
   type ExperimentalShadowRunSectionResponse,
+  type ExperimentalStatusResponse,
   type FrontierPublicReadTransport,
   type HealthResponse,
   type PublicViewKind,
@@ -21,14 +24,18 @@ import {
 } from "./api";
 import {
   assertSnapshotBinding,
+  bindingFromOverview,
+  buildExperimentCommandCenter,
   buildExperimentHistory,
   buildFeatureExplanations,
-  computeRankDeltas,
+  buildRankDeltasFromComparisons,
+  buildWarRoomHistory,
   displayRankDelta,
   displayUnavailable,
   EXPERIMENTAL_LENS,
   EXPERIMENTAL_LENS_LABEL,
   EXPERIMENTAL_LENS_NOTE,
+  experimentalStateKind,
   filterEpisodes,
   isEditableTarget,
   resolveKeyboardCommand,
@@ -37,6 +44,7 @@ import {
   type ExperimentalRankDelta,
   type PanelKind,
   type TerminalLens,
+  type WarRoomCommandCenter,
 } from "./model";
 
 interface TerminalAppProps {
@@ -44,6 +52,13 @@ interface TerminalAppProps {
 }
 
 const LENSES: readonly PublicViewKind[] = ["RADAR", "NOW", "TRENDING"];
+
+/**
+ * Bounded comparison fetch: per-episode comparisons are issued for at most
+ * the first N baseline rows. Rows beyond the bound render their candidate
+ * rank UNKNOWN and delta UNAVAILABLE — never a fabricated rank (R4).
+ */
+const EXPERIMENTAL_COMPARISON_LIMIT = 20;
 
 function StateBadge({ label, value }: { label: string; value: string }) {
   const normalized = value.toLocaleUpperCase();
@@ -276,6 +291,7 @@ function HelpPanel() {
   const commands = [
     ["1 / 2 / 3", "RADAR / NOW / TRENDING baseline lenses"],
     ["x", "EXPERIMENTAL shadow comparison lens (toggle)"],
+    ["e", "experiment command center (WP8 status surface)"],
     ["j / ↓", "next visible episode"],
     ["k / ↑", "previous visible episode"],
     ["Enter", "inspect selected episode"],
@@ -311,16 +327,37 @@ type ExperimentalState =
       overview: ExperimentalOverviewResponse | null;
       runsSection: ExperimentalShadowRunSectionResponse | null;
       batchesSection: ExperimentalFeatureBatchSectionResponse | null;
+      statusSurface: ExperimentalStatusResponse | null;
+      historyEndpoint: ExperimentalHistoryResponse | null;
       radarItems: EpisodeResponse[] | null;
+      comparisons: ReadonlyMap<string, ExperimentalEpisodeComparisonResponse> | null;
+      comparisonFailures: readonly string[];
       failures: readonly string[];
     }
+  | { status: "error"; message: string };
+
+/**
+ * Experiment command-center panel state (WP8): the /v0/experimental/status
+ * surface rendered as a keyboard-first war-room view. Superseded fetches are
+ * discarded by request id — never rendered.
+ */
+type ExperimentCenterState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; center: WarRoomCommandCenter }
   | { status: "error"; message: string };
 
 function AvailabilityBadge({ label, value }: { label: string; value: string }) {
   return <StateBadge label={label} value={value} />;
 }
 
-function RankDeltaTable({ deltas }: { deltas: readonly ExperimentalRankDelta[] }) {
+function RankDeltaTable({
+  deltas,
+  comparisons,
+}: {
+  deltas: readonly ExperimentalRankDelta[];
+  comparisons: ReadonlyMap<string, ExperimentalEpisodeComparisonResponse> | null;
+}) {
   return (
     <div className="table-shell experimental-table-shell">
       <table className="episode-table experimental-table">
@@ -328,26 +365,160 @@ function RankDeltaTable({ deltas }: { deltas: readonly ExperimentalRankDelta[] }
           <tr>
             <th scope="col">Episode</th>
             <th scope="col">Baseline rank</th>
-            <th scope="col">Experimental rank</th>
+            <th scope="col">PEF rank (EXPERIMENTAL SHADOW)</th>
             <th scope="col">Δ rank (experimental − baseline)</th>
+            <th scope="col">Run</th>
+            <th scope="col">Freeze receipt</th>
+            <th scope="col">Evaluation</th>
           </tr>
         </thead>
         <tbody>
-          {deltas.map((delta) => (
-            <tr key={delta.episodeId}>
-              <td><code>{shortId(delta.episodeId, 18)}</code></td>
-              <td className="rank-cell">#{delta.baselineRank}</td>
-              <td>
-                <span className="unavailable">
-                  {delta.experimentalRank === null ? "UNKNOWN" : `#${delta.experimentalRank}`}
-                </span>
-              </td>
-              <td className="numeric signed">{displayRankDelta(delta.delta)}</td>
-            </tr>
-          ))}
+          {deltas.map((delta) => {
+            const comparison = comparisons?.get(delta.episodeId) ?? null;
+            return (
+              <tr key={delta.episodeId}>
+                <td><code>{shortId(delta.episodeId, 18)}</code></td>
+                <td className="rank-cell">#{delta.baselineRank}</td>
+                <td>
+                  <span className="unavailable">
+                    {delta.experimentalRank === null
+                      ? displayUnavailable(delta.experimentalRankState)
+                      : `#${delta.experimentalRank}`}
+                  </span>
+                </td>
+                <td className="numeric signed">
+                  {displayRankDelta(delta.delta, delta.deltaState)}
+                </td>
+                <td>
+                  {comparison?.run_id ? <code>{shortId(comparison.run_id, 14)}</code> : <span className="unavailable">UNAVAILABLE</span>}
+                </td>
+                <td>
+                  {comparison?.candidate_freeze_receipt_id ? (
+                    <code>{shortId(comparison.candidate_freeze_receipt_id, 14)}</code>
+                  ) : (
+                    <span className="unavailable">UNAVAILABLE</span>
+                  )}
+                </td>
+                <td>
+                  {comparison?.evaluation_receipt_status ? (
+                    <span className={`state-badge state-${experimentalStateKind(comparison.evaluation_receipt_status).toLocaleLowerCase()}`}>
+                      {comparison.evaluation_receipt_status}
+                    </span>
+                  ) : (
+                    <span className="unavailable">{displayUnavailable(comparison?.evaluation_state ?? null)}</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function PrecisionCell({ label, precision }: { label: string; precision: WarRoomCommandCenter["precision"]["candidate"] }) {
+  return (
+    <div className="precision-cell">
+      <StateBadge label={label} value={precision.state} />
+      <span className="unavailable">{precision.precision ?? "UNAVAILABLE precision"}</span>
+      <small>
+        surfaced {precision.surfacedResolved ?? "UNKNOWN"} · positive {precision.positiveSurfacedResolved ?? "UNKNOWN"}
+      </small>
+    </div>
+  );
+}
+
+function ExperimentCommandCenterPanel({ state }: { state: ExperimentCenterState }) {
+  return (
+    <section className="panel-content experiment-center" aria-labelledby="experiment-center-title">
+      <div className="panel-heading">
+        <p className="eyebrow">EXPERIMENTAL_SHADOW · not baseline authority</p>
+        <h2 id="experiment-center-title">Experiment command center</h2>
+      </div>
+      {state.status === "idle" ? (
+        <p className="unavailable">Command center not loaded. Press <kbd>e</kbd> to request the status surface.</p>
+      ) : null}
+      {state.status === "loading" ? <p role="status">Loading experiment status…</p> : null}
+      {state.status === "error" ? (
+        <div role="alert" className="error-banner experimental-error">
+          <strong>EXPERIMENT STATUS UNKNOWN</strong>
+          <span>{state.message}</span>
+        </div>
+      ) : null}
+      {state.status === "ready" ? <CommandCenterGrid center={state.center} /> : null}
+    </section>
+  );
+}
+
+function CommandCenterGrid({ center }: { center: WarRoomCommandCenter }) {
+  const samplesState = center.samples.qualifying.length > 0 ? "AVAILABLE" : "NO_DATA";
+  const domainsState = center.domains.length > 0 ? "AVAILABLE" : "NO_DATA";
+  return (
+    <>
+      <p className="epistemic-warning">
+        <strong>{EXPERIMENTAL_LENS_LABEL}</strong>
+        <span>{EXPERIMENTAL_LENS_NOTE}</span>
+      </p>
+      <div className="binding-line">
+        <span>experiment <code>{center.experimentId ?? "UNKNOWN"}</code></span>
+        <span>candidate <code>{center.candidateId ?? "UNKNOWN"}</code></span>
+      </div>
+      <div className="health-grid experiment-state-grid">
+        <StateBadge label="FREEZE" value={center.freeze.state} />
+        <StateBadge label="WINDOW" value={center.window.state} />
+        <StateBadge label="SAMPLES" value={samplesState} />
+        <StateBadge label="DOMAINS" value={domainsState} />
+        <StateBadge label="PRECISION" value={center.precision.candidate.state} />
+        <StateBadge label="LEAD" value={center.lead.state} />
+        <StateBadge label="DRIFT" value={center.drift.state} />
+        <StateBadge label="HEALTH" value={center.health.coverageState} />
+      </div>
+      <dl className="audit-definition-list">
+        <div><dt>Freeze receipt</dt><dd><code>{center.freeze.receiptId ?? "UNKNOWN"}</code></dd></div>
+        <div><dt>Implementation</dt><dd>{center.freeze.implementationState} · <code>{center.freeze.implementationCommit ?? "UNKNOWN"}</code></dd></div>
+        <div><dt>Source registry</dt><dd>{center.freeze.sourceRegistryState} · <code>{center.freeze.sourceRegistryDigest ?? "UNKNOWN"}</code></dd></div>
+        <div><dt>Window start</dt><dd>{center.window.start ?? "UNKNOWN"}</dd></div>
+        <div><dt>Latest boundary</dt><dd>{center.window.latestBoundaryAsOf ?? "UNKNOWN"}</dd></div>
+        <div><dt>Latest run</dt><dd><code>{center.run.runId ?? "UNKNOWN"}</code> · {center.run.state}</dd></div>
+        <div><dt>Drift</dt><dd>{center.drift.state}</dd></div>
+        <div><dt>Non-inferiority</dt><dd>{center.noninferiority.state} · lower bound {center.noninferiority.lowerBound ?? "UNAVAILABLE"} · margin {center.noninferiority.margin ?? "UNKNOWN"}</dd></div>
+        <div><dt>Evaluation receipt</dt><dd>{center.evaluation.status ?? "UNKNOWN"} · {center.evaluation.state}</dd></div>
+        <div><dt>Median lead advantage</dt><dd>{center.lead.deltaSeconds ?? "UNAVAILABLE"} seconds</dd></div>
+      </dl>
+      <div className="precision-grid">
+        <PrecisionCell label="Candidate precision" precision={center.precision.candidate} />
+        <PrecisionCell label="Baseline precision" precision={center.precision.baseline} />
+      </div>
+      <section aria-label="Qualifying sample counts">
+        <h3>Qualifying samples</h3>
+        {center.samples.qualifying.length === 0 ? (
+          <p className="unavailable">NO QUALIFYING SAMPLE DATA for this horizon.</p>
+        ) : (
+          <ul className="audit-list">
+            {center.samples.qualifying.map((count) => (
+              <li key={count.domain}>
+                <code>{count.domain}</code> · anchors {count.anchorCount ?? "UNKNOWN"} · pending {count.pendingCount ?? "UNKNOWN"} · positive {count.resolvedPositiveCount ?? "UNKNOWN"} · negative {count.resolvedNegativeCount ?? "UNKNOWN"} · unknown {count.unknownCount ?? "UNKNOWN"}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section aria-label="Per-domain evaluation rows">
+        <h3>Domain evaluation rows</h3>
+        {center.domains.length === 0 ? (
+          <p className="unavailable">NO DOMAIN EVALUATION DATA for this horizon.</p>
+        ) : (
+          <ul className="audit-list">
+            {center.domains.map((row) => (
+              <li key={row.domain}>
+                <code>{row.domain}</code> · candidate precision {row.candidatePrecision ?? "UNAVAILABLE"} · control precision {row.controlPrecision ?? "UNAVAILABLE"} · Δ lower bound {row.differenceLowerBound ?? "UNAVAILABLE"} · lead {row.medianLeadAdvantageSeconds ?? "UNAVAILABLE"}s · non-inferiority {row.noninferiorityPass === null ? "UNAVAILABLE" : row.noninferiorityPass ? "PASS" : "FAIL"} · adequacy {row.qualifiesSampleAdequacy === null ? "UNAVAILABLE" : String(row.qualifiesSampleAdequacy)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -390,12 +561,24 @@ function ExperimentalPanel({
   const batchAvailability =
     batchSection?.availability ??
     resolveSectionAvailability(overviewAvailability, "feature_batch");
+  const commandCenter = buildExperimentCommandCenter(state.statusSurface);
   const history = buildExperimentHistory(state.overview);
-  const featureBatch = batchSection?.latest ?? state.overview?.latest_feature_batch ?? null;
+  const warHistory = buildWarRoomHistory(state.historyEndpoint);
+  const featureBatch = state.batchesSection?.latest ?? state.overview?.latest_feature_batch ?? null;
   const featureExplanations = buildFeatureExplanations(featureBatch);
-  const deltas = state.radarItems ? computeRankDeltas(state.radarItems, null) : null;
+  const deltas = state.radarItems
+    ? buildRankDeltasFromComparisons(state.radarItems, state.comparisons)
+    : null;
   const allEmpty =
     history.length > 0 && history.every((entry) => entry.availability === "NO_DATA");
+  const latestComparison = state.radarItems
+    ? state.comparisons?.get(state.radarItems[0]?.episode_id ?? "") ?? null
+    : null;
+  const freezeReceiptId =
+    commandCenter.freeze.receiptId ??
+    latestComparison?.candidate_freeze_receipt_id ??
+    runStatus?.candidate_freeze_receipt_id ??
+    null;
 
   return (
     <div className="experimental-panel">
@@ -411,10 +594,10 @@ function ExperimentalPanel({
         <span>{EXPERIMENTAL_LENS_NOTE}</span>
       </p>
 
-      {state.failures.length > 0 ? (
+      {state.failures.length > 0 || state.comparisonFailures.length > 0 ? (
         <div role="alert" className="experimental-failures">
           <strong>EXPERIMENTAL sections unavailable (UNKNOWN):</strong>
-          <span>{state.failures.join(" · ")}</span>
+          <span>{[...state.failures, ...state.comparisonFailures].join(" · ")}</span>
         </div>
       ) : null}
 
@@ -429,6 +612,7 @@ function ExperimentalPanel({
               <div><dt>As of</dt><dd>{runStatus.as_of}</dd></div>
               <div><dt>Candidate artifact</dt><dd><code>{shortId(runStatus.candidate_artifact_id, 20)}</code></dd></div>
               <div><dt>Control snapshot</dt><dd><code>{shortId(runStatus.control_snapshot_id, 20)}</code></dd></div>
+              <div><dt>Freeze receipt</dt><dd><code>{shortId(runStatus.candidate_freeze_receipt_id ?? "", 20) || "UNKNOWN"}</code></dd></div>
               <div><dt>Failure reason</dt><dd>{runStatus.failure_reason ?? "NONE"}</dd></div>
             </dl>
           ) : (
@@ -451,10 +635,12 @@ function ExperimentalPanel({
           </div>
         ) : (
           <>
-            <RankDeltaTable deltas={deltas} />
+            <RankDeltaTable deltas={deltas} comparisons={state.comparisons} />
             <p className="experimental-note">
-              The EXPERIMENTAL_SHADOW summary read plane exposes run/artifact identity and
-              status only — per-episode candidate ranks are UNKNOWN here, so no delta is invented.
+              Deltas come from the EXPERIMENTAL_SHADOW comparison surface and are rendered
+              verbatim. Episodes outside the bounded comparison window (first {EXPERIMENTAL_COMPARISON_LIMIT} rows) or with failed
+              comparisons render UNKNOWN rank / UNAVAILABLE delta — never an invented rank.
+              Baseline rows keep their baseline order: candidate data never reranks them.
             </p>
           </>
         )}
@@ -480,7 +666,19 @@ function ExperimentalPanel({
 
       <section aria-labelledby="experimental-history-title" className="experimental-section">
         <h2 id="experimental-history-title">Experiment history</h2>
-        {history.length === 0 || allEmpty ? (
+        {warHistory.length > 0 ? (
+          <dl className="experimental-history-list">
+            {warHistory.map((entry) => (
+              <div key={`${entry.kind}:${entry.id}`}>
+                <dt>{entry.kind}</dt>
+                <dd>
+                  <code>{shortId(entry.id, 16)}</code> · status {entry.status} · as_of {entry.asOf}
+                  {entry.runClass ? <span> · class {entry.runClass}</span> : null}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : history.length === 0 || allEmpty ? (
           <div className="empty-state">
             <strong>NO EXPERIMENTAL DATA for this as_of.</strong>
             <span>No stored shadow runs, artifacts, receipts, batches, or analysis artifacts. This is not observed absence of experiments in the world.</span>
@@ -502,6 +700,56 @@ function ExperimentalPanel({
         )}
       </section>
 
+      <section aria-labelledby="experimental-state-title" className="experimental-section">
+        <h2 id="experimental-state-title">Experiment state</h2>
+        {state.statusSurface === null ? (
+          <div className="empty-state">
+            <strong>Experiment status surface UNKNOWN for this horizon.</strong>
+            <span>The coherent status projection could not be read; no state is invented.</span>
+          </div>
+        ) : commandCenter.availability === "NO_DATA" ? (
+          <div className="empty-state">
+            <strong>NO EXPERIMENT STATUS DATA for this horizon.</strong>
+            <span>This is not a claim that no experiment exists.</span>
+          </div>
+        ) : (
+          <CommandCenterGrid center={commandCenter} />
+        )}
+      </section>
+
+      <section aria-labelledby="experimental-freeze-title" className="experimental-section">
+        <h2 id="experimental-freeze-title">Freeze identity</h2>
+        {freezeReceiptId === null ? (
+          <div className="empty-state">
+            <strong>No bound freeze receipt is visible (UNKNOWN).</strong>
+            <span>Unbound freeze is an explicit state, not a hidden one.</span>
+          </div>
+        ) : (
+          <dl className="audit-definition-list">
+            <div><dt>Freeze receipt</dt><dd><code>{freezeReceiptId}</code></dd></div>
+            <div><dt>Freeze state</dt><dd>{commandCenter.freeze.state}</dd></div>
+            <div><dt>Implementation</dt><dd>{commandCenter.freeze.implementationState} · <code>{commandCenter.freeze.implementationCommit ?? "UNKNOWN"}</code></dd></div>
+            <div><dt>Source registry</dt><dd>{commandCenter.freeze.sourceRegistryState} · <code>{commandCenter.freeze.sourceRegistryDigest ?? "UNKNOWN"}</code></dd></div>
+          </dl>
+        )}
+      </section>
+
+      <section aria-labelledby="experimental-evaluation-title" className="experimental-section">
+        <h2 id="experimental-evaluation-title">Evaluation progress</h2>
+        {commandCenter.evaluation.status === null ? (
+          <div className="empty-state">
+            <strong>No evaluation receipt is bound for this horizon.</strong>
+            <span>Evaluation progress is UNKNOWN until a receipt exists; nothing is extrapolated.</span>
+          </div>
+        ) : (
+          <dl className="audit-definition-list">
+            <div><dt>Receipt status</dt><dd><span className={`state-badge state-${experimentalStateKind(commandCenter.evaluation.status).toLocaleLowerCase()}`}>{commandCenter.evaluation.status}</span></dd></div>
+            <div><dt>Receipt state</dt><dd>{commandCenter.evaluation.state}</dd></div>
+            <div><dt>Non-inferiority</dt><dd>{commandCenter.noninferiority.state} · lower bound {commandCenter.noninferiority.lowerBound ?? "UNAVAILABLE"} · margin {commandCenter.noninferiority.margin ?? "UNKNOWN"}</dd></div>
+          </dl>
+        )}
+      </section>
+
       <footer className="workspace-footer">
         <span>EXPERIMENTAL lens · <button type="button" className="episode-button" onClick={onBack}>back to {backLens} [x]</button></span>
       </footer>
@@ -515,6 +763,7 @@ export function TerminalApp({ transport }: TerminalAppProps) {
   const snapshotRef = useRef<string | null>(null);
   const lastBaselineLensRef = useRef<PublicViewKind>("RADAR");
   const experimentalRequestRef = useRef(0);
+  const experimentCenterRequestRef = useRef(0);
   const [lens, setLens] = useState<TerminalLens>("RADAR");
   const [view, setView] = useState<ViewResponse | null>(null);
   const [filter, setFilter] = useState("");
@@ -525,6 +774,7 @@ export function TerminalApp({ transport }: TerminalAppProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [experimental, setExperimental] = useState<ExperimentalState>({ status: "idle" });
+  const [experimentCenter, setExperimentCenter] = useState<ExperimentCenterState>({ status: "idle" });
   const lensRef = useRef<TerminalLens>("RADAR");
   lensRef.current = lens;
 
@@ -640,10 +890,45 @@ export function TerminalApp({ transport }: TerminalAppProps) {
   }, []);
 
   /**
+   * Experiment command-center fetch (WP8). Guarded by an incrementing request
+   * id: only the newest request may render, so superseded status responses
+   * (identity/freeze changes mid-flight) are discarded, never shown.
+   */
+  const loadExperimentCenter = useCallback(async () => {
+    const requestId = ++experimentCenterRequestRef.current;
+    setExperimentCenter({ status: "loading" });
+    try {
+      const response = await api.experimentalStatus();
+      if (experimentCenterRequestRef.current !== requestId) {
+        // Superseded request: discard, never render stale experiment state.
+        return;
+      }
+      setExperimentCenter({ status: "ready", center: buildExperimentCommandCenter(response) });
+    } catch (caught) {
+      if (experimentCenterRequestRef.current !== requestId) return;
+      setExperimentCenter({
+        status: "error",
+        message: caught instanceof Error ? caught.message : "Experiment status request failed.",
+      });
+    }
+  }, [api]);
+
+  /** Keyboard/pointer toggle for the experiment command-center panel. */
+  const toggleExperimentCenter = useCallback(() => {
+    if (panels.includes("experiment")) {
+      closePanel("experiment");
+      return;
+    }
+    openPanel("experiment");
+    void loadExperimentCenter();
+  }, [closePanel, loadExperimentCenter, openPanel, panels]);
+
+  /**
    * Enter the EXPERIMENTAL lens. Snapshot safety: baseline view state
    * (view rows, filter, selection, inspector, panels) is never mutated; the
-   * experimental fetch is bound to the currently selected snapshot as_of and
-   * stale completions are discarded.
+   * experimental fetches are bound to the currently selected snapshot as_of
+   * AND to the experiment identity (run/freeze/evaluation) — stale
+   * completions from superseded identities are discarded, never rendered.
    */
   const enterExperimental = useCallback(async () => {
     const requestId = ++experimentalRequestRef.current;
@@ -665,11 +950,13 @@ export function TerminalApp({ transport }: TerminalAppProps) {
       api.experimentalOverview(asOf),
       api.experimentalShadowRuns(asOf),
       api.experimentalFeatureBatches(asOf),
+      api.experimentalStatus(),
+      api.experimentalHistory(),
     ]);
     if (experimentalRequestRef.current !== requestId || lensRef.current !== EXPERIMENTAL_LENS) {
       return; // superseded: the operator moved on; discard, never render stale shadow data
     }
-    const [radarResult, overviewResult, runsResult, batchesResult] = results;
+    const [radarResult, overviewResult, runsResult, batchesResult, statusResult, historyResult] = results;
     const failures: string[] = [];
     let radarItems: EpisodeResponse[] | null = null;
     if (radarResult.status === "fulfilled") {
@@ -685,6 +972,8 @@ export function TerminalApp({ transport }: TerminalAppProps) {
     if (overviewResult.status === "rejected") failures.push("experimental overview");
     if (runsResult.status === "rejected") failures.push("shadow-runs section");
     if (batchesResult.status === "rejected") failures.push("feature-batches section");
+    if (statusResult.status === "rejected") failures.push("experiment status");
+    if (historyResult.status === "rejected") failures.push("experiment history");
     if (
       overviewResult.status === "rejected" &&
       runsResult.status === "rejected" &&
@@ -696,14 +985,47 @@ export function TerminalApp({ transport }: TerminalAppProps) {
       });
       return;
     }
+    const overview = overviewResult.status === "fulfilled" ? overviewResult.value : null;
+    // Bind the experiment identity BEFORE issuing per-episode comparisons so
+    // the api-level guard can discard responses from superseded identities.
+    api.setExperimentalBinding(bindingFromOverview(overview));
+    const comparisons = new Map<string, ExperimentalEpisodeComparisonResponse>();
+    const comparisonFailures: string[] = [];
+    const comparisonEpisodes = (radarItems ?? []).slice(0, EXPERIMENTAL_COMPARISON_LIMIT);
+    if (comparisonEpisodes.length > 0) {
+      const comparisonResults = await Promise.allSettled(
+        comparisonEpisodes.map((item) =>
+          api.experimentalEpisodeComparison(item.episode_id, { asOf }),
+        ),
+      );
+      if (experimentalRequestRef.current !== requestId || lensRef.current !== EXPERIMENTAL_LENS) {
+        return; // superseded mid-flight; discard every comparison response
+      }
+      comparisonResults.forEach((result, index) => {
+        const episodeId = comparisonEpisodes[index]?.episode_id;
+        if (!episodeId) return;
+        if (result.status === "fulfilled" && result.value.episode_id === episodeId) {
+          comparisons.set(episodeId, result.value);
+        } else {
+          comparisonFailures.push(`comparison:${episodeId}`);
+        }
+      });
+    }
+    if (experimentalRequestRef.current !== requestId || lensRef.current !== EXPERIMENTAL_LENS) {
+      return; // superseded: never render stale shadow data
+    }
     setExperimental({
       status: "ready",
       asOf,
       snapshotId,
-      overview: overviewResult.status === "fulfilled" ? overviewResult.value : null,
+      overview,
       runsSection: runsResult.status === "fulfilled" ? runsResult.value : null,
       batchesSection: batchesResult.status === "fulfilled" ? batchesResult.value : null,
+      statusSurface: statusResult.status === "fulfilled" ? statusResult.value : null,
+      historyEndpoint: historyResult.status === "fulfilled" ? historyResult.value : null,
       radarItems,
+      comparisons,
+      comparisonFailures,
       failures,
     });
   }, [api, view]);
@@ -748,15 +1070,17 @@ export function TerminalApp({ transport }: TerminalAppProps) {
         filterRef.current?.focus();
       } else if (command.kind === "panel") {
         if (command.panel === "health") void toggleHealth();
+        else if (command.panel === "experiment") toggleExperimentCenter();
         else togglePanel(command.panel);
       } else if (command.kind === "refresh") {
+        if (panels.includes("experiment")) void loadExperimentCenter();
         if (lens === EXPERIMENTAL_LENS) void enterExperimental();
         else void loadView(lens, snapshotRef.current ?? undefined);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closePanel, closeTopPanel, inspectEpisode, lens, loadView, moveSelection, selectedEpisodeId, toggleExperimental, toggleHealth, togglePanel]);
+  }, [closePanel, closeTopPanel, inspectEpisode, lens, loadExperimentCenter, loadView, moveSelection, panels, selectedEpisodeId, toggleExperimentCenter, toggleExperimental, toggleHealth, togglePanel]);
 
   const loadLatest = async () => {
     snapshotRef.current = null;
@@ -807,6 +1131,7 @@ export function TerminalApp({ transport }: TerminalAppProps) {
           <button type="button" onClick={() => void loadLatest()}>latest snapshot</button>
           <button type="button" onClick={() => togglePanel("audit")} disabled={!view}>audit [a]</button>
           <button type="button" onClick={() => void toggleHealth()} disabled={!view}>health [h]</button>
+          <button type="button" onClick={toggleExperimentCenter}>center [e]</button>
           <button type="button" onClick={() => togglePanel("help")}>keys [?]</button>
         </div>
       </header>
@@ -836,6 +1161,16 @@ export function TerminalApp({ transport }: TerminalAppProps) {
             <strong>EXPERIMENTAL</strong>
             <small>EXPERIMENTAL_SHADOW comparison</small>
           </button>
+          <button
+            type="button"
+            className="experimental-lens"
+            aria-pressed={panels.includes("experiment")}
+            onClick={toggleExperimentCenter}
+          >
+            <span className="keycap">e</span>
+            <strong>COMMAND CENTER</strong>
+            <small>experiment status surface</small>
+          </button>
           <div className="semantic-guard">
             <strong>BASELINE SUBSTRATE</strong>
             <span>No client rerank.</span>
@@ -859,7 +1194,7 @@ export function TerminalApp({ transport }: TerminalAppProps) {
               </div>
             ) : (
               <div>
-                <p className="eyebrow">Server order · baseline rank is not objective truth</p>
+                <p className="eyebrow">Server-ordered baseline · no client rerank</p>
                 <h1 id="episode-table-title">{lens} / episode activity</h1>
               </div>
             )}
@@ -909,7 +1244,7 @@ export function TerminalApp({ transport }: TerminalAppProps) {
           )}
 
           <footer className="workspace-footer">
-            <span>j/k move · Enter inspect · h health · a audit · ? help · r refresh same snapshot · x experimental</span>
+            <span>j/k move · Enter inspect · h health · a audit · e command center · ? help · r refresh same snapshot · x experimental</span>
             <span>{view?.semantic_scope ?? "UNBOUND"} · policy {view?.view_policy_version ?? "—"}</span>
           </footer>
         </section>
@@ -920,6 +1255,7 @@ export function TerminalApp({ transport }: TerminalAppProps) {
           {topPanel === "health" && health ? <HealthPanel health={health} /> : null}
           {topPanel === "audit" && view ? <AuditPanel view={view} /> : null}
           {topPanel === "help" ? <HelpPanel /> : null}
+          {topPanel === "experiment" ? <ExperimentCommandCenterPanel state={experimentCenter} /> : null}
         </aside>
       </main>
     </div>

@@ -72,7 +72,58 @@ The worker currently uses one synchronous psycopg connection and performs acquis
 
 Do not add concurrent database writes merely to increase apparent throughput; concurrency requires an explicit connection/transaction design and evidence that the existing sequential worker is the bottleneck.
 
-A normal interactive stop is `SIGINT` / `Ctrl-C`; the CLI handles `KeyboardInterrupt` and exits cleanly after control returns from the active acquisition operation.
+The worker is a single-process singleton enforced with a Postgres-native
+session advisory lock (`pg_try_advisory_lock` on the dedicated key derived
+from the constant name `frontier-worker-lease`):
+
+- The lock is acquired per cycle. If another live worker holds it, the
+  process logs and exits with code 3 and `WORKER_LEASE_HELD`; no second
+  cycle can ever run concurrently.
+- Each completed cycle upserts one row into the mutable `worker_heartbeats`
+  table (`worker_id`, `role='ACQUISITION+EXPERIMENT'`, `beat_at`, `metrics`)
+  with cycle duration, per-source acquisition counts, retry backlog,
+  cadence SLO states, experiment-cycle outcome, latest baseline snapshot
+  and candidate run `as_of`, and the current drift state. Heartbeat
+  failures never fail the acquisition cycle (liveness is best-effort).
+- A failure isolated to a single source item never kills the cycle: the
+  per-source error is recorded in the cycle payload and heartbeat
+  (`errors` / `isolated_errors`) and the remaining sources proceed.
+  Transient Postgres connection failures are classified separately, logged,
+  retried with bounded exponential backoff (cap 30 s delay), and the worker
+  reconnects; after 5 consecutive reconnect failures it exits with code 4
+  (`WORKER_DB_UNREACHABLE`).
+- All acquisition/publish writes remain transactional, so a stop at any
+  boundary commits no partial rows.
+
+A normal interactive stop is `SIGINT` / `Ctrl-C`; `SIGTERM` is handled the
+same way. The signal handlers set a cooperative shutdown flag, the current
+cycle is allowed to finish (its publish transactions commit atomically),
+the cycle lease is released, and the process exits 0. Stopped mid-experiment
+attempts are never orphaned as RUNNING: any RUNNING attempt whose lease has
+elapsed is expired on the next restart (WP2 adopt-or-expire).
+
+Observability:
+
+```bash
+FRONTIER_DATABASE_URL='postgresql://...' uv run frontier ops status
+```
+
+`frontier ops status` is read-only. It prints JSON with heartbeat age and
+metrics, per-source retry backlog, source freshness versus the registry
+`poll_interval_seconds` (FRESH/DEGRADED/STALE), attempt queue depth
+(PENDING/RUNNING and terminal state counts), latest baseline snapshot and
+candidate run `as_of`, drift state, and row counts of the experiment
+tables (artifact growth indicator).
+
+## Experiment operations
+
+Prospective-experiment operator workflows are documented separately in
+[`docs/CANDIDATE_FREEZE_WORKFLOW.md`](CANDIDATE_FREEZE_WORKFLOW.md): candidate freeze
+receipts via `frontier freeze derive` (dry) and `frontier freeze --persist` (real freeze
+is human-authorized and post-merge only), drift verification via
+`frontier freeze verify`, and canonical durability truth via
+`frontier freeze durability` (a `NOT_DURABLE` freeze can never gate confirmatory runs).
+Experiment observability reuses the read-only `frontier ops status` surface above.
 
 ## Recovery drill
 

@@ -2,7 +2,7 @@
 
 Status: CURRENT_IMPLEMENTATION_STATE_V1
 
-Snapshot parent: `main@bb105d03cacba0d7bee4b3f871c1a1e5231fb3f0`.
+Snapshot parent: `main@bb105d03cacba0d7bee4b3f871c1a1e5231fb3f0`. The GIGASPRINT_01 branch base authority remains `main@db9a56e4be66085def287682fa94bbe599bb58f5` (PR #18 merge, sprint-1 intelligence); the prior promotion parent `main@239171e0a8819a98306031b6c292952125c77957` remains the historical authority of the PR #14 TERMINAL_V0 transition.
 
 This file records the canonical repository implementation state and current priority after merge of
 PR #30. It does not override `docs/CONSTITUTION.md`, accepted ADRs, frozen phase authorities, or
@@ -168,6 +168,11 @@ with:
 observed control as satisfied evidence but does not silently close or delete D007; debt-register
 closure, if still required there, must be performed explicitly against that evidence.
 
+That explicit closure has since been performed on the GIGASPRINT_01 branch: D007 is CLOSED in
+`docs/DEBT_REGISTER.md` against this ruleset evidence (id 22366099, enforcement active, required
+status check `verify`, PR-based merge path retained; direct admin bypass remains theoretically
+possible and the ruleset trigger is monitored per the debt register).
+
 ## Current priority sequence
 
 ### 0. ROADMAP_RECONCILIATION_POST_REAL_TRUST_VALIDATOR_V0 — CURRENT GOVERNANCE WORK
@@ -219,6 +224,35 @@ only as an adapter after separate authority; MCP does not become architecture or
 Continue source and operational work only through source-policy, trust-boundary, reproducibility,
 capacity, recovery, and health/coverage gates. New domains or infrastructure do not inherit truth,
 confirmation, or ranking authority merely by being connected.
+
+### 8. ADVANCED_INTELLIGENCE_EXPERIMENTS — MERGED (sprint-1, PR #18)
+
+Merged to `main` as `main@db9a56e4be66085def287682fa94bbe599bb58f5` (PR #18). Delivered against the prospective baseline and read plane, without semantic mutation of either:
+- preregistered PEF_V0 deterministic candidate ranking (`experiments/advanced_intelligence/pef_v0/preregistration.json`);
+- shadow experiment engine executing control vs candidate on the identical episode universe, with baseline snapshots untouched;
+- durable candidate-freeze receipts with fail-closed drift detection;
+- digest-bound evaluation machinery (top-K paired precision, Newcombe hybrid margin, opportunity anchors, immutable receipts);
+- transparent feature vectors and experimental analysis artifacts under a structural truth-key guard;
+- read-only `/v0/experimental/*` read plane and terminal EXPERIMENTAL lens;
+- migrations 0004–0009 for all new artifact/receipt/vector stores.
+
+An advanced model receives authority only if it demonstrates prospective value over the naive baseline at comparable precision across multiple domains, as required by P03. Confirmatory authority has NOT been granted to PEF_V0; it remains EXPERIMENTAL_SHADOW.
+
+### 9. GIGASPRINT_01 — PROSPECTIVE INTELLIGENCE OPERATIONALIZATION — IMPLEMENTED_ON_BRANCH
+
+Implemented on branch `agent/gigasprint-01-prospective-intelligence` (base `main@db9a56e4be66085def287682fa94bbe599bb58f5`, updated with the `origin/main@04426fe1c9bdaa74e27d5f189c25e83a04794945` roadmap-reconciliation merge), pending independent review and merge authorization. Delivered:
+- durable prospective opportunity/outcome and experiment-attempt state (migrations 0010–0012);
+- paired prospective experiment orchestration with adopt-or-expire attempt lifecycle;
+- persisted paired-snapshot evaluation loaders and a coherent scientific evaluation status model;
+- drift sentry validating frozen identity before confirmatory work;
+- per-episode experimental read plane and terminal experiment war room;
+- worker heartbeat, advisory-lock lease, graceful shutdown and `frontier ops status`;
+- backup/restore proof extended to experimental scientific tables;
+- G10 hostile-mutation replay gauntlet for frozen-candidate determinism;
+- full experiment lifecycle proof on live PostgreSQL via `e2e-postgres.yml` (fresh-DB-per-file isolation, PR/nightly);
+- candidate freeze operator workflow (`frontier freeze derive|verify|durability`).
+
+Status is IMPLEMENTED_ON_BRANCH only: no roadmap authority is claimed until the branch passes independent review and merge authorization. See `docs/GIGASPRINT_01_PR_NOTES.md`.
 
 ## Carried debt
 

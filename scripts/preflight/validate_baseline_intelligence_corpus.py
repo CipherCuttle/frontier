@@ -70,7 +70,9 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     data = json.loads(CORPUS.read_text(encoding="utf-8"))
     require(data.get("schema_version") == EXPECTED_SCHEMA, "schema version drift")
-    require(data.get("runtime_implementation_authorized") is False, "authority must predate runtime")
+    require(
+        data.get("runtime_implementation_authorized") is False, "authority must predate runtime"
+    )
     require(data.get("projection") == EXPECTED_PROJECTION, "projection identity drift")
     require(data.get("windows_seconds") == EXPECTED_WINDOWS, "window authority drift")
     require(data.get("ranking_order") == EXPECTED_RANKING, "ranking policy drift")

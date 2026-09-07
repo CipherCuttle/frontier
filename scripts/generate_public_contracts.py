@@ -49,6 +49,24 @@ class _SchemaOnlyExperimentalRepository:
     def latest_analysis_artifacts(self, *, as_of: Any = None) -> Any:
         raise ExperimentalReadFailure("schema-only repository")
 
+    def episode_comparison(self, *, episode_id: Any = None, **kwargs: Any) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def run_detail(self, *, run_id: Any = None, **kwargs: Any) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def evaluation_detail(self, *, evaluation_id: Any = None, **kwargs: Any) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def experiment_history(self, *, limit: Any = None, **kwargs: Any) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def evaluation_history(self, *, limit: Any = None, **kwargs: Any) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
+    def experiment_status_inputs(self) -> Any:
+        raise ExperimentalReadFailure("schema-only repository")
+
 
 def openapi_document() -> JsonObject:
     repository: PublicReadRepository = _SchemaOnlyRepository()

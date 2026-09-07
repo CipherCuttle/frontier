@@ -10,23 +10,35 @@ results (R4, R7, R8). GET only: no mutation endpoint exists here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from frontier.application.experimental_read import ExperimentalReadService
+from frontier.domain.experiment_status import (
+    DomainEvaluationStatusRow,
+    render_experiment_status,
+)
 from frontier.domain.experimental_read import (
     EXPERIMENTAL_READ_AUTHORITY_STATE,
     EXPERIMENTAL_READ_INTERPRETATION,
     EXPERIMENTAL_READ_SCHEMA_VERSION,
+    HISTORY_LIMIT_DEFAULT,
     AnalysisArtifactSummary,
+    EpisodeComparison,
+    EvaluationDetail,
+    EvaluationDetailSection,
     EvaluationReceiptSummary,
     ExperimentalOverview,
     ExperimentalReadFailure,
+    ExperimentHistory,
+    ExperimentStatusSurface,
     FeatureBatchSummary,
     PefArtifactSummary,
+    RunDetailSection,
+    ShadowRunDetail,
     ShadowRunSummary,
     parse_experimental_as_of,
 )
@@ -215,6 +227,173 @@ class ExperimentalAnalysisArtifactSectionResponse(BaseModel):
     latest: ExperimentalAnalysisArtifactResponse | None
 
 
+class ExperimentalControlRankEntryResponse(BaseModel):
+    model_config = _forbid()
+
+    episode_id: str
+    rank: int
+
+
+class ExperimentalEpisodeComparisonResponse(BaseModel):
+    model_config = _forbid()
+
+    schema_version: str = EXPERIMENTAL_READ_SCHEMA_VERSION
+    authority_state: str = EXPERIMENTAL_READ_AUTHORITY_STATE
+    interpretation: str = EXPERIMENTAL_READ_INTERPRETATION
+    availability: str
+    episode_id: str
+    as_of: str | None
+    run_id: str | None
+    run_status: str | None
+    run_failure_reason: str | None
+    control_snapshot_id: str | None
+    candidate_freeze_receipt_id: str | None
+    evaluation_receipt_id: str | None
+    evaluation_receipt_status: str | None
+    evaluation_state: str
+    baseline_rank_state: str
+    baseline_rank: int | None
+    candidate_rank_state: str
+    candidate_rank: int | None
+    rank_delta_state: str
+    rank_delta: int | None
+    candidate_components_state: str
+    candidate_components: dict[str, Any] | None
+    feature_availability: str
+    feature_interpretation_state: str
+    feature_interpretation: str | None
+    feature_values: list[dict[str, Any]]
+
+
+class ExperimentalRunDetailResponse(BaseModel):
+    model_config = _forbid()
+
+    run_id: str
+    run_digest: str
+    experiment_id: str
+    candidate_id: str
+    schema_version: str
+    algorithm_version: str
+    configuration_digest: str
+    authority_state: str
+    status: str
+    as_of: str
+    generated_at: str
+    control_snapshot_id: str
+    control_receipt_id: str
+    candidate_artifact_id: str
+    candidate_output_digest: str
+    episode_universe_digest: str
+    candidate_freeze_receipt_id: str | None
+    failure_reason: str | None
+    run_class: str | None
+    coverage_state: str
+    control_ranking: list[ExperimentalControlRankEntryResponse]
+
+
+class ExperimentalEvaluationDomainRowResponse(BaseModel):
+    model_config = _forbid()
+
+    domain: str
+    candidate_precision: str | None
+    candidate_surfaced_resolved: int | None
+    candidate_positive_surfaced_resolved: int | None
+    control_precision: str | None
+    control_surfaced_resolved: int | None
+    control_positive_surfaced_resolved: int | None
+    difference_lower_bound: str | None
+    noninferiority_pass: bool | None
+    median_lead_time_advantage_seconds: str | None
+    qualifies_sample_adequacy: bool | None
+
+
+class ExperimentalEvaluationDetailResponse(BaseModel):
+    model_config = _forbid()
+
+    evaluation_id: str
+    receipt_digest: str
+    status: str
+    as_of: str
+    generated_at: str
+    experiment_id: str
+    candidate_id: str
+    schema_version: str
+    evaluation_algorithm_version: str
+    candidate_configuration_digest: str
+    evaluation_configuration_digest: str
+    authority_state: str
+    candidate_freeze_receipt_id: str
+    freeze_receipt_digest: str
+    freeze_status: str
+    preregistration_digest: str
+    shadow_run_ids: list[str]
+    status_reason: str | None
+    verdict: str | None
+    domains: list[ExperimentalEvaluationDomainRowResponse]
+
+
+class ExperimentalStatusResponse(BaseModel):
+    model_config = _forbid()
+
+    schema_version: str = EXPERIMENTAL_READ_SCHEMA_VERSION
+    authority_state: str = EXPERIMENTAL_READ_AUTHORITY_STATE
+    interpretation: str = EXPERIMENTAL_READ_INTERPRETATION
+    availability: str
+    status: dict[str, Any] | None
+
+
+class ExperimentalRunDetailSectionResponse(BaseModel):
+    model_config = _forbid()
+
+    schema_version: str = EXPERIMENTAL_READ_SCHEMA_VERSION
+    authority_state: str = EXPERIMENTAL_READ_AUTHORITY_STATE
+    interpretation: str = EXPERIMENTAL_READ_INTERPRETATION
+    availability: str
+    run: ExperimentalRunDetailResponse | None
+
+
+class ExperimentalEvaluationDetailSectionResponse(BaseModel):
+    model_config = _forbid()
+
+    schema_version: str = EXPERIMENTAL_READ_SCHEMA_VERSION
+    authority_state: str = EXPERIMENTAL_READ_AUTHORITY_STATE
+    interpretation: str = EXPERIMENTAL_READ_INTERPRETATION
+    availability: str
+    evaluation: ExperimentalEvaluationDetailResponse | None
+
+
+class ExperimentalRunHistoryEntryResponse(BaseModel):
+    model_config = _forbid()
+
+    run_id: str
+    run_digest: str
+    run_class: str | None
+    status: str
+    as_of: str
+
+
+class ExperimentalEvaluationHistoryEntryResponse(BaseModel):
+    model_config = _forbid()
+
+    evaluation_id: str
+    status: str
+    as_of: str
+
+
+class ExperimentalHistoryResponse(BaseModel):
+    model_config = _forbid()
+
+    schema_version: str = EXPERIMENTAL_READ_SCHEMA_VERSION
+    authority_state: str = EXPERIMENTAL_READ_AUTHORITY_STATE
+    interpretation: str = EXPERIMENTAL_READ_INTERPRETATION
+    experiment_id: str
+    candidate_id: str
+    availability: str
+    limit: int
+    runs: list[ExperimentalRunHistoryEntryResponse]
+    evaluations: list[ExperimentalEvaluationHistoryEntryResponse]
+
+
 def _shadow_run_model(summary: ShadowRunSummary) -> ExperimentalShadowRunResponse:
     return ExperimentalShadowRunResponse.model_validate(
         {
@@ -378,6 +557,188 @@ def _overview_model(overview: ExperimentalOverview) -> ExperimentalOverviewRespo
     )
 
 
+def _run_detail_model(detail: ShadowRunDetail) -> ExperimentalRunDetailResponse:
+    return ExperimentalRunDetailResponse.model_validate(
+        {
+            "run_id": detail.run_id,
+            "run_digest": detail.run_digest,
+            "experiment_id": detail.experiment_id,
+            "candidate_id": detail.candidate_id,
+            "schema_version": detail.schema_version,
+            "algorithm_version": detail.algorithm_version,
+            "configuration_digest": detail.configuration_digest,
+            "authority_state": detail.authority_state,
+            "status": detail.status,
+            "as_of": detail.as_of,
+            "generated_at": detail.generated_at,
+            "control_snapshot_id": detail.control_snapshot_id,
+            "control_receipt_id": detail.control_receipt_id,
+            "candidate_artifact_id": detail.candidate_artifact_id,
+            "candidate_output_digest": detail.candidate_output_digest,
+            "episode_universe_digest": detail.episode_universe_digest,
+            "candidate_freeze_receipt_id": detail.candidate_freeze_receipt_id,
+            "failure_reason": detail.failure_reason,
+            "run_class": detail.run_class,
+            "coverage_state": detail.coverage_state,
+            "control_ranking": [
+                {"episode_id": entry.episode_id, "rank": entry.rank}
+                for entry in detail.control_ranking
+            ],
+        }
+    )
+
+
+def _evaluation_domain_row_model(
+    row: DomainEvaluationStatusRow,
+) -> ExperimentalEvaluationDomainRowResponse:
+    return ExperimentalEvaluationDomainRowResponse.model_validate(
+        {
+            "domain": row.domain,
+            "candidate_precision": row.candidate_precision,
+            "candidate_surfaced_resolved": row.candidate_surfaced_resolved,
+            "candidate_positive_surfaced_resolved": row.candidate_positive_surfaced_resolved,
+            "control_precision": row.control_precision,
+            "control_surfaced_resolved": row.control_surfaced_resolved,
+            "control_positive_surfaced_resolved": row.control_positive_surfaced_resolved,
+            "difference_lower_bound": row.difference_lower_bound,
+            "noninferiority_pass": row.noninferiority_pass,
+            "median_lead_time_advantage_seconds": row.median_lead_time_advantage_seconds,
+            "qualifies_sample_adequacy": row.qualifies_sample_adequacy,
+        }
+    )
+
+
+def _evaluation_detail_model(detail: EvaluationDetail) -> ExperimentalEvaluationDetailResponse:
+    return ExperimentalEvaluationDetailResponse.model_validate(
+        {
+            "evaluation_id": detail.evaluation_id,
+            "receipt_digest": detail.receipt_digest,
+            "status": detail.status,
+            "as_of": detail.as_of,
+            "generated_at": detail.generated_at,
+            "experiment_id": detail.experiment_id,
+            "candidate_id": detail.candidate_id,
+            "schema_version": detail.schema_version,
+            "evaluation_algorithm_version": detail.evaluation_algorithm_version,
+            "candidate_configuration_digest": detail.candidate_configuration_digest,
+            "evaluation_configuration_digest": detail.evaluation_configuration_digest,
+            "authority_state": detail.authority_state,
+            "candidate_freeze_receipt_id": detail.candidate_freeze_receipt_id,
+            "freeze_receipt_digest": detail.freeze_receipt_digest,
+            "freeze_status": detail.freeze_status,
+            "preregistration_digest": detail.preregistration_digest,
+            "shadow_run_ids": list(detail.shadow_run_ids),
+            "status_reason": detail.status_reason,
+            "verdict": detail.verdict,
+            "domains": [_evaluation_domain_row_model(row) for row in detail.domains],
+        }
+    )
+
+
+def _comparison_model(
+    comparison: EpisodeComparison,
+) -> ExperimentalEpisodeComparisonResponse:
+    return ExperimentalEpisodeComparisonResponse.model_validate(
+        {
+            "schema_version": comparison.schema_version,
+            "authority_state": comparison.authority_state,
+            "interpretation": comparison.interpretation,
+            "availability": comparison.availability,
+            "episode_id": comparison.episode_id,
+            "as_of": comparison.as_of,
+            "run_id": comparison.run_id,
+            "run_status": comparison.run_status,
+            "run_failure_reason": comparison.run_failure_reason,
+            "control_snapshot_id": comparison.control_snapshot_id,
+            "candidate_freeze_receipt_id": comparison.candidate_freeze_receipt_id,
+            "evaluation_receipt_id": comparison.evaluation_receipt_id,
+            "evaluation_receipt_status": comparison.evaluation_receipt_status,
+            "evaluation_state": comparison.evaluation_state,
+            "baseline_rank_state": comparison.baseline_rank_state,
+            "baseline_rank": comparison.baseline_rank,
+            "candidate_rank_state": comparison.candidate_rank_state,
+            "candidate_rank": comparison.candidate_rank,
+            "rank_delta_state": comparison.rank_delta_state,
+            "rank_delta": comparison.rank_delta,
+            "candidate_components_state": comparison.candidate_components_state,
+            "candidate_components": comparison.candidate_components,
+            "feature_availability": comparison.feature_availability,
+            "feature_interpretation_state": comparison.feature_interpretation_state,
+            "feature_interpretation": comparison.feature_interpretation,
+            "feature_values": comparison.feature_values,
+        }
+    )
+
+
+def _run_detail_section_model(
+    section: RunDetailSection,
+) -> ExperimentalRunDetailSectionResponse:
+    return ExperimentalRunDetailSectionResponse.model_validate(
+        {
+            "availability": section.availability,
+            "run": None if section.run is None else _run_detail_model(section.run),
+        }
+    )
+
+
+def _evaluation_detail_section_model(
+    section: EvaluationDetailSection,
+) -> ExperimentalEvaluationDetailSectionResponse:
+    return ExperimentalEvaluationDetailSectionResponse.model_validate(
+        {
+            "availability": section.availability,
+            "evaluation": (
+                None if section.evaluation is None else _evaluation_detail_model(section.evaluation)
+            ),
+        }
+    )
+
+
+def _history_model(history: ExperimentHistory) -> ExperimentalHistoryResponse:
+    return ExperimentalHistoryResponse.model_validate(
+        {
+            "schema_version": history.schema_version,
+            "authority_state": history.authority_state,
+            "interpretation": history.interpretation,
+            "experiment_id": history.experiment_id,
+            "candidate_id": history.candidate_id,
+            "availability": history.availability,
+            "limit": history.limit,
+            "runs": [
+                {
+                    "run_id": item.run_id,
+                    "run_digest": item.run_digest,
+                    "run_class": item.run_class,
+                    "status": item.status,
+                    "as_of": item.as_of,
+                }
+                for item in history.runs
+            ],
+            "evaluations": [
+                {
+                    "evaluation_id": item.evaluation_id,
+                    "status": item.status,
+                    "as_of": item.as_of,
+                }
+                for item in history.evaluations
+            ],
+        }
+    )
+
+
+def _status_response_model(surface: ExperimentStatusSurface) -> ExperimentalStatusResponse:
+    payload = None if surface.status is None else render_experiment_status(surface.status)
+    return ExperimentalStatusResponse.model_validate(
+        {
+            "schema_version": EXPERIMENTAL_READ_SCHEMA_VERSION,
+            "authority_state": EXPERIMENTAL_READ_AUTHORITY_STATE,
+            "interpretation": EXPERIMENTAL_READ_INTERPRETATION,
+            "availability": surface.availability,
+            "status": payload,
+        }
+    )
+
+
 def _optional_as_of(value: str | None) -> datetime | None:
     if value is None:
         return None
@@ -395,7 +756,37 @@ def register_experimental_routes(app: FastAPI, service: ExperimentalReadService)
             detail = "as_of must be a canonical UTC timestamp."
         elif exc.code == "INVALID_ANALYSIS_KIND":
             detail = "Unknown experimental analysis artifact kind."
+        elif exc.code == "INVALID_LIMIT":
+            detail = "limit must be an integer between 1 and 200."
         return JSONResponse(status_code=400, content={"error": exc.code, "detail": detail})
+
+    def episode_comparison(
+        episode_id: str, run_id: AsOfQuery = None, as_of: AsOfQuery = None
+    ) -> ExperimentalEpisodeComparisonResponse:
+        comparison = service.get_episode_comparison(
+            episode_id=episode_id,
+            run_id=run_id,
+            as_of=_optional_as_of(as_of),
+        )
+        return _comparison_model(comparison)
+
+    def run_detail(run_id: str, as_of: AsOfQuery = None) -> ExperimentalRunDetailSectionResponse:
+        return _run_detail_section_model(
+            service.get_run_detail(run_id=run_id, as_of=_optional_as_of(as_of))
+        )
+
+    def evaluation_detail(
+        evaluation_id: str, as_of: AsOfQuery = None
+    ) -> ExperimentalEvaluationDetailSectionResponse:
+        return _evaluation_detail_section_model(
+            service.get_evaluation_detail(evaluation_id=evaluation_id, as_of=_optional_as_of(as_of))
+        )
+
+    def status_endpoint() -> ExperimentalStatusResponse:
+        return _status_response_model(service.get_status())
+
+    def history(limit: int = HISTORY_LIMIT_DEFAULT) -> ExperimentalHistoryResponse:
+        return _history_model(service.get_history(limit=limit))
 
     def overview(as_of: AsOfQuery = None) -> ExperimentalOverviewResponse:
         return _overview_model(service.get_overview(as_of=_optional_as_of(as_of)))
@@ -508,4 +899,39 @@ def register_experimental_routes(app: FastAPI, service: ExperimentalReadService)
         methods=["GET"],
         response_model=ExperimentalAnalysisArtifactSectionResponse,
         operation_id="getExperimentalAnalysisArtifacts",
+    )
+    app.add_api_route(
+        "/v0/experimental/episodes/{episode_id}/comparison",
+        episode_comparison,
+        methods=["GET"],
+        response_model=ExperimentalEpisodeComparisonResponse,
+        operation_id="getExperimentalEpisodeComparison",
+    )
+    app.add_api_route(
+        "/v0/experimental/runs/{run_id}",
+        run_detail,
+        methods=["GET"],
+        response_model=ExperimentalRunDetailSectionResponse,
+        operation_id="getExperimentalRunDetail",
+    )
+    app.add_api_route(
+        "/v0/experimental/evaluations/{evaluation_id}",
+        evaluation_detail,
+        methods=["GET"],
+        response_model=ExperimentalEvaluationDetailSectionResponse,
+        operation_id="getExperimentalEvaluationDetail",
+    )
+    app.add_api_route(
+        "/v0/experimental/status",
+        status_endpoint,
+        methods=["GET"],
+        response_model=ExperimentalStatusResponse,
+        operation_id="getExperimentalStatus",
+    )
+    app.add_api_route(
+        "/v0/experimental/history",
+        history,
+        methods=["GET"],
+        response_model=ExperimentalHistoryResponse,
+        operation_id="getExperimentalHistory",
     )

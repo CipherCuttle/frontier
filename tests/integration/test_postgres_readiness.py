@@ -26,7 +26,7 @@ def test_migrated_database_is_ready() -> None:
         readiness = verify_database_readiness(connection)
 
     assert readiness.migration_revision == EXPECTED_DATABASE_REVISION
-    assert readiness.database_name == "frontier"
+    assert readiness.database_name  # whatever scratch database the test points at
     assert "observations" in readiness.required_relations
     assert "baseline_intelligence_snapshots" in readiness.required_relations
 
@@ -52,7 +52,7 @@ def test_doctor_reports_database_and_source_registry(capsys: pytest.CaptureFixtu
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["migration_revision"] == EXPECTED_DATABASE_REVISION
-    assert payload["database_name"] == "frontier"
+    assert payload["database_name"]
     assert payload["configured_sources"] == sorted(payload["configured_sources"])
     assert "arxiv.cs-ai" in payload["configured_sources"]
     assert "github.ml-repos" in payload["configured_sources"]

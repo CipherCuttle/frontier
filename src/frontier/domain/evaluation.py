@@ -710,10 +710,15 @@ def evaluate_domains(
     rank_cutoff_k: int = GLOBAL_RANK_CUTOFF_K,
 ) -> tuple[DomainEvaluation, ...]:
     """Stratify resolved opportunities by the frozen V0 taxonomy and evaluate
-    every preregistered domain gate. UNQUALIFIED/UNQUALIFIED_MIXED anchors are
-    retained and reported only in receipt counts, never as domain rows.
+    every preregistered domain gate. Only the three frozen qualifying strata
+    (SOFTWARE_PACKAGES, AI_MODELS, SECURITY_VULNERABILITIES) produce domain
+    rows: per the preregistration ``domain_mapping``, UNQUALIFIED_MIXED is the
+    reported cross-stratum resolution group — never a promotion domain — so
+    UNQUALIFIED/UNQUALIFIED_MIXED anchors are retained and reported ONLY in
+    receipt counts (``unqualified_mixed_count`` / ``unqualified_count``) and
+    can never satisfy the ``MINIMUM_QUALIFYING_DOMAINS`` gate.
     """
-    domains = sorted({item.domain for item in opportunities})
+    domains = sorted(set(QUALIFYING_DOMAINS) & {item.domain for item in opportunities})
     evaluations: list[DomainEvaluation] = []
     for domain in domains:
         in_domain = [item for item in opportunities if item.domain == domain]

@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .advanced_intelligence import PEF_CANDIDATE_ID, PEF_CONFIGURATION_DIGEST, PEF_EXPERIMENT_ID
+from .canonical_json import CanonicalValue
+from .experiment_status import DomainEvaluationStatusRow, ExperimentStatus
 from .experimental_analysis import ExperimentalAnalysisKind
 
 EXPERIMENTAL_READ_SCHEMA_VERSION = "experimental-read-response-v0"
@@ -34,6 +36,10 @@ EXPERIMENTAL_READ_INTERPRETATION = (
 EXPERIMENTAL_READ_UNKNOWN = "UNKNOWN"
 EXPERIMENTAL_READ_AVAILABLE = "AVAILABLE"
 EXPERIMENTAL_READ_NO_DATA = "NO_DATA"
+EXPERIMENTAL_READ_UNAVAILABLE = "UNAVAILABLE"
+EXPERIMENTAL_READ_INVALID_LIMIT = "INVALID_LIMIT"
+HISTORY_LIMIT_DEFAULT = 50
+HISTORY_LIMIT_MAX = 200
 
 SECTION_SHADOW_RUN = "shadow_run"
 SECTION_PEF_ARTIFACT = "pef_artifact"
@@ -54,6 +60,10 @@ class InvalidExperimentalAsOfError(ExperimentalReadFailure):
 
 class InvalidExperimentalAnalysisKindError(ExperimentalReadFailure):
     code = "INVALID_ANALYSIS_KIND"
+
+
+class InvalidExperimentalLimitError(ExperimentalReadFailure):
+    code = "INVALID_LIMIT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +176,165 @@ class AnalysisArtifactSummary:
     source_registry_version: str | None
     episode_universe_digest: str | None
     input_digest: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ControlRankEntry:
+    """One control-arm per-episode rank entry (deterministic, R8)."""
+
+    episode_id: str
+    rank: int
+
+
+@dataclass(frozen=True, slots=True)
+class ShadowRunDetail:
+    """Full run record incl. bindings, run_class, and coverage state (R7, R8)."""
+
+    run_id: str
+    run_digest: str
+    experiment_id: str
+    candidate_id: str
+    schema_version: str
+    algorithm_version: str
+    configuration_digest: str
+    authority_state: str
+    status: str
+    as_of: str
+    generated_at: str
+    control_snapshot_id: str
+    control_receipt_id: str
+    candidate_artifact_id: str
+    candidate_output_digest: str
+    episode_universe_digest: str
+    candidate_freeze_receipt_id: str | None
+    failure_reason: str | None
+    run_class: str | None
+    coverage_state: str
+    control_ranking: tuple[ControlRankEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationDetail:
+    """Full evaluation receipt incl. stored per-domain rows (R8)."""
+
+    evaluation_id: str
+    receipt_digest: str
+    status: str
+    as_of: str
+    generated_at: str
+    experiment_id: str
+    candidate_id: str
+    schema_version: str
+    evaluation_algorithm_version: str
+    candidate_configuration_digest: str
+    evaluation_configuration_digest: str
+    authority_state: str
+    candidate_freeze_receipt_id: str
+    freeze_receipt_digest: str
+    freeze_status: str
+    preregistration_digest: str
+    shadow_run_ids: tuple[str, ...]
+    status_reason: str | None
+    verdict: str | None
+    domains: tuple[DomainEvaluationStatusRow, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RunHistoryEntry:
+    """One bounded-history run row (deterministic ordering, R8)."""
+
+    run_id: str
+    run_digest: str
+    run_class: str | None
+    status: str
+    as_of: str
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationHistoryEntry:
+    """One bounded-history evaluation row (deterministic ordering, R8)."""
+
+    evaluation_id: str
+    status: str
+    as_of: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentHistory:
+    """Bounded, deterministically ordered run/evaluation history (R4, R8)."""
+
+    schema_version: str
+    authority_state: str
+    interpretation: str
+    experiment_id: str
+    candidate_id: str
+    availability: str
+    limit: int
+    runs: tuple[RunHistoryEntry, ...]
+    evaluations: tuple[EvaluationHistoryEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeComparison:
+    """Per-episode comparison for one paired run (R1, R4, R7, R8).
+
+    Mixed-identity protection: the envelope always carries the exact
+    ``run_id``, ``control_snapshot_id``, ``candidate_freeze_receipt_id``
+    (or ``None``), and the evaluation state it was derived from — clients can
+    never mix snapshots invisibly. Absent ranks are explicit
+    ``UNAVAILABLE``/``NO_DATA`` states and are NEVER rendered as zero.
+    """
+
+    schema_version: str
+    authority_state: str
+    interpretation: str
+    availability: str
+    episode_id: str
+    as_of: str | None
+    run_id: str | None
+    run_status: str | None
+    run_failure_reason: str | None
+    control_snapshot_id: str | None
+    candidate_freeze_receipt_id: str | None
+    evaluation_receipt_id: str | None
+    evaluation_receipt_status: str | None
+    evaluation_state: str
+    baseline_rank_state: str
+    baseline_rank: int | None
+    candidate_rank_state: str
+    candidate_rank: int | None
+    rank_delta_state: str
+    rank_delta: int | None
+    candidate_components_state: str
+    candidate_components: dict[str, CanonicalValue] | None
+    feature_availability: str
+    feature_interpretation_state: str
+    feature_interpretation: str | None
+    feature_values: list[dict[str, CanonicalValue]]
+
+
+@dataclass(frozen=True, slots=True)
+class RunDetailSection:
+    """Explicit availability + full run record (R4, R7, R8)."""
+
+    availability: str
+    run: ShadowRunDetail | None
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationDetailSection:
+    """Explicit availability + full evaluation receipt (R4, R8)."""
+
+    availability: str
+    evaluation: EvaluationDetail | None
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentStatusSurface:
+    """WP6 operator state with an explicit availability state (R4, R8)."""
+
+    availability: str
+    status: ExperimentStatus | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,3 +463,45 @@ def build_experimental_overview(
         latest_feature_batch=feature_batch,
         analysis_artifacts=dict(analysis_artifacts),
     )
+
+
+def _absent_comparison(*, episode_id: str, availability: str) -> EpisodeComparison:
+    """Explicit absent comparison envelope (R4): no ranks, never zeros."""
+    return EpisodeComparison(
+        schema_version=EXPERIMENTAL_READ_SCHEMA_VERSION,
+        authority_state=EXPERIMENTAL_READ_AUTHORITY_STATE,
+        interpretation=EXPERIMENTAL_READ_INTERPRETATION,
+        availability=availability,
+        episode_id=episode_id,
+        as_of=None,
+        run_id=None,
+        run_status=None,
+        run_failure_reason=None,
+        control_snapshot_id=None,
+        candidate_freeze_receipt_id=None,
+        evaluation_receipt_id=None,
+        evaluation_receipt_status=None,
+        evaluation_state=EXPERIMENTAL_READ_NO_DATA,
+        baseline_rank_state=EXPERIMENTAL_READ_UNAVAILABLE,
+        baseline_rank=None,
+        candidate_rank_state=EXPERIMENTAL_READ_UNAVAILABLE,
+        candidate_rank=None,
+        rank_delta_state=EXPERIMENTAL_READ_UNAVAILABLE,
+        rank_delta=None,
+        candidate_components_state=EXPERIMENTAL_READ_UNAVAILABLE,
+        candidate_components=None,
+        feature_availability=EXPERIMENTAL_READ_UNAVAILABLE,
+        feature_interpretation_state=EXPERIMENTAL_READ_UNAVAILABLE,
+        feature_interpretation=None,
+        feature_values=[],
+    )
+
+
+def build_unavailable_comparison(episode_id: str) -> EpisodeComparison:
+    """Repository could not answer: explicit ``UNKNOWN``, never fabricated."""
+    return _absent_comparison(episode_id=episode_id, availability=EXPERIMENTAL_READ_UNKNOWN)
+
+
+def build_no_data_comparison(episode_id: str) -> EpisodeComparison:
+    """No comparison data exists for this episode: explicit ``NO_DATA``."""
+    return _absent_comparison(episode_id=episode_id, availability=EXPERIMENTAL_READ_NO_DATA)

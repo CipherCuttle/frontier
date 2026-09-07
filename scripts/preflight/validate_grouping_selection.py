@@ -84,8 +84,7 @@ def main() -> None:
         )
 
     actual = [
-        evaluate_strategy(cases, strategy=strategy).to_canonical()
-        for strategy in CandidateStrategy
+        evaluate_strategy(cases, strategy=strategy).to_canonical() for strategy in CandidateStrategy
     ]
     require(
         selection.get("evaluated_candidates") == actual,

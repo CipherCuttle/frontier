@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from frontier.application.experimental_read import ExperimentalReadService
+from frontier.domain.experiment_status import ExperimentStatusInputs
 from frontier.domain.experimental_analysis import ExperimentalAnalysisKind
 from frontier.domain.experimental_read import (
     EXPERIMENTAL_READ_AUTHORITY_STATE,
@@ -14,12 +15,17 @@ from frontier.domain.experimental_read import (
     EXPERIMENTAL_READ_SCHEMA_VERSION,
     EXPERIMENTAL_READ_UNKNOWN,
     AnalysisArtifactSummary,
+    EpisodeComparison,
+    EvaluationDetail,
+    EvaluationHistoryEntry,
     EvaluationReceiptSummary,
     ExperimentalOverview,
     FeatureBatchSummary,
     InvalidExperimentalAnalysisKindError,
     InvalidExperimentalAsOfError,
     PefArtifactSummary,
+    RunHistoryEntry,
+    ShadowRunDetail,
     ShadowRunSummary,
     build_experimental_overview,
     experimental_availability,
@@ -154,6 +160,33 @@ class _RecordingRepository:
                 ExperimentalAnalysisKind.CORROBORATION
             )
         }
+
+    # WP7 (G5) read-plane methods: unit fixtures fail closed by default.
+    def episode_comparison(
+        self, *, episode_id: str, run_id: str | None = None, as_of: datetime | None = None
+    ) -> EpisodeComparison | None:
+        raise RuntimeError("database unavailable")
+
+    def run_detail(self, *, run_id: str, as_of: datetime | None = None) -> ShadowRunDetail | None:
+        raise RuntimeError("database unavailable")
+
+    def evaluation_detail(
+        self, *, evaluation_id: str, as_of: datetime | None = None
+    ) -> EvaluationDetail | None:
+        raise RuntimeError("database unavailable")
+
+    def experiment_history(
+        self, *, limit: int, as_of: datetime | None = None
+    ) -> tuple[RunHistoryEntry, ...]:
+        raise RuntimeError("database unavailable")
+
+    def evaluation_history(
+        self, *, limit: int, as_of: datetime | None = None
+    ) -> tuple[EvaluationHistoryEntry, ...]:
+        raise RuntimeError("database unavailable")
+
+    def experiment_status_inputs(self) -> ExperimentStatusInputs:
+        raise RuntimeError("database unavailable")
 
 
 def test_availability_states_are_explicit() -> None:
