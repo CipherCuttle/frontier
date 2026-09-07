@@ -2,18 +2,23 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
 psycopg = pytest.importorskip("psycopg")
 
+from frontier.adapters.acquisition.config import load_source_registry
 from frontier.adapters.postgres.advanced_intelligence import (
     PostgresCandidateFreezeRepository,
     PostgresPefArtifactRepository,
 )
-from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligenceRepository
-from frontier.adapters.postgres.prospective_shadow import PostgresProspectiveShadowRunRepository
+from frontier.adapters.postgres.prospective_shadow import (
+    PostgresProspectiveBaselineIntelligenceRepository,
+    PostgresProspectiveShadowRunRepository,
+)
 from frontier.application.prospective_shadow import run_confirmatory_shadow_boundary
 from frontier.domain.advanced_intelligence import PEF_CONFIGURATION_DIGEST, ShadowRunStatus
 from frontier.domain.candidate_freeze import (
@@ -29,7 +34,6 @@ pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL n
 AS_OF = datetime(2035, 1, 1, 0, 0, tzinfo=UTC)
 DURABLE = AS_OF - timedelta(seconds=1)
 GENERATED_AT = AS_OF + timedelta(seconds=30)
-REGISTRY_VERSION = Digest("sha256:" + "9" * 64)
 
 
 def _freeze_receipt():
@@ -51,13 +55,15 @@ def test_confirmatory_boundary_persists_freeze_candidate_and_bound_run() -> None
     assert DB_URL is not None
     receipt = _freeze_receipt()
     assert receipt.status is FreezeStatus.FROZEN
+    registry = load_source_registry(Path("."))
 
     with psycopg.connect(DB_URL) as conn:
-        baseline = PostgresBaselineIntelligenceRepository(conn)
+        baseline = PostgresProspectiveBaselineIntelligenceRepository(conn, registry)
         pef = PostgresPefArtifactRepository(conn)
         shadow = PostgresProspectiveShadowRunRepository(conn)
         freeze = PostgresCandidateFreezeRepository(conn)
 
+        assert baseline.list_enabled_source_ids() == sorted(registry.sources)
         result = run_confirmatory_shadow_boundary(
             baseline_repository=baseline,
             pef_repository=pef,
@@ -67,7 +73,7 @@ def test_confirmatory_boundary_persists_freeze_candidate_and_bound_run() -> None
             durable_freeze_at=DURABLE,
             as_of=AS_OF,
             generated_at=GENERATED_AT,
-            source_registry_version=REGISTRY_VERSION,
+            source_registry_version=registry.source_registry_version,
         )
 
         assert result.execution.run.status is ShadowRunStatus.RAN
@@ -85,6 +91,40 @@ def test_confirmatory_boundary_persists_freeze_candidate_and_bound_run() -> None
             end=AS_OF + timedelta(minutes=5),
         ) == (AS_OF,)
 
+        shadow.record_window_binding(
+            candidate_freeze_receipt_id=receipt.receipt_id,
+            durable_freeze_commit="c" * 40,
+            durable_freeze_at=DURABLE,
+            window_start=AS_OF,
+            window_end=AS_OF + timedelta(days=28),
+        )
+        conn.commit()
+        shadow.record_window_binding(
+            candidate_freeze_receipt_id=receipt.receipt_id,
+            durable_freeze_commit="c" * 40,
+            durable_freeze_at=DURABLE,
+            window_start=AS_OF,
+            window_end=AS_OF + timedelta(days=28),
+        )
+        conn.commit()
+        with pytest.raises(RuntimeError, match="conflicting window binding"):
+            shadow.record_window_binding(
+                candidate_freeze_receipt_id=receipt.receipt_id,
+                durable_freeze_commit="d" * 40,
+                durable_freeze_at=DURABLE,
+                window_start=AS_OF,
+                window_end=AS_OF + timedelta(days=28),
+            )
+        conn.rollback()
+
+        conflicting_run = replace(
+            result.execution.run,
+            generated_at=result.execution.run.generated_at + timedelta(seconds=1),
+        )
+        assert conflicting_run.run_id != result.execution.run.run_id
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            shadow.record_run(conflicting_run)
+
         with pytest.raises(RuntimeError, match="already exists"):
             run_confirmatory_shadow_boundary(
                 baseline_repository=baseline,
@@ -95,5 +135,5 @@ def test_confirmatory_boundary_persists_freeze_candidate_and_bound_run() -> None
                 durable_freeze_at=DURABLE,
                 as_of=AS_OF,
                 generated_at=GENERATED_AT + timedelta(seconds=1),
-                source_registry_version=REGISTRY_VERSION,
+                source_registry_version=registry.source_registry_version,
             )
