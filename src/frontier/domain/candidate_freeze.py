@@ -119,6 +119,8 @@ class CandidateFreezeReceipt:
             raise ValueError("candidate freeze schema version mismatch")
         if self.status is FreezeStatus.FROZEN and self.drift_reasons:
             raise ValueError("FROZEN freeze receipt cannot carry drift reasons")
+        if self.status is FreezeStatus.FROZEN and self.registry_entry_digests is None:
+            raise ValueError("FROZEN freeze receipt requires source registry entry digests")
         if self.status is FreezeStatus.DRIFTED and not self.drift_reasons:
             raise ValueError("DRIFTED freeze receipt requires explicit drift reasons")
         if self.original_receipt_digest is not None and self.verified_at is None:
