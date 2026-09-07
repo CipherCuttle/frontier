@@ -16,7 +16,11 @@ from frontier.application.intelligence import (
     BaselineIntelligenceRun,
     run_baseline_intelligence,
 )
-from frontier.domain.advanced_intelligence import PefArtifact, PefArtifactStatus, ShadowExperimentRun
+from frontier.domain.advanced_intelligence import (
+    PefArtifact,
+    PefArtifactStatus,
+    ShadowExperimentRun,
+)
 from frontier.domain.candidate_freeze import (
     CandidateFreezeReceipt,
     FreezeStatus,
@@ -129,13 +133,19 @@ def load_candidate_freeze_receipt(path: Path) -> CandidateFreezeReceipt:
     if not isinstance(drift_raw, list) or not all(isinstance(item, str) for item in drift_raw):
         raise ValueError("drift_reasons must be a list of strings")
 
-    preregistration_digest = _digest(document.get("preregistration_digest"), name="preregistration_digest")
-    configuration_digest = _digest(document.get("configuration_digest"), name="configuration_digest")
+    preregistration_digest = _digest(
+        document.get("preregistration_digest"), name="preregistration_digest"
+    )
+    configuration_digest = _digest(
+        document.get("configuration_digest"), name="configuration_digest"
+    )
     assert preregistration_digest is not None
     assert configuration_digest is not None
 
     verified_raw = document.get("verified_at")
-    verified_at = None if verified_raw is None else _parse_timestamp(verified_raw, name="verified_at")
+    verified_at = (
+        None if verified_raw is None else _parse_timestamp(verified_raw, name="verified_at")
+    )
 
     status_raw = document.get("status")
     if not isinstance(status_raw, str):
@@ -216,7 +226,9 @@ def first_confirmatory_boundary(durable_freeze_at: datetime) -> datetime:
 
 
 def confirmatory_window_end(durable_freeze_at: datetime) -> datetime:
-    return first_confirmatory_boundary(durable_freeze_at) + timedelta(seconds=RANKING_WINDOW_SECONDS)
+    return first_confirmatory_boundary(durable_freeze_at) + timedelta(
+        seconds=RANKING_WINDOW_SECONDS
+    )
 
 
 def require_confirmatory_boundary(*, as_of: datetime, durable_freeze_at: datetime) -> None:
@@ -247,7 +259,9 @@ def due_confirmatory_boundaries(
         raise RuntimeError("duplicate bound shadow runs exist for a confirmatory boundary")
     existing = set(normalized)
     now_utc = now.astimezone(UTC)
-    latest_due_epoch = (int(now_utc.timestamp()) // SNAPSHOT_CADENCE_SECONDS) * SNAPSHOT_CADENCE_SECONDS
+    latest_due_epoch = (
+        int(now_utc.timestamp()) // SNAPSHOT_CADENCE_SECONDS
+    ) * SNAPSHOT_CADENCE_SECONDS
     latest_due = datetime.fromtimestamp(latest_due_epoch, tz=UTC)
     due: list[datetime] = []
     boundary = start
