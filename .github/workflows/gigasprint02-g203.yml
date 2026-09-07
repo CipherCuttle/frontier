@@ -54,3 +54,17 @@ jobs:
           uv run pyright
           uv run alembic upgrade head
           uv run pytest -q tests/unit/test_evaluation_loaders.py tests/unit/test_evaluation.py tests/integration/test_evaluation_persisted_postgres.py tests/integration/test_freeze_publication_postgres.py tests/integration/test_confirmatory_claim_postgres.py tests/integration/test_drift_sentry_postgres.py tests/replay/test_experiment_gauntlet.py
+      - name: Export exact verified bytes
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: g203-verified-bytes
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            src/frontier/application/evaluation.py
+            src/frontier/application/evaluation_loaders.py
+            src/frontier/adapters/postgres/evaluation_store.py
+            tests/unit/test_evaluation_loaders.py
+            tests/integration/test_evaluation_persisted_postgres.py
+            tests/replay/test_experiment_gauntlet.py
