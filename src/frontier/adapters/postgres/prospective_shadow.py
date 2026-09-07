@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import cast
 
-import psycopg
-
 from frontier.adapters.postgres.advanced_intelligence import PostgresShadowRunRepository
 
 
