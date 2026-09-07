@@ -18,6 +18,11 @@ Current carried items:
 | D004 | DEFERRED_REQUIREMENT | specialist analytical store | only after Postgres workload evidence |
 | D005 | DEFERRED_REQUIREMENT | graph storage | only after relational projection demonstrably fails operator/algorithm need |
 | D006 | UNPROVEN_ASSUMPTION | exact trend/clustering/dedupe algorithms | P04+ experimental evidence; no pre-crowning |
-| D007 | KNOWN_COMPROMISE | GitHub `main` branch is currently unprotected; reviewed exact-head merges + CI reduce but do not eliminate accidental/direct-write risk | enable and verify branch protection/ruleset before parallel agent development becomes routine |
+
+Resolved items:
+
+| ID | Former class | Item | Closure evidence |
+|---|---|---|---|
+| D007 | KNOWN_COMPROMISE | GitHub `main` branch protection / reviewed-merge enforcement | CLOSED on repository state observed after `main@a1cd427696ce76dd07fcd28abf06012df5767b78`: active repository ruleset `main-pr-verify-gate` (ruleset id `22366099`) targets `refs/heads/main`, requires the pull-request workflow and required status check `verify`, has no bypass actors, and reports current-user bypass as `never`. This satisfies D007's recorded trigger to enable and verify branch protection/ruleset before parallel agent development becomes routine. |
 
 Vague `TODO refactor later` debt is not governance.
