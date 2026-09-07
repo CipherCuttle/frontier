@@ -188,9 +188,7 @@ def object_digest(value: object) -> str:
 
 def bundle_payload(bundle: JsonObject) -> JsonObject:
     return {
-        key: value
-        for key, value in bundle.items()
-        if key not in {"bundle_id", "bundle_digest"}
+        key: value for key, value in bundle.items() if key not in {"bundle_id", "bundle_digest"}
     }
 
 
@@ -211,7 +209,7 @@ def _decode_base64url(value: object, *, exact_bytes: int | None = None) -> bytes
     padding = "=" * ((4 - len(value) % 4) % 4)
     try:
         raw = base64.b64decode(value + padding, altchars=b"-_", validate=True)
-    except (ValueError, binascii.Error):
+    except ValueError, binascii.Error:
         return None
     if exact_bytes is not None and len(raw) != exact_bytes:
         return None
@@ -362,9 +360,8 @@ def _validate_adjudicators(
             binding.get("public_key_b64u"),
             exact_bytes=ED25519_PUBLIC_KEY_BYTES,
         )
-        if (
-            public_key is None
-            or binding.get("public_key_sha256") != sha256_digest_bytes(public_key)
+        if public_key is None or binding.get("public_key_sha256") != sha256_digest_bytes(
+            public_key
         ):
             return None
         attestation = _object(binding.get("identity_attestation"))
@@ -441,9 +438,8 @@ def _validate_controller_attestations(
         if expected is None or role_str in seen or expected[0] != controller:
             return False
         material = _decode_base64url(obj.get("verification_material_b64u"))
-        if (
-            material is None
-            or obj.get("verification_material_sha256") != sha256_digest_bytes(material)
+        if material is None or obj.get("verification_material_sha256") != sha256_digest_bytes(
+            material
         ):
             return False
         attestation = _object(obj.get("attestation"))
@@ -451,11 +447,15 @@ def _validate_controller_attestations(
             return False
         payload = _object(attestation.get("payload"))
         proof = _object(attestation.get("proof"))
-        if payload != {
-            "role": role_str,
-            "controller_commitment": controller,
-            "verification_material_sha256": expected[1],
-        } or proof is None:
+        if (
+            payload
+            != {
+                "role": role_str,
+                "controller_commitment": controller,
+                "verification_material_sha256": expected[1],
+            }
+            or proof is None
+        ):
             return False
         if obj.get("attestation_digest") != object_digest(attestation):
             return False
@@ -515,21 +515,23 @@ def _validate_provenance(
             return None
         if not parents:
             root_material = _decode_base64url(node.get("root_verification_material_b64u"))
-            if (
-                root_material is None
-                or node.get("root_verification_material_sha256")
-                != sha256_digest_bytes(root_material)
-            ):
+            if root_material is None or node.get(
+                "root_verification_material_sha256"
+            ) != sha256_digest_bytes(root_material):
                 return None
             root_attestation = _object(node.get("root_attestation"))
             if root_attestation is None or set(root_attestation) != {"payload", "proof"}:
                 return None
             root_payload = _object(root_attestation.get("payload"))
             root_proof = _object(root_attestation.get("proof"))
-            if root_payload != {
-                "content_digest": node.get("content_digest"),
-                "terminal_upstream": True,
-            } or root_proof is None:
+            if (
+                root_payload
+                != {
+                    "content_digest": node.get("content_digest"),
+                    "terminal_upstream": True,
+                }
+                or root_proof is None
+            ):
                 return None
             if node.get("root_attestation_digest") != object_digest(root_attestation):
                 return None
@@ -575,9 +577,8 @@ def _validate_provenance(
             ):
                 return None
             material = _decode_base64url(edge.get("verification_material_b64u"))
-            if (
-                material is None
-                or edge.get("verification_material_sha256") != sha256_digest_bytes(material)
+            if material is None or edge.get("verification_material_sha256") != sha256_digest_bytes(
+                material
             ):
                 return None
             attestation = _object(edge.get("attestation"))
@@ -585,11 +586,15 @@ def _validate_provenance(
                 return None
             payload = _object(attestation.get("payload"))
             proof = _object(attestation.get("proof"))
-            if payload != {
-                "child_content_digest": node.get("content_digest"),
-                "parent_node_id": parent_id,
-                "relation": relation,
-            } or proof is None:
+            if (
+                payload
+                != {
+                    "child_content_digest": node.get("content_digest"),
+                    "parent_node_id": parent_id,
+                    "relation": relation,
+                }
+                or proof is None
+            ):
                 return None
             if edge.get("attestation_digest") != object_digest(attestation):
                 return None

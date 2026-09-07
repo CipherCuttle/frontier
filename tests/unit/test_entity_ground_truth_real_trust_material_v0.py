@@ -21,8 +21,7 @@ from frontier.domain.entity_ground_truth_real_trust_material_v0 import (
 
 ROOT = Path(__file__).resolve().parents[2]
 PREFLIGHT_AUTHORITY_PATH = (
-    ROOT
-    / "experiments/advanced_intelligence/entity_provenance_v0/"
+    ROOT / "experiments/advanced_intelligence/entity_provenance_v0/"
     "entity_ground_truth_real_trust_preflight_authority.json"
 )
 PROTOCOL_V2_PATH = ROOT / "src/frontier/domain/entity_ground_truth_protocol_v2.py"
@@ -33,6 +32,7 @@ EXPECTED_PROTOCOL_V2_BLOB = "3a5f383f0cdc84f2f75ca968931d423b56832ee7"
 def _git_blob_sha1(path: Path) -> str:
     raw = path.read_bytes()
     return hashlib.sha1(f"blob {len(raw)}\0".encode() + raw).hexdigest()
+
 
 
 def _b64u(raw: bytes) -> str:
@@ -49,12 +49,7 @@ class FakeOfflineBackend:
         self.ed25519_ok = ed25519_ok
 
     def verify_ed25519(self, public_key: bytes, message: bytes, signature: bytes) -> bool:
-        return (
-            self.ed25519_ok
-            and len(public_key) == 32
-            and bool(message)
-            and len(signature) == 64
-        )
+        return self.ed25519_ok and len(public_key) == 32 and bool(message) and len(signature) == 64
 
     def verify_external_attestation(
         self,
@@ -344,12 +339,10 @@ def test_validator_is_bound_to_merged_preflight_authority() -> None:
         "frontier-entity-ground-truth-real-trust-preflight-authority-v1"
     )
     assert (
-        authority["authorized_after_merge"]["prepare_offline_real_trust_material_validator"]
-        is True
+        authority["authorized_after_merge"]["prepare_offline_real_trust_material_validator"] is True
     )
     assert (
-        authority["authorized_after_merge"]["prepare_real_trust_material_validation_tests"]
-        is True
+        authority["authorized_after_merge"]["prepare_real_trust_material_validation_tests"] is True
     )
     assert authority["collection_authority"]["real_label_collection"] is False
     assert authority["scientific_state"]["entity_quality"] == (
