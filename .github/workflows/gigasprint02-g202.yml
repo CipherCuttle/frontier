@@ -43,6 +43,7 @@ jobs:
       - name: Verify G2-02
         shell: bash
         run: |
+          uv run ruff check --fix tests/integration/test_drift_sentry_postgres.py
           uv run ruff check src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py migrations/versions/0013_freeze_publication_authority.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py src/frontier/application/candidate_freeze.py src/frontier/application/drift_sentry.py src/frontier/application/experiment_orchestration.py src/frontier/adapters/postgres/experiment_attempts.py src/frontier/adapters/postgres/readiness.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py tests/integration/test_drift_sentry_postgres.py
           uv run pyright
           uv run alembic upgrade head
