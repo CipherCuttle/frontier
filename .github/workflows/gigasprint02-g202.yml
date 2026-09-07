@@ -38,17 +38,19 @@ jobs:
       - run: uv sync --all-extras --frozen
       - name: Apply guarded G2-02 patch
         run: uv run python scripts/gigasprint02_g202_patch.py
+      - name: Repair drift integration setup
+        run: uv run python scripts/gigasprint02_g202_drift_test_repair.py
       - name: Verify G2-02
         shell: bash
         run: |
-          uv run ruff check src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py migrations/versions/0013_freeze_publication_authority.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py src/frontier/application/candidate_freeze.py src/frontier/application/drift_sentry.py src/frontier/application/experiment_orchestration.py src/frontier/adapters/postgres/experiment_attempts.py src/frontier/adapters/postgres/readiness.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py
+          uv run ruff check src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py migrations/versions/0013_freeze_publication_authority.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py src/frontier/application/candidate_freeze.py src/frontier/application/drift_sentry.py src/frontier/application/experiment_orchestration.py src/frontier/adapters/postgres/experiment_attempts.py src/frontier/adapters/postgres/readiness.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py tests/integration/test_drift_sentry_postgres.py
           uv run pyright
           uv run alembic upgrade head
           uv run pytest -q tests/unit/test_freeze_publication.py tests/unit/test_confirmatory_freeze_binding.py tests/unit/test_experiment_orchestration.py tests/unit/test_drift_sentry.py tests/integration/test_freeze_publication_postgres.py tests/integration/test_drift_sentry_postgres.py
       - name: Commit G2-02 and remove temporary runners
         shell: bash
         run: |
-          rm .github/workflows/gigasprint02-g202.yml scripts/gigasprint02_g202_patch.py
+          rm .github/workflows/gigasprint02-g202.yml scripts/gigasprint02_g202_patch.py scripts/gigasprint02_g202_drift_test_repair.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
