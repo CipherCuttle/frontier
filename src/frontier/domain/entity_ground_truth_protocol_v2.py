@@ -138,8 +138,7 @@ def _definition_parts(
     ):
         raise ProtocolV2DefinitionError("candidate signal class definition drift")
     if not isinstance(candidate_boundary, dict) or not all(
-        isinstance(key, str) and isinstance(value, str)
-        for key, value in candidate_boundary.items()
+        isinstance(key, str) and isinstance(value, str) for key, value in candidate_boundary.items()
     ):
         raise ProtocolV2DefinitionError("candidate signal boundary definition drift")
     if set(candidate_boundary) != set(cast(list[str], signal_classes)):
@@ -833,9 +832,7 @@ def validate_v2_packet(
         )
 
     assessment_directions = {
-        direction
-        for assessment_map in assessment_maps
-        for direction in assessment_map.values()
+        direction for assessment_map in assessment_maps for direction in assessment_map.values()
     }
     if assessment_directions == {"SUPPORTS_SAME", "SUPPORTS_DIFFERENT"}:
         return PacketValidation(
