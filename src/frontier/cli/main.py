@@ -259,7 +259,8 @@ def run_pef_shadow_worker(
 
     if idle_seconds <= 0:
         raise ValueError("idle_seconds must be positive")
-    receipt = load_candidate_freeze_receipt(_freeze_path(config_root, freeze_receipt_path))
+    receipt_path = _freeze_path(config_root, freeze_receipt_path)
+    receipt = load_candidate_freeze_receipt(receipt_path)
     start = first_confirmatory_boundary(durable_freeze_at)
     end = confirmatory_window_end(durable_freeze_at)
 
@@ -271,7 +272,11 @@ def run_pef_shadow_worker(
         freeze = PostgresCandidateFreezeRepository(conn)
 
         while True:
-            require_runtime_freeze_material(config_root, receipt)
+            require_runtime_freeze_material(
+                config_root,
+                receipt,
+                receipt_path=receipt_path,
+            )
             registry = load_source_registry(config_root)
             existing = shadow.bound_run_boundaries(
                 candidate_freeze_receipt_id=receipt.receipt_id,
