@@ -279,9 +279,7 @@ def _candidate() -> JsonObject:
         "ADJUDICATOR_2": str(adjudicator_bindings[1]["public_key_sha256"]),
         "SERVICE_SEALING": str(service_object["public_key_sha256"]),
         "DURABILITY_PUBLICATION": str(durability_object["public_key_sha256"]),
-        "IDENTITY_ATTESTATION_AUTHORITY": str(
-            identity_authority["verification_material_sha256"]
-        ),
+        "IDENTITY_ATTESTATION_AUTHORITY": str(identity_authority["verification_material_sha256"]),
     }
     controller_attestations = [
         _controller_attestation(
@@ -693,9 +691,7 @@ def test_signing_verification_material_reuse_is_rejected() -> None:
         item for item in map(_obj, attestations) if item["role"] == "DURABILITY_PUBLICATION"
     )
     attestation = _obj(durability_attestation["attestation"])
-    _obj(attestation["payload"])["verification_material_sha256"] = service[
-        "public_key_sha256"
-    ]
+    _obj(attestation["payload"])["verification_material_sha256"] = service["public_key_sha256"]
     durability_attestation["attestation_digest"] = object_digest(attestation)
     _refresh_bundle_identity(candidate)
 
