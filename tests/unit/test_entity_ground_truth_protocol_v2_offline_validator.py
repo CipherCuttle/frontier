@@ -28,9 +28,7 @@ SCHEMA_PATH = (
     ROOT / "experiments/advanced_intelligence/entity_provenance_v0/"
     "entity_ground_truth_expanded_packet_v2.schema.json"
 )
-CORPUS_PATH = (
-    ROOT / "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v2.json"
-)
+CORPUS_PATH = ROOT / "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v2.json"
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -57,8 +55,7 @@ def test_semantic_validator_derives_every_frozen_expected_outcome() -> None:
     runs = execute_v2_corpus(corpus=corpus, builder=builder, schema=schema)
     cases = cast(list[dict[str, Any]], corpus["cases"])
     expected_by_id = {
-        cast(str, case["id"]): cast(dict[str, Any], case["expected"])
-        for case in cases
+        cast(str, case["id"]): cast(dict[str, Any], case["expected"]) for case in cases
     }
 
     for run in runs:
@@ -67,10 +64,7 @@ def test_semantic_validator_derives_every_frozen_expected_outcome() -> None:
         assert validation.packet_status.value == expected["packet_status"]
         assert validation.label_status.value == expected["label_status"]
         assert validation.required_action == expected["required_action"]
-        assert (
-            validation.headline_metric_eligible
-            is expected["headline_metric_eligible"]
-        )
+        assert validation.headline_metric_eligible is expected["headline_metric_eligible"]
         assert validation.quality_claim is expected["quality_claim"]
         assert list(validation.forbidden_claims) == expected["forbidden_claims"]
 
@@ -134,9 +128,7 @@ def test_definition_rejects_any_real_authority_in_test_crypto() -> None:
     test_mac["real_label_authority"] = True
     tampered_builder["spec_payload_digest"] = protocol_digest(spec)
     tampered_corpus = cast(dict[str, Any], copy.deepcopy(corpus))
-    tampered_corpus["builder_spec_payload_digest"] = tampered_builder[
-        "spec_payload_digest"
-    ]
+    tampered_corpus["builder_spec_payload_digest"] = tampered_builder["spec_payload_digest"]
 
     with pytest.raises(ProtocolV2DefinitionError, match="cannot authorize real labels"):
         execute_v2_corpus(

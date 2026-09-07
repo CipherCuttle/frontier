@@ -213,9 +213,7 @@ def expand_v2_case(
         elif op == "SHARE_ORIGIN_ROOT":
             source_id = cast(str, mutation["source_evidence_id"])
             target_id = cast(str, mutation["target_evidence_id"])
-            evidence_map[target_id]["origin_root_id"] = (
-                evidence_map[source_id]["origin_root_id"]
-            )
+            evidence_map[target_id]["origin_root_id"] = evidence_map[source_id]["origin_root_id"]
         elif op == "ADD_CANDIDATE_DEPENDENCY":
             evidence_id = cast(str, mutation["evidence_id"])
             dependencies = cast(
@@ -317,9 +315,7 @@ def expand_v2_case(
 
     if leaks and rendered_items:
         for signal_class in leaks:
-            rendered_items[0]["excerpt"] += (
-                f"\nLEAK::{signal_class}={boundary[signal_class]}"
-            )
+            rendered_items[0]["excerpt"] += f"\nLEAK::{signal_class}={boundary[signal_class]}"
 
     rendered_digest = protocol_digest(rendered_items)
     rendered_text = json.dumps(
@@ -374,9 +370,7 @@ def expand_v2_case(
                     {
                         "evidence_id": evidence_id,
                         "assessment": (
-                            "SUPPORTS_SAME"
-                            if evidence_id == "E1"
-                            else "SUPPORTS_DIFFERENT"
+                            "SUPPORTS_SAME" if evidence_id == "E1" else "SUPPORTS_DIFFERENT"
                         ),
                     }
                     for evidence_id in sorted(evidence_map)
@@ -436,9 +430,7 @@ def expand_v2_case(
 
     for mutation in mutations:
         if mutation["op"] == "MUTATE_LABEL_BUNDLE_AFTER_DIGEST":
-            cast(JsonObject, label_bundle["payload"])["version"] = (
-                "synthetic-v2.0.0-mutated"
-            )
+            cast(JsonObject, label_bundle["payload"])["version"] = "synthetic-v2.0.0-mutated"
 
     return {
         "schema_version": PACKET_SCHEMA_VERSION,
@@ -494,10 +486,9 @@ def _durability_valid(value: object, key: dict[str, str]) -> bool:
         return False
     receipt_obj = cast(JsonObject, receipt)
     receipt_payload = cast(JsonObject, receipt_obj["payload"])
-    return (
-        receipt_payload.get("bound_digest") == digest
-        and receipt_payload.get("durable_at") == payload_obj.get("durable_at")
-    )
+    return receipt_payload.get("bound_digest") == digest and receipt_payload.get(
+        "durable_at"
+    ) == payload_obj.get("durable_at")
 
 
 def _reject(action: str, *violations: str) -> PacketValidation:
@@ -525,10 +516,7 @@ def validate_v2_packet(
 
     if packet.get("schema_version") != PACKET_SCHEMA_VERSION:
         return _reject("REJECT_PROTOCOL_DRIFT", "packet-schema-version")
-    if (
-        packet.get("protocol_id") != PROTOCOL_ID
-        or packet.get("synthetic_only") is not True
-    ):
+    if packet.get("protocol_id") != PROTOCOL_ID or packet.get("synthetic_only") is not True:
         return _reject("REJECT_PROTOCOL_DRIFT", "protocol-identity")
     if packet.get("builder_spec_payload_digest") != builder["spec_payload_digest"]:
         return _reject("REJECT_PROTOCOL_DRIFT", "builder-binding")
@@ -616,9 +604,7 @@ def validate_v2_packet(
         origin_payload = cast(JsonObject, receipt["payload"])
         if origin_payload.get("evidence_id") != evidence_id:
             return _reject("REJECT_UNBOUND_EVIDENCE", "origin-evidence-binding")
-        if origin_payload.get("captured_at") != cast(JsonObject, raw_snapshot).get(
-            "captured_at"
-        ):
+        if origin_payload.get("captured_at") != cast(JsonObject, raw_snapshot).get("captured_at"):
             return _reject("REJECT_UNBOUND_EVIDENCE", "origin-capture-binding")
         origin_root = origin_payload.get("origin_root_id")
         if not isinstance(origin_root, str):
