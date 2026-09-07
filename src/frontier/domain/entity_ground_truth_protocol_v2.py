@@ -131,17 +131,25 @@ def _definition_parts(
     if corpus.get("synthetic_only") is not True:
         raise ProtocolV2DefinitionError("corpus must remain synthetic-only")
 
-    signal_classes = spec.get("candidate_signal_classes_order")
-    candidate_boundary = corpus.get("candidate_signal_boundary")
-    if not isinstance(signal_classes, list) or not all(
-        isinstance(value, str) for value in signal_classes
-    ):
+    signal_classes_raw = spec.get("candidate_signal_classes_order")
+    candidate_boundary_raw = corpus.get("candidate_signal_boundary")
+    if not isinstance(signal_classes_raw, list):
         raise ProtocolV2DefinitionError("candidate signal class definition drift")
-    if not isinstance(candidate_boundary, dict) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in candidate_boundary.items()
+    signal_classes_objects = cast(list[object], signal_classes_raw)
+    if not all(isinstance(value, str) for value in signal_classes_objects):
+        raise ProtocolV2DefinitionError("candidate signal class definition drift")
+    signal_classes = cast(list[str], signal_classes_objects)
+
+    if not isinstance(candidate_boundary_raw, dict):
+        raise ProtocolV2DefinitionError("candidate signal boundary definition drift")
+    candidate_boundary_objects = cast(dict[object, object], candidate_boundary_raw)
+    if not all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in candidate_boundary_objects.items()
     ):
         raise ProtocolV2DefinitionError("candidate signal boundary definition drift")
-    if set(candidate_boundary) != set(cast(list[str], signal_classes)):
+    candidate_boundary = cast(dict[str, str], candidate_boundary_objects)
+    if set(candidate_boundary) != set(signal_classes):
         raise ProtocolV2DefinitionError("candidate signal boundary coverage drift")
 
     crypto = cast(JsonObject, spec.get("test_mac"))
@@ -792,8 +800,9 @@ def validate_v2_packet(
             )
         if not isinstance(assessments_obj, list):
             return _reject("REJECT_PROTOCOL_DRIFT", "assessment-list-shape")
+        assessments = cast(list[object], assessments_obj)
         assessment_map: dict[str, str] = {}
-        for assessment in assessments_obj:
+        for assessment in assessments:
             if not isinstance(assessment, dict):
                 return _reject("REJECT_PROTOCOL_DRIFT", "assessment-item-shape")
             assessment_obj = cast(JsonObject, assessment)
