@@ -36,6 +36,8 @@ jobs:
         with:
           version: "0.12.10"
       - run: uv sync --all-extras --frozen
+      - name: Repair guarded patch targeting
+        run: uv run python scripts/gigasprint02_g203_patch_repair.py
       - name: Apply G2-03 in ephemeral checkout
         run: uv run python scripts/gigasprint02_g203_patch.py
       - name: Verify G2-03
