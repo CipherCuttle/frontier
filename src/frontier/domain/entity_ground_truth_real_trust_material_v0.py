@@ -12,6 +12,7 @@ import base64
 import binascii
 import hashlib
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -31,6 +32,7 @@ VALIDITY_AUTHORIZATION_DOMAIN_SEPARATOR: Final = (
 )
 ED25519_PUBLIC_KEY_BYTES: Final = 32
 ED25519_SIGNATURE_BYTES: Final = 64
+POP_CHALLENGE_MIN_BYTES: Final = 16
 SAFE_INTEGER_MAX: Final = (1 << 53) - 1
 
 JsonObject = dict[str, Any]
@@ -58,6 +60,7 @@ _REQUIRED_CONTROLLER_ROLES: Final = {
     "DURABILITY_PUBLICATION",
     "IDENTITY_ATTESTATION_AUTHORITY",
 }
+_ADJUDICATOR_ROLES: Final = {"ADJUDICATOR_1", "ADJUDICATOR_2"}
 _PARENT_RELATIONS: Final = {
     "MIRROR_OF",
     "SYNDICATED_FROM",
@@ -97,6 +100,7 @@ class OfflineVerificationBackend(Protocol):
         verification_material: bytes,
         payload: JsonObject,
         proof: JsonObject,
+        as_of: datetime,
     ) -> bool: ...
 
 
@@ -193,8 +197,7 @@ def bundle_payload(bundle: JsonObject) -> JsonObject:
 
 
 def candidate_bundle_digest(bundle: JsonObject) -> str:
-    payload = bundle_payload(bundle)
-    return sha256_digest_bytes(BUNDLE_DOMAIN_SEPARATOR + jcs_safe_bytes(payload))
+    return sha256_digest_bytes(BUNDLE_DOMAIN_SEPARATOR + jcs_safe_bytes(bundle_payload(bundle)))
 
 
 def derive_bundle_id(bundle_digest: str) -> str:
@@ -209,11 +212,15 @@ def _decode_base64url(value: object, *, exact_bytes: int | None = None) -> bytes
     padding = "=" * ((4 - len(value) % 4) % 4)
     try:
         raw = base64.b64decode(value + padding, altchars=b"-_", validate=True)
-    except ValueError, binascii.Error:
+    except (ValueError, binascii.Error):
         return None
     if exact_bytes is not None and len(raw) != exact_bytes:
         return None
     return raw
+
+
+def _b64u(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
 
 def _valid_digest(value: object) -> bool:
@@ -236,8 +243,7 @@ def _timestamp(value: str) -> datetime:
 
 def _contains_forbidden_marker(value: object) -> bool:
     if isinstance(value, str):
-        upper = value.upper()
-        return upper.startswith(("TEST_ONLY_", "PLACEHOLDER_", "EXAMPLE_"))
+        return value.upper().startswith(("TEST_ONLY_", "PLACEHOLDER_", "EXAMPLE_"))
     if isinstance(value, list):
         return any(_contains_forbidden_marker(item) for item in cast(list[object], value))
     if isinstance(value, dict):
@@ -310,13 +316,13 @@ def _identity_authority(value: object) -> tuple[bytes, str, str] | None:
     return material, scheme_id, cast(str, controller)
 
 
-def pop_message(binding: JsonObject) -> bytes:
+def pop_message(binding: JsonObject, *, expected_challenge: bytes) -> bytes:
     payload = {
         "phase_id": PHASE_ID,
         "subject_commitment": binding["subject_commitment"],
         "adjudicator_public_key_sha256": binding["public_key_sha256"],
         "identity_attestation_digest": binding["identity_attestation_digest"],
-        "proof_challenge_nonce": binding["proof_challenge_nonce_b64u"],
+        "proof_challenge_nonce": _b64u(expected_challenge),
     }
     return POP_DOMAIN_SEPARATOR.encode("ascii") + jcs_safe_bytes(payload)
 
@@ -326,16 +332,30 @@ def _validate_adjudicators(
     *,
     identity_material: bytes,
     identity_scheme: str,
+    expected_pop_challenges: Mapping[str, bytes],
     backend: OfflineVerificationBackend,
+    as_of: datetime,
 ) -> tuple[set[str], set[bytes], dict[str, str]] | None:
     raw = _array(bundle.get("adjudicator_identity_key_bindings"))
-    if raw is None or len(raw) != 2:
+    if raw is None or len(raw) != 2 or set(expected_pop_challenges) != _ADJUDICATOR_ROLES:
+        return None
+    challenges = list(expected_pop_challenges.values())
+    if (
+        any(
+            not isinstance(challenge, bytes) or len(challenge) < POP_CHALLENGE_MIN_BYTES
+            for challenge in challenges
+        )
+        or len(set(challenges)) != 2
+    ):
         return None
 
     expected_roles = ["ADJUDICATOR_1", "ADJUDICATOR_2"]
     subjects: set[str] = set()
     keys: set[bytes] = set()
     controllers: dict[str, str] = {}
+    identity_material_digest = sha256_digest_bytes(identity_material)
+    as_of_utc = as_of.astimezone(UTC)
+
     for raw_binding, expected_role in zip(raw, expected_roles, strict=True):
         binding = _object(raw_binding)
         if binding is None or set(binding) != {
@@ -360,10 +380,12 @@ def _validate_adjudicators(
             binding.get("public_key_b64u"),
             exact_bytes=ED25519_PUBLIC_KEY_BYTES,
         )
-        if public_key is None or binding.get("public_key_sha256") != sha256_digest_bytes(
-            public_key
+        if (
+            public_key is None
+            or binding.get("public_key_sha256") != sha256_digest_bytes(public_key)
         ):
             return None
+
         attestation = _object(binding.get("identity_attestation"))
         if attestation is None or set(attestation) != {"payload", "proof"}:
             return None
@@ -371,11 +393,36 @@ def _validate_adjudicators(
         proof = _object(attestation.get("proof"))
         if payload is None or proof is None:
             return None
-        if payload != {
-            "role": "ADJUDICATOR",
-            "subject_commitment": subject,
-            "adjudicator_public_key_sha256": binding.get("public_key_sha256"),
+        if set(payload) != {
+            "role",
+            "issuer_verification_material_sha256",
+            "subject_commitment",
+            "adjudicator_public_key_sha256",
+            "valid_from",
+            "valid_until",
+            "revocation_state",
+            "revocation_sequence",
         }:
+            return None
+        valid_from = payload.get("valid_from")
+        valid_until = payload.get("valid_until")
+        revocation_sequence = payload.get("revocation_sequence")
+        if (
+            payload.get("role") != "ADJUDICATOR"
+            or payload.get("issuer_verification_material_sha256") != identity_material_digest
+            or payload.get("subject_commitment") != subject
+            or payload.get("adjudicator_public_key_sha256") != binding.get("public_key_sha256")
+            or not _valid_timestamp(valid_from)
+            or not _valid_timestamp(valid_until)
+            or payload.get("revocation_state") != "ACTIVE"
+            or not isinstance(revocation_sequence, int)
+            or isinstance(revocation_sequence, bool)
+            or revocation_sequence < 0
+        ):
+            return None
+        start = _timestamp(cast(str, valid_from))
+        end = _timestamp(cast(str, valid_until))
+        if not start <= as_of_utc < end:
             return None
         if binding.get("identity_attestation_digest") != object_digest(attestation):
             return None
@@ -384,16 +431,23 @@ def _validate_adjudicators(
             verification_material=identity_material,
             payload={"scheme_id": identity_scheme, **payload},
             proof=proof,
+            as_of=as_of_utc,
         ):
             return None
+
+        expected_challenge = expected_pop_challenges[expected_role]
         nonce = _decode_base64url(binding.get("proof_challenge_nonce_b64u"))
         signature = _decode_base64url(
             binding.get("proof_of_possession_signature_b64u"),
             exact_bytes=ED25519_SIGNATURE_BYTES,
         )
-        if nonce is None or len(nonce) < 16 or signature is None:
+        if nonce != expected_challenge or signature is None:
             return None
-        if not backend.verify_ed25519(public_key, pop_message(binding), signature):
+        if not backend.verify_ed25519(
+            public_key,
+            pop_message(binding, expected_challenge=expected_challenge),
+            signature,
+        ):
             return None
         subjects.add(cast(str, subject))
         keys.add(public_key)
@@ -409,6 +463,7 @@ def _validate_controller_attestations(
     *,
     expected_bindings: dict[str, tuple[str, str]],
     backend: OfflineVerificationBackend,
+    as_of: datetime,
 ) -> bool:
     raw = _array(bundle.get("role_controller_attestations"))
     if raw is None or len(raw) != len(_REQUIRED_CONTROLLER_ROLES):
@@ -433,13 +488,13 @@ def _validate_controller_attestations(
             or not _valid_digest(controller)
         ):
             return False
-        role_str = role
-        expected = expected_bindings.get(role_str)
-        if expected is None or role_str in seen or expected[0] != controller:
+        expected = expected_bindings.get(role)
+        if expected is None or role in seen or expected[0] != controller:
             return False
         material = _decode_base64url(obj.get("verification_material_b64u"))
-        if material is None or obj.get("verification_material_sha256") != sha256_digest_bytes(
-            material
+        if (
+            material is None
+            or obj.get("verification_material_sha256") != sha256_digest_bytes(material)
         ):
             return False
         attestation = _object(obj.get("attestation"))
@@ -450,7 +505,7 @@ def _validate_controller_attestations(
         if (
             payload
             != {
-                "role": role_str,
+                "role": role,
                 "controller_commitment": controller,
                 "verification_material_sha256": expected[1],
             }
@@ -462,23 +517,24 @@ def _validate_controller_attestations(
         if not backend.verify_external_attestation(
             kind="ROLE_CONTROLLER",
             verification_material=material,
-            payload=cast(JsonObject, payload),
+            payload=payload,
             proof=proof,
+            as_of=as_of,
         ):
             return False
-        seen.add(role_str)
+        seen.add(role)
     return seen == _REQUIRED_CONTROLLER_ROLES
 
 
 def provenance_node_id(node: JsonObject) -> str:
-    payload = {key: value for key, value in node.items() if key != "node_id"}
-    return object_digest(payload)
+    return object_digest({key: value for key, value in node.items() if key != "node_id"})
 
 
 def _validate_provenance(
     manifest_value: object,
     *,
     backend: OfflineVerificationBackend,
+    as_of: datetime,
 ) -> set[str] | None:
     manifest = _object(manifest_value)
     if manifest is None or set(manifest) != {"nodes", "evidence_bindings", "manifest_digest"}:
@@ -499,6 +555,7 @@ def _validate_provenance(
             "node_id",
             "content_digest",
             "parents",
+            "upstream_equivalence_commitment",
             "root_verification_material_b64u",
             "root_verification_material_sha256",
             "root_attestation",
@@ -513,7 +570,10 @@ def _validate_provenance(
         parents = _array(node.get("parents"))
         if parents is None:
             return None
+        equivalence = node.get("upstream_equivalence_commitment")
         if not parents:
+            if not _valid_digest(equivalence):
+                return None
             root_material = _decode_base64url(node.get("root_verification_material_b64u"))
             if root_material is None or node.get(
                 "root_verification_material_sha256"
@@ -528,6 +588,7 @@ def _validate_provenance(
                 root_payload
                 != {
                     "content_digest": node.get("content_digest"),
+                    "upstream_equivalence_commitment": equivalence,
                     "terminal_upstream": True,
                 }
                 or root_proof is None
@@ -538,11 +599,12 @@ def _validate_provenance(
             if not backend.verify_external_attestation(
                 kind="PROVENANCE_ROOT",
                 verification_material=root_material,
-                payload=cast(JsonObject, root_payload),
+                payload=root_payload,
                 proof=root_proof,
+                as_of=as_of,
             ):
                 return None
-        elif any(
+        elif equivalence is not None or any(
             node.get(name) is not None
             for name in (
                 "root_verification_material_b64u",
@@ -554,8 +616,10 @@ def _validate_provenance(
             return None
         nodes[cast(str, node_id)] = node
 
-    for _child_id, node in nodes.items():
-        parents = cast(list[object], node["parents"])
+    for node in nodes.values():
+        parents = _array(node["parents"])
+        if parents is None:
+            return None
         for raw_edge in parents:
             edge = _object(raw_edge)
             if edge is None or set(edge) != {
@@ -601,8 +665,9 @@ def _validate_provenance(
             if not backend.verify_external_attestation(
                 kind="PROVENANCE_EDGE",
                 verification_material=material,
-                payload=cast(JsonObject, payload),
+                payload=payload,
                 proof=proof,
+                as_of=as_of,
             ):
                 return None
 
@@ -615,14 +680,24 @@ def _validate_provenance(
         if node_id in visiting:
             return None
         visiting.add(node_id)
-        parents = cast(list[object], nodes[node_id]["parents"])
+        parents = _array(nodes[node_id]["parents"])
+        if parents is None:
+            return None
         if not parents:
-            result = {node_id}
+            equivalence = nodes[node_id].get("upstream_equivalence_commitment")
+            if not isinstance(equivalence, str):
+                return None
+            result = {equivalence}
         else:
             result: set[str] = set()
             for raw_edge in parents:
-                edge = cast(JsonObject, raw_edge)
-                parent_roots = roots(cast(str, edge["parent_node_id"]))
+                edge = _object(raw_edge)
+                if edge is None:
+                    return None
+                parent_id = edge.get("parent_node_id")
+                if not isinstance(parent_id, str):
+                    return None
+                parent_roots = roots(parent_id)
                 if parent_roots is None:
                     return None
                 result.update(parent_roots)
@@ -643,9 +718,8 @@ def _validate_provenance(
             or not evidence_id
             or not isinstance(node_id, str)
             or node_id not in nodes
+            or evidence_id in evidence_ids
         ):
-            return None
-        if evidence_id in evidence_ids:
             return None
         derived = roots(node_id)
         if derived is None:
@@ -765,11 +839,7 @@ def _validate_time_and_validity(
     authorization_message = validity_authorization_message(state)
     if not backend.verify_ed25519(service_key, authorization_message, service_signature):
         return False
-    if not backend.verify_ed25519(
-        durability_key,
-        authorization_message,
-        durability_signature,
-    ):
+    if not backend.verify_ed25519(durability_key, authorization_message, durability_signature):
         return False
     start = _timestamp(cast(str, valid_from))
     end = _timestamp(cast(str, valid_until))
@@ -781,6 +851,7 @@ def validate_real_trust_material_candidate(
     bundle: object,
     *,
     expected_current_authority_head_digest: str,
+    expected_pop_challenges: Mapping[str, bytes],
     backend: OfflineVerificationBackend,
     as_of: datetime,
 ) -> MaterialCandidateValidation:
@@ -823,7 +894,9 @@ def validate_real_trust_material_candidate(
         obj,
         identity_material=identity_material,
         identity_scheme=identity_scheme,
+        expected_pop_challenges=expected_pop_challenges,
         backend=backend,
+        as_of=as_of,
     )
     if adjudicators is None:
         return _reject("adjudicator-identity-key-binding-or-pop")
@@ -868,10 +941,15 @@ def validate_real_trust_material_candidate(
         obj,
         expected_bindings=expected_bindings,
         backend=backend,
+        as_of=as_of,
     ):
         return _reject("controller-attestation")
 
-    roots = _validate_provenance(obj.get("origin_provenance_manifest"), backend=backend)
+    roots = _validate_provenance(
+        obj.get("origin_provenance_manifest"),
+        backend=backend,
+        as_of=as_of,
+    )
     if roots is None:
         return _reject("origin-provenance-independence")
 
