@@ -243,12 +243,15 @@ def test_valid_base_vectors_require_two_candidate_disjoint_independent_inputs() 
         labels = [_as_string(value, "label") for value in _as_list(vector["labels"], "labels")]
 
         assert len(evidence) == 2
-        assert len(
-            {
-                _as_string(_as_object(item, "evidence")["origin_root_seed"], "origin_root_seed")
-                for item in evidence.values()
-            }
-        ) == 2
+        assert (
+            len(
+                {
+                    _as_string(_as_object(item, "evidence")["origin_root_seed"], "origin_root_seed")
+                    for item in evidence.values()
+                }
+            )
+            == 2
+        )
         for item in evidence.values():
             evidence_item = _as_object(item, "evidence")
             raw_payload = _as_object(evidence_item["raw_payload"], "raw_payload")
