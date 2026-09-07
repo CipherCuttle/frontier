@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 3
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -36,7 +36,7 @@ jobs:
         with:
           version: "0.12.10"
       - run: uv sync --all-extras --frozen
-      - name: Apply guarded G2-02 payload from parent commit
+      - name: Apply guarded G2-02 payload from original payload commit
         shell: bash
         run: |
           python - <<'PY'
@@ -44,7 +44,7 @@ jobs:
 
           path = ".github/workflows/gigasprint02-g202.yml"
           source = subprocess.run(
-              ["git", "show", f"HEAD^:{path}"],
+              ["git", "show", f"HEAD^^:{path}"],
               check=True,
               capture_output=True,
               text=True,
@@ -67,6 +67,33 @@ jobs:
           payload = "\n".join(normalized) + "\n"
           compile(payload, "<g2-02-payload>", "exec")
           exec(payload, {"__name__": "__main__"})
+          PY
+      - name: Normalize generated escape sequences
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("src/frontier/application/freeze_publication.py")
+          source.write_bytes(source.read_bytes().replace(b"\x00", b"\\0"))
+
+          test = Path("tests/unit/test_freeze_publication.py")
+          lines = test.read_text(encoding="utf-8").splitlines()
+          repaired = []
+          skip = False
+          for index, line in enumerate(lines):
+              if skip:
+                  skip = False
+                  continue
+              if 'path.write_text(canonical_json_text(receipt.to_canonical())+"' in line:
+                  repaired.append(
+                      '    path.write_text(canonical_json_text(receipt.to_canonical())+"\\n")'
+                  )
+                  if index + 1 < len(lines) and lines[index + 1].strip() == '")':
+                      skip = True
+              else:
+                  repaired.append(line)
+          test.write_text("\n".join(repaired) + "\n", encoding="utf-8")
           PY
       - name: Verify G2-02
         shell: bash
