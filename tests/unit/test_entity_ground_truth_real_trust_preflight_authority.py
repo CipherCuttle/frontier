@@ -12,8 +12,7 @@ from frontier.domain.entity_ground_truth_protocol_v2 import (
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTHORITY_PATH = (
-    ROOT
-    / "experiments/advanced_intelligence/entity_provenance_v0/"
+    ROOT / "experiments/advanced_intelligence/entity_provenance_v0/"
     "entity_ground_truth_real_trust_preflight_authority.json"
 )
 VALIDATOR_PATH = ROOT / "src/frontier/domain/entity_ground_truth_protocol_v2.py"
