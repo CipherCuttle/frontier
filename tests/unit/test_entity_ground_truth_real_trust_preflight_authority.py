@@ -76,12 +76,8 @@ def test_preflight_binds_merged_validator_and_preserves_state() -> None:
     assert lineage["offline_validator_merge_commit"] == EXPECTED_PARENT
     assert lineage["offline_validator_source_git_blob_sha1"] == EXPECTED_VALIDATOR_BLOB
     assert _git_blob_sha1(VALIDATOR_PATH) == EXPECTED_VALIDATOR_BLOB
-    assert closure["one_bounded_hostile_review"] == (
-        f"SPENT_ON_{EXPECTED_REVIEWED_HEAD.upper()}"
-    )
-    assert closure["critical_high_findings"] == (
-        "FIVE_P1_REPAIRED_PENDING_TARGETED_REREVIEW"
-    )
+    assert closure["one_bounded_hostile_review"] == (f"SPENT_ON_{EXPECTED_REVIEWED_HEAD.upper()}")
+    assert closure["critical_high_findings"] == ("FIVE_P1_REPAIRED_PENDING_TARGETED_REREVIEW")
     assert ENTITY_QUALITY_STATUS == "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH"
     assert PROMOTION_STATUS == "UNAVAILABLE"
 
