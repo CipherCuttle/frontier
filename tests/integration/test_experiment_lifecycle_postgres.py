@@ -518,7 +518,9 @@ def _run_dev_chain(connection: ConnectionT) -> tuple[str, _Identity]:
     # The candidate freeze receipt is recorded through the canonical freeze
     # workflow first; the DEV cycle then binds it (durable stamp is authority
     # data, never confirmatory promotion).
-    PostgresCandidateFreezeRepository(connection).record_receipt(FREEZE)
+    PostgresCandidateFreezeRepository(connection, persistence_authorized=True).record_receipt(
+        FREEZE
+    )
     orchestrator = _bound_orchestrator(connection, worker_id="worker.e2e.dev")
     first = orchestrator.run_cycle(now=BOUNDARY)
     assert first.action is ExperimentCycleAction.RAN, first.detail

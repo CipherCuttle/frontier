@@ -206,7 +206,7 @@ def _persisted_paired(
     PostgresPefArtifactRepository(conn).publish_complete_artifact(
         candidate.artifact, candidate.receipt
     )
-    PostgresCandidateFreezeRepository(conn).record_receipt(freeze)
+    PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(freeze)
     PostgresShadowRunPersister(conn).persist(run, run_class=run_class)
     return snapshot, candidate, run, freeze
 

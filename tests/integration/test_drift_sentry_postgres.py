@@ -100,7 +100,7 @@ def test_stored_drifted_receipt_skips_the_confirmatory_attempt_in_postgres() -> 
     receipt = _stored_frozen_receipt()
     boundary = _future_boundary()
     with psycopg.connect(DB_URL) as conn:
-        PostgresCandidateFreezeRepository(conn).record_receipt(receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(receipt)
         resolver = PostgresFreezeBindingResolver(conn)
         binding = resolver.latest_binding()
         assert binding is not None
@@ -149,7 +149,7 @@ def test_stored_receipt_drift_invalidates_confirmatory_evaluation() -> None:
     horizon = as_of + timedelta(hours=1)
     sentry = DriftSentry(REPO_ROOT)
     with psycopg.connect(DB_URL) as conn:
-        PostgresCandidateFreezeRepository(conn).record_receipt(receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(receipt)
         stored = PostgresFreezeBindingResolver(conn).latest_binding()
     assert stored is not None and stored.durable_freeze_at is not None
     durable_freeze_at = stored.durable_freeze_at
