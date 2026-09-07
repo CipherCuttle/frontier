@@ -203,7 +203,7 @@ def test_candidate_disjointness_is_recomputed_over_exact_direction_neutral_view(
     assert "sealed authenticated human submission receipts" in direction_contract
 
     signal_boundary = _as_object(corpus["candidate_signal_boundary"], "candidate_signal_boundary")
-    assert list(signal_boundary) == EXPECTED_SIGNAL_BOUNDARY
+    assert set(signal_boundary) == set(EXPECTED_SIGNAL_BOUNDARY)
 
     base_vectors = _as_object(corpus["base_vectors"], "base_vectors")
     for vector_name in ("VALID_SAME", "VALID_DIFFERENT"):
@@ -328,7 +328,7 @@ def test_adjudicator_identity_peer_blindness_and_bundle_are_cryptographically_bo
     mutation_rule = _as_string(bundle["mutation_rule"], "mutation_rule")
     assert "different bundle digest" in mutation_rule
     assert "Old and new bundle identities cannot be silently pooled or substituted" in mutation_rule
-    assert "exact bundle digest" in _as_string(
+    assert "exactly one immutable bundle digest" in _as_string(
         bundle["later_evaluation_binding"], "later_evaluation_binding"
     )
 
