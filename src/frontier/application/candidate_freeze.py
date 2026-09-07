@@ -25,14 +25,14 @@ _COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
 def _read_digest(path: Path) -> Digest | None:
     try:
         return sha256_digest(path.read_bytes())
-    except FileNotFoundError, IsADirectoryError, PermissionError:
+    except (FileNotFoundError, IsADirectoryError, PermissionError):
         return None
 
 
 def _load_json_document(path: Path) -> dict[str, object] | None:
     try:
         raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
-    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     if not isinstance(raw, dict):
         return None
@@ -94,7 +94,7 @@ def _git_identity(root: Path) -> tuple[str | None, str | None]:
             check=True,
             timeout=30,
         )
-    except OSError, subprocess.SubprocessError:
+    except (OSError, subprocess.SubprocessError):
         return (None, None)
     commit_hash = commit.stdout.strip()
     tree_hash = tree.stdout.strip()

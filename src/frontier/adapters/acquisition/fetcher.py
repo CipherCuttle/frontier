@@ -260,7 +260,7 @@ def _retry_after(headers: dict[str, str], maximum: int) -> int | None:
             if when.tzinfo is None:
                 when = when.replace(tzinfo=UTC)
             seconds = max(0, int((when - datetime.now(UTC)).total_seconds()))
-        except TypeError, ValueError, OverflowError:
+        except (TypeError, ValueError, OverflowError):
             return None
     return min(maximum, max(0, seconds))
 

@@ -113,7 +113,7 @@ class DriftSentry:
     def _try_collect(self) -> FreezeInputs | None:
         try:
             return collect_freeze_inputs(self._root)
-        except OSError, subprocess.SubprocessError:
+        except (OSError, subprocess.SubprocessError):
             return None
 
     def check(
