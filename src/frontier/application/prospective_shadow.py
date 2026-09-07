@@ -130,8 +130,12 @@ def load_candidate_freeze_receipt(path: Path) -> CandidateFreezeReceipt:
         raise ValueError("registry_entry_digests must be a list or null")
 
     drift_raw = document.get("drift_reasons")
-    if not isinstance(drift_raw, list) or not all(isinstance(item, str) for item in drift_raw):
+    if not isinstance(drift_raw, list):
         raise ValueError("drift_reasons must be a list of strings")
+    drift_values = cast(list[object], drift_raw)
+    if not all(isinstance(item, str) for item in drift_values):
+        raise ValueError("drift_reasons must be a list of strings")
+    drift_reasons = tuple(cast(str, item) for item in drift_values)
 
     preregistration_digest = _digest(
         document.get("preregistration_digest"), name="preregistration_digest"
@@ -154,7 +158,7 @@ def load_candidate_freeze_receipt(path: Path) -> CandidateFreezeReceipt:
     receipt = CandidateFreezeReceipt(
         frozen_at=_parse_timestamp(document.get("frozen_at"), name="frozen_at"),
         status=FreezeStatus(status_raw),
-        drift_reasons=tuple(cast(list[str], drift_raw)),
+        drift_reasons=drift_reasons,
         preregistration_digest=preregistration_digest,
         preregistration_config_digest=_digest(
             document.get("preregistration_config_digest"),
