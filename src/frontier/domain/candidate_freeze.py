@@ -207,6 +207,8 @@ def build_candidate_freeze_receipt(
         reasons.append("dependency lock digest unavailable")
     if inputs.source_registry_digest is None:
         reasons.append("source registry digest unavailable")
+    if inputs.registry_entry_digests is None:
+        reasons.append("source registry entry digests unavailable")
     status = FreezeStatus.DRIFTED if reasons else FreezeStatus.FROZEN
     return CandidateFreezeReceipt(
         frozen_at=frozen_at,
