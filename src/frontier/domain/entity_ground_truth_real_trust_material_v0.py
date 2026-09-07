@@ -212,7 +212,7 @@ def _decode_base64url(value: object, *, exact_bytes: int | None = None) -> bytes
     padding = "=" * ((4 - len(value) % 4) % 4)
     try:
         raw = base64.b64decode(value + padding, altchars=b"-_", validate=True)
-    except (ValueError, binascii.Error):
+    except ValueError, binascii.Error:
         return None
     if exact_bytes is not None and len(raw) != exact_bytes:
         return None
@@ -380,9 +380,8 @@ def _validate_adjudicators(
             binding.get("public_key_b64u"),
             exact_bytes=ED25519_PUBLIC_KEY_BYTES,
         )
-        if (
-            public_key is None
-            or binding.get("public_key_sha256") != sha256_digest_bytes(public_key)
+        if public_key is None or binding.get("public_key_sha256") != sha256_digest_bytes(
+            public_key
         ):
             return None
 
@@ -492,9 +491,8 @@ def _validate_controller_attestations(
         if expected is None or role in seen or expected[0] != controller:
             return False
         material = _decode_base64url(obj.get("verification_material_b64u"))
-        if (
-            material is None
-            or obj.get("verification_material_sha256") != sha256_digest_bytes(material)
+        if material is None or obj.get("verification_material_sha256") != sha256_digest_bytes(
+            material
         ):
             return False
         attestation = _object(obj.get("attestation"))
