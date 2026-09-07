@@ -60,7 +60,9 @@ def _derive_receipt(capsys: pytest.CaptureFixture[str]) -> dict[str, object]:
 
 
 def test_full_freeze_operator_workflow(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     assert DB_URL is not None
     monkeypatch.delenv(FREEZE_PERSIST_AUTHORIZED_ENV, raising=False)
@@ -122,7 +124,7 @@ def test_full_freeze_operator_workflow(
         dependency_lock_digest=Digest("sha256:" + "2" * 64),
         source_registry_digest=Digest("sha256:" + "3" * 64),
     )
-    wrong_path = Path(".pytest_cache") / f"tampered_freeze_{receipt_id[-8:]}.json"
+    wrong_path = tmp_path / f"tampered_freeze_{receipt_id[-8:]}.json"
     wrong_path.write_text(json.dumps(wrong_receipt.to_canonical(), sort_keys=True))
     wrong_rc = freeze_verify(REPO_ROOT, receipt_file=wrong_path, verified_at=FIXED_FROZEN_AT)
     assert wrong_rc == 1
