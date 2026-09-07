@@ -34,7 +34,6 @@ def _git_blob_sha1(path: Path) -> str:
     return hashlib.sha1(f"blob {len(raw)}\0".encode() + raw).hexdigest()
 
 
-
 def _b64u(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
