@@ -303,15 +303,17 @@ class PostgresFreezeBindingResolver:
         with self._connection.cursor() as cur:
             cur.execute(
                 """
-                SELECT status, drift_reasons, preregistration_digest,
-                       preregistration_config_digest, implementation_commit,
-                       implementation_tree_digest, dependency_lock_digest,
-                       source_registry_digest, registry_entry_digests,
-                       receipt_digest, frozen_at, verified_at,
-                       original_receipt_digest, durable_freeze_at
-                FROM candidate_freeze_receipts
-                WHERE experiment_id = %s
-                ORDER BY frozen_at DESC, receipt_id DESC
+                SELECT r.status, r.drift_reasons, r.preregistration_digest,
+                       r.preregistration_config_digest, r.implementation_commit,
+                       r.implementation_tree_digest, r.dependency_lock_digest,
+                       r.source_registry_digest, r.registry_entry_digests,
+                       r.receipt_digest, r.frozen_at, r.verified_at,
+                       r.original_receipt_digest, r.durable_freeze_at,
+                       p.publication_commit, p.publication_committer_at
+                FROM candidate_freeze_receipts r
+                LEFT JOIN candidate_freeze_publications p ON p.receipt_id = r.receipt_id
+                WHERE r.experiment_id = %s
+                ORDER BY r.frozen_at DESC, r.receipt_id DESC
                 LIMIT 1
                 """,
                 (PEF_EXPERIMENT_ID,),
@@ -348,6 +350,8 @@ class PostgresFreezeBindingResolver:
         return FreezeBinding(
             receipt=receipt,
             durable_freeze_at=None if row[13] is None else cast(datetime, row[13]),
+            publication_commit=None if row[14] is None else cast(str, row[14]),
+            publication_committer_at=None if row[15] is None else cast(datetime, row[15]),
         )
 
 

@@ -76,10 +76,10 @@ def _registry_entry_digests(root: Path, path: Path) -> tuple[RegistryEntryDigest
     return tuple(sorted(entries, key=lambda entry: entry.path))
 
 
-def _git_identity(root: Path) -> tuple[str | None, str | None]:
+def _git_identity(root: Path, *, ref: str = "HEAD") -> tuple[str | None, str | None]:
     try:
         commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", ref],
             cwd=root,
             capture_output=True,
             text=True,
@@ -87,7 +87,7 @@ def _git_identity(root: Path) -> tuple[str | None, str | None]:
             timeout=30,
         )
         tree = subprocess.run(
-            ["git", "rev-parse", "HEAD^{tree}"],
+            ["git", "rev-parse", f"{ref}^{{tree}}"],
             cwd=root,
             capture_output=True,
             text=True,
@@ -103,7 +103,7 @@ def _git_identity(root: Path) -> tuple[str | None, str | None]:
     return (commit_hash, tree_hash)
 
 
-def collect_freeze_inputs(root: Path) -> FreezeInputs:
+def collect_freeze_inputs(root: Path, *, implementation_ref: str | None = None) -> FreezeInputs:
     """Collect the recomputed candidate identity components (fail-closed).
 
     Every unavailable component (missing lock/registry file, missing git
@@ -116,7 +116,7 @@ def collect_freeze_inputs(root: Path) -> FreezeInputs:
     preregistration_digest = _read_digest(preregistration_path)
     if preregistration_digest is None:
         raise FileNotFoundError(f"preregistration file missing: {FREEZE_PREREGISTRATION_PATH}")
-    commit, tree = _git_identity(root)
+    commit, tree = _git_identity(root, ref=implementation_ref or "HEAD")
     return FreezeInputs(
         preregistration_digest=preregistration_digest,
         preregistration_config_digest=_preregistration_config_digest(

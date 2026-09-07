@@ -576,8 +576,8 @@ def test_existing_ran_run_short_circuits_retry_without_new_run_row() -> None:
         (None, True, "no candidate freeze receipt is bound"),
         ("DRIFTED", True, "bound candidate freeze receipt is DRIFTED, not FROZEN"),
         ("NOT_DURABLE", True, "bound freeze receipt has durable_freeze_at NULL (not durable)"),
-        ("EARLIER", True, "run as_of is not strictly after durable_freeze_at"),
-        ("EQUAL", True, "run as_of is not strictly after durable_freeze_at"),
+        ("EARLIER", True, "Git publication precedes canonical DB durability"),
+        ("EQUAL", True, "Git publication precedes canonical DB durability"),
         ("LATER", False, "run is not executing in the canonical DB context"),
     ],
 )
@@ -597,7 +597,20 @@ def test_confirmatory_gate_matrix_skips_every_failing_gate(
             durable = BOUNDARY + timedelta(seconds=300)
         elif binding == "EQUAL":
             durable = BOUNDARY
-        resolved = FreezeBinding(receipt=receipt, durable_freeze_at=durable)
+        resolved = FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=durable,
+            publication_commit=(None if binding == "NOT_DURABLE" else "9" * 40),
+            publication_committer_at=(
+                None
+                if binding == "NOT_DURABLE"
+                else (
+                    BOUNDARY - timedelta(seconds=300)
+                    if binding == "LATER"
+                    else BOUNDARY - timedelta(seconds=301)
+                )
+            ),
+        )
     attempts = FakeAttemptRepository()
     persistence = FakeShadowRunPersistence()
     runner = RecordingRunner()
@@ -621,7 +634,12 @@ def test_confirmatory_gate_matrix_skips_every_failing_gate(
 def test_confirmatory_gates_allow_strictly_after_durable_frozen_in_canonical_context() -> None:
     receipt = _frozen_receipt(frozen_at=BOUNDARY - timedelta(seconds=600))
     binding = StubBindingResolver(
-        FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=300))
+        FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=BOUNDARY - timedelta(seconds=600),
+            publication_commit="9" * 40,
+            publication_committer_at=BOUNDARY - timedelta(seconds=301),
+        )
     )
     attempts = FakeAttemptRepository()
     persistence = FakeShadowRunPersistence()
@@ -645,7 +663,12 @@ def test_confirmatory_gates_allow_strictly_after_durable_frozen_in_canonical_con
 def test_dev_run_never_binds_freeze_receipt_or_marks_confirmatory() -> None:
     receipt = _frozen_receipt(frozen_at=BOUNDARY - timedelta(seconds=300))
     binding = StubBindingResolver(
-        FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=300))
+        FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=BOUNDARY - timedelta(seconds=600),
+            publication_commit="9" * 40,
+            publication_committer_at=BOUNDARY - timedelta(seconds=301),
+        )
     )
     attempts = FakeAttemptRepository()
     persistence = FakeShadowRunPersistence()
@@ -666,7 +689,12 @@ def test_dev_run_never_binds_freeze_receipt_or_marks_confirmatory() -> None:
 
 def test_gate_evaluation_matrix_pure_function() -> None:
     receipt = _frozen_receipt(frozen_at=BOUNDARY - timedelta(seconds=300))
-    good = FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=1))
+    good = FreezeBinding(
+        receipt=receipt,
+        durable_freeze_at=BOUNDARY - timedelta(seconds=600),
+        publication_commit="9" * 40,
+        publication_committer_at=BOUNDARY - timedelta(seconds=301),
+    )
     assert evaluate_confirmatory_gates(
         good, as_of=BOUNDARY, canonical_context=True
     ) == ConfirmatoryDecision(True, "all confirmatory binding gates hold", receipt)

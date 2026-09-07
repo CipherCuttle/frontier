@@ -5,7 +5,7 @@ from typing import cast
 
 import psycopg
 
-EXPECTED_DATABASE_REVISION = "0012_opportunity_memberships"
+EXPECTED_DATABASE_REVISION = "0013_freeze_publication"
 REQUIRED_RELATIONS = (
     "sources",
     "collection_runs",
@@ -17,6 +17,7 @@ REQUIRED_RELATIONS = (
     "pef_ranking_artifacts",
     "shadow_experiment_runs",
     "candidate_freeze_receipts",
+    "candidate_freeze_publications",
     "evaluation_receipts",
     "feature_vectors",
     "experimental_analysis_artifacts",

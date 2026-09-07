@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Protocol
 
 from frontier.application.candidate_freeze import collect_freeze_inputs
+from frontier.application.freeze_publication import derive_freeze_publication
 from frontier.domain.candidate_freeze import (
     CandidateFreezeReceipt,
     FreezeInputs,
@@ -110,9 +111,42 @@ class DriftSentry:
         """Collect the live identity components (may raise on hard errors)."""
         return collect_freeze_inputs(self._root)
 
-    def _try_collect(self) -> FreezeInputs | None:
+    def _try_collect(self, receipt: CandidateFreezeReceipt | None = None) -> FreezeInputs | None:
         try:
-            return collect_freeze_inputs(self._root)
+            if receipt is None or receipt.implementation_commit is None:
+                return collect_freeze_inputs(self._root)
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=self._root,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            ).stdout.strip()
+            if head == receipt.implementation_commit:
+                return collect_freeze_inputs(self._root)
+            try:
+                subprocess.run(
+                    [
+                        "git",
+                        "cat-file",
+                        "-e",
+                        f"{receipt.implementation_commit}^{{commit}}",
+                    ],
+                    cwd=self._root,
+                    capture_output=True,
+                    check=True,
+                    timeout=30,
+                )
+            except subprocess.CalledProcessError:
+                return collect_freeze_inputs(self._root)
+            try:
+                derive_freeze_publication(self._root, receipt)
+            except RuntimeError, ValueError:
+                return collect_freeze_inputs(self._root)
+            return collect_freeze_inputs(
+                self._root, implementation_ref=receipt.implementation_commit
+            )
         except OSError, subprocess.SubprocessError:
             return None
 
@@ -131,7 +165,7 @@ class DriftSentry:
         """
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("drift sentry requires a timezone-aware clock")
-        live = inputs if inputs is not None else self._try_collect()
+        live = inputs if inputs is not None else self._try_collect(receipt)
         if live is None:
             return DriftReport(
                 checked_at=now,
@@ -186,7 +220,7 @@ class DriftSentry:
         """
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("drift sentry requires a timezone-aware clock")
-        live = self._try_collect()
+        live = self._try_collect(receipt)
         if live is None:
             return _explicit_drifted_receipt(
                 receipt,

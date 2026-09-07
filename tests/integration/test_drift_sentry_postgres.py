@@ -27,11 +27,18 @@ from frontier.adapters.postgres.experiment_attempts import (
     PostgresFreezeBindingResolver,
     PostgresShadowRunPersister,
 )
+from frontier.adapters.postgres.freeze_publication import (
+    PostgresCandidateFreezePublicationRepository,
+)
 from frontier.application.drift_sentry import DriftSentry
 from frontier.application.evaluation import PairedSnapshot, evaluate_shadow_experiment
 from frontier.application.experiment_orchestration import (
     ExperimentOrchestrator,
     FreezeBinding,
+)
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    first_confirmatory_boundary,
 )
 from frontier.domain.advanced_intelligence import (
     ShadowControlArmRanking,
@@ -90,23 +97,34 @@ def _stored_frozen_receipt():
     )
 
 
-def _future_boundary() -> datetime:
-    """A due boundary strictly after the canonical durability stamp (now)."""
-    now = datetime.now(UTC) + timedelta(days=365)
-    epoch = int(now.timestamp())
-    return datetime.fromtimestamp(epoch - (epoch % 300), tz=UTC)
-
-
 def test_stored_drifted_receipt_skips_the_confirmatory_attempt_in_postgres() -> None:
     assert DB_URL is not None
     receipt = _stored_frozen_receipt()
-    boundary = _future_boundary()
+    assert receipt.implementation_commit is not None
+    assert receipt.implementation_tree_digest is not None
     with psycopg.connect(DB_URL) as conn:
         PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(receipt)
         resolver = PostgresFreezeBindingResolver(conn)
         binding = resolver.latest_binding()
         assert binding is not None
         assert binding.durable_freeze_at is not None
+        publication_at = binding.durable_freeze_at + timedelta(seconds=1)
+        PostgresCandidateFreezePublicationRepository(
+            conn, persistence_authorized=True
+        ).record_publication(
+            CandidateFreezePublication(
+                freeze_receipt_id=receipt.receipt_id,
+                freeze_receipt_digest=receipt.receipt_digest,
+                implementation_commit=receipt.implementation_commit,
+                implementation_tree_digest=receipt.implementation_tree_digest,
+                publication_commit="c" * 64,
+                publication_committer_at=publication_at,
+            )
+        )
+        binding = resolver.latest_binding()
+        assert binding is not None
+        assert binding.publication_committer_at == publication_at
+        boundary = first_confirmatory_boundary(publication_at)
         orchestrator = ExperimentOrchestrator(
             attempts=PostgresExperimentAttemptRepository(conn),
             baseline_repository=_UnusedBaselineRepository(),  # pyright: ignore[reportArgumentType]

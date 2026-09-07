@@ -31,6 +31,7 @@ from typing import Protocol
 
 from frontier.application.advanced_intelligence import run_shadow_experiment
 from frontier.application.drift_sentry import DriftChecker
+from frontier.application.freeze_publication import require_confirmatory_boundary
 from frontier.application.intelligence import (
     BaselineIntelligenceRepository,
     run_baseline_intelligence,
@@ -85,6 +86,8 @@ class FreezeBinding:
 
     receipt: CandidateFreezeReceipt
     durable_freeze_at: datetime | None
+    publication_commit: str | None = None
+    publication_committer_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,11 +127,16 @@ def evaluate_confirmatory_gates(
             False,
             "bound freeze receipt has durable_freeze_at NULL (not durable)",
         )
-    if not as_of > binding.durable_freeze_at:
-        return ConfirmatoryDecision(
-            False,
-            "run as_of is not strictly after durable_freeze_at",
+    if binding.publication_commit is None or binding.publication_committer_at is None:
+        return ConfirmatoryDecision(False, "bound freeze receipt has no verified Git publication")
+    if binding.publication_committer_at < binding.durable_freeze_at:
+        return ConfirmatoryDecision(False, "Git publication precedes canonical DB durability")
+    try:
+        require_confirmatory_boundary(
+            as_of=as_of, publication_committer_at=binding.publication_committer_at
         )
+    except ValueError as error:
+        return ConfirmatoryDecision(False, str(error))
     if not canonical_context:
         return ConfirmatoryDecision(
             False,

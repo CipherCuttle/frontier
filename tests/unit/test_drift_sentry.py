@@ -440,7 +440,12 @@ def _confirmatory_orchestrator(
         persistence=persistence,
         source_registry_version=receipt.source_registry_digest or FABRICATED_REGISTRY,
         freeze_binding=StubBindingResolver(
-            FreezeBinding(receipt=receipt, durable_freeze_at=durable_freeze_at)
+            FreezeBinding(
+                receipt=receipt,
+                durable_freeze_at=durable_freeze_at,
+                publication_commit="9" * 40,
+                publication_committer_at=durable_freeze_at + timedelta(seconds=1),
+            )
         ),
         shadow_runner=runner,  # pyright: ignore[reportArgumentType]
         run_class="CONFIRMATORY",
