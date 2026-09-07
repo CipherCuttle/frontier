@@ -283,3 +283,31 @@ def test_validator_rejects_missing_decisive_assessment_coverage() -> None:
     assert result.label_status is LabelStatus.INVALID_PACKET
     assert result.required_action == "REJECT_PROTOCOL_DRIFT"
     assert "assessment-evidence-coverage" in result.violations
+
+
+def test_validator_rejects_unhashable_assessment_direction() -> None:
+    builder, schema, corpus = _fixtures()
+    case = cast(dict[str, Any], corpus["cases"][0])
+    packet = expand_v2_case(case, corpus=corpus, builder=builder, schema=schema)
+    tampered = copy.deepcopy(packet)
+    keys = _keys(builder)
+
+    adjudication = cast(dict[str, Any], tampered["adjudication"])
+    submissions = cast(list[dict[str, Any]], adjudication["submissions"])
+    first_payload = cast(dict[str, Any], submissions[0]["payload"])
+    assessments = cast(list[dict[str, Any]], first_payload["assessments"])
+    assessments[0]["assessment"] = ["SUPPORTS_SAME"]
+    _resign(submissions[0], keys["submission"])
+    _rebind_adjudication_chain(tampered, keys)
+
+    result = validate_v2_packet(
+        tampered,
+        builder=builder,
+        schema=schema,
+        corpus=corpus,
+    )
+
+    assert result.packet_status is PacketStatus.REJECT
+    assert result.label_status is LabelStatus.INVALID_PACKET
+    assert result.required_action == "REJECT_PROTOCOL_DRIFT"
+    assert "assessment-direction" in result.violations
