@@ -22,9 +22,7 @@ START = datetime(2026, 9, 7, 18, 20, tzinfo=UTC)
 def test_first_boundary_is_strictly_after_durable_merge() -> None:
     assert first_confirmatory_boundary(DURABLE) == START
     exact_boundary = datetime(2026, 9, 7, 18, 20, tzinfo=UTC)
-    assert first_confirmatory_boundary(exact_boundary) == datetime(
-        2026, 9, 7, 18, 25, tzinfo=UTC
-    )
+    assert first_confirmatory_boundary(exact_boundary) == datetime(2026, 9, 7, 18, 25, tzinfo=UTC)
 
 
 def test_window_end_is_fixed_28_days_after_preregistered_start() -> None:
@@ -34,9 +32,7 @@ def test_window_end_is_fixed_28_days_after_preregistered_start() -> None:
 def test_boundary_cannot_shift_or_extend_window() -> None:
     require_confirmatory_boundary(as_of=START, durable_freeze_at=DURABLE)
     with pytest.raises(ValueError, match="outside the fixed preregistered ranking window"):
-        require_confirmatory_boundary(
-            as_of=START - timedelta(minutes=5), durable_freeze_at=DURABLE
-        )
+        require_confirmatory_boundary(as_of=START - timedelta(minutes=5), durable_freeze_at=DURABLE)
     with pytest.raises(ValueError, match="outside the fixed preregistered ranking window"):
         require_confirmatory_boundary(
             as_of=confirmatory_window_end(DURABLE), durable_freeze_at=DURABLE
