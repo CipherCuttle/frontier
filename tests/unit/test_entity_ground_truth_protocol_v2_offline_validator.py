@@ -71,7 +71,7 @@ def test_semantic_validator_derives_every_frozen_expected_outcome() -> None:
 
 def test_expansion_does_not_consume_expected_outcome_assertions() -> None:
     builder, schema, corpus = _fixtures()
-    original = cast(dict[str, Any], copy.deepcopy(corpus["cases"][0]))
+    original = copy.deepcopy(corpus["cases"][0])
     tampered = cast(dict[str, Any], copy.deepcopy(original))
     tampered["expected"] = {
         "packet_status": "REJECT",
@@ -103,7 +103,7 @@ def test_validator_fail_closes_non_escalation_drift() -> None:
     builder, schema, corpus = _fixtures()
     case = cast(dict[str, Any], corpus["cases"][0])
     packet = expand_v2_case(case, corpus=corpus, builder=builder, schema=schema)
-    tampered = cast(dict[str, Any], copy.deepcopy(packet))
+    tampered = copy.deepcopy(packet)
     non_escalation = cast(dict[str, Any], tampered["non_escalation"])
     non_escalation["real_label_collection_authorized"] = True
 
@@ -122,12 +122,12 @@ def test_validator_fail_closes_non_escalation_drift() -> None:
 
 def test_definition_rejects_any_real_authority_in_test_crypto() -> None:
     builder, schema, corpus = _fixtures()
-    tampered_builder = cast(dict[str, Any], copy.deepcopy(builder))
+    tampered_builder = copy.deepcopy(builder)
     spec = cast(dict[str, Any], tampered_builder["spec_payload"])
     test_mac = cast(dict[str, Any], spec["test_mac"])
     test_mac["real_label_authority"] = True
     tampered_builder["spec_payload_digest"] = protocol_digest(spec)
-    tampered_corpus = cast(dict[str, Any], copy.deepcopy(corpus))
+    tampered_corpus = copy.deepcopy(corpus)
     tampered_corpus["builder_spec_payload_digest"] = tampered_builder["spec_payload_digest"]
 
     with pytest.raises(ProtocolV2DefinitionError, match="cannot authorize real labels"):
