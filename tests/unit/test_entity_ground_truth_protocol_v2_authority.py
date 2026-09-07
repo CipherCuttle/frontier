@@ -7,8 +7,7 @@ from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[2]
 AUTHORITY_PATH = (
-    ROOT
-    / "experiments/advanced_intelligence/entity_provenance_v0/"
+    ROOT / "experiments/advanced_intelligence/entity_provenance_v0/"
     "entity_ground_truth_protocol_v2_authority.json"
 )
 
