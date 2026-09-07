@@ -554,7 +554,7 @@ def _validate_provenance(
             return None
         nodes[cast(str, node_id)] = node
 
-    for child_id, node in nodes.items():
+    for _child_id, node in nodes.items():
         parents = cast(list[object], node["parents"])
         for raw_edge in parents:
             edge = _object(raw_edge)
