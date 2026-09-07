@@ -624,6 +624,123 @@ class TestApplicationService:
         assert entry.as_of == snapshot.run.as_of
 
 
+class TestFrozenDomainUniverseGate:
+    """R-M01: only the three frozen strata can satisfy the >=2-domain gate.
+
+    Per the preregistration ``domain_mapping``, UNQUALIFIED_MIXED is the
+    reported cross-stratum resolution group — never a promotion domain. One
+    adequate qualifying domain plus any number of adequate UNQUALIFIED_MIXED
+    anchors must NOT satisfy MINIMUM_QUALIFYING_DOMAINS; two qualifying
+    adequate domains must.
+    """
+
+    def _mixed_universe(
+        self,
+    ) -> tuple[tuple[RetainedOpportunity, ...], dict[str, Sequence[AnchorTracking]]]:
+        """30 adequate UNQUALIFIED_MIXED groups (pypi + cisa primary anchors)."""
+        groups: list[OpportunityGroup] = []
+        tracking: dict[str, Sequence[AnchorTracking]] = {}
+        for index in range(30):
+            outcome = OutcomeLabel.POSITIVE if index < 10 else OutcomeLabel.NEGATIVE
+            anchor = _anchor(f"mix-{index}", observed_at=_at(index + 1))
+            cross = _anchor(
+                f"mix-{index}-kev", source_id="cisa.kev", observed_at=anchor.observed_at
+            )
+            tracking[anchor.observation_id] = (
+                _track_at(anchor.observed_at, "ep", control_rank=1, candidate_rank=1),
+            )
+            groups.append(_group(anchor, outcome=outcome, other_anchors=(cross,)))
+        return build_retained_opportunities(groups), tracking
+
+    def test_unqualified_mixed_is_never_a_domain_row(self) -> None:
+        opportunities, tracking = self._mixed_universe()
+        assert all(item.domain == DOMAIN_UNQUALIFIED_MIXED for item in opportunities)
+        assert evaluate_domains(opportunities, tracking) == ()
+
+    def _application_groups(
+        self, domains: tuple[str, ...]
+    ) -> tuple[tuple[OpportunityGroup, ...], PairedSnapshot]:
+        """Adequate groups for each requested domain + 30 mixed groups, one
+        shared episode universe, so every anchor surfaces in both arms."""
+        anchor_source = {
+            DOMAIN_SOFTWARE_PACKAGES: "pypi.updates",
+            DOMAIN_AI_MODELS: "hf.models",
+        }
+        groups: list[OpportunityGroup] = []
+        observation_ids: list[str] = []
+        for index in range(30):
+            outcome = OutcomeLabel.POSITIVE if index < 10 else OutcomeLabel.NEGATIVE
+            observed_at = _at(index + 1)
+            mixed = _anchor(f"gmix-{index}", observed_at=observed_at)
+            cross = _anchor(
+                f"gmix-{index}-kev", source_id="cisa.kev", observed_at=observed_at
+            )
+            groups.append(_group(mixed, outcome=outcome, other_anchors=(cross,)))
+            observation_ids.append(mixed.observation_id)
+            for domain in domains:
+                anchor = _anchor(
+                    f"g-{domain}-{index}",
+                    source_id=anchor_source[domain],
+                    observed_at=observed_at,
+                )
+                groups.append(_group(anchor, outcome=outcome))
+                observation_ids.append(anchor.observation_id)
+        snapshot = PairedSnapshot(
+            run=_shadow_run(_at(2 * CADENCE)),
+            candidate_rank_by_episode={"ep_main": 7},
+            episode_memberships={"ep_main": tuple(observation_ids)},
+        )
+        return tuple(groups), snapshot
+
+    def _evaluate_universe(
+        self, domains: tuple[str, ...], *, durable: bool
+    ):
+        groups, snapshot = self._application_groups(domains)
+        freeze = _freeze_receipt(FROZEN_FREEZE)
+        if durable:
+            # Bind the run to the freeze receipt so the confirmatory binding
+            # check passes and the evaluation reaches its verdict.
+            snapshot = replace(
+                snapshot,
+                run=replace(snapshot.run, candidate_freeze_receipt_id=freeze.receipt_id),
+            )
+        return evaluate_shadow_experiment(
+            snapshots=(snapshot,),
+            opportunity_groups=groups,
+            freeze_receipt=freeze,
+            evaluation_horizon=_at(86400 + 2 * CADENCE),
+            generated_at=_at(86400 + 2 * CADENCE),
+            durable_freeze_at=_at(0) if durable else None,
+        )
+
+    def test_one_qualifying_domain_plus_adequate_mixed_fails_gate(self) -> None:
+        receipt = self._evaluate_universe((DOMAIN_SOFTWARE_PACKAGES,), durable=False)
+        domains = {evaluation.domain for evaluation in receipt.domains}
+        assert DOMAIN_UNQUALIFIED_MIXED not in domains
+        software = next(
+            evaluation
+            for evaluation in receipt.domains
+            if evaluation.domain == DOMAIN_SOFTWARE_PACKAGES
+        )
+        assert software.qualifies_sample_adequacy is True
+        # Reported-only: the mixed group is surfaced in counts, never rows.
+        assert receipt.counts.unqualified_mixed_count == 30
+        assert receipt.qualifying_domain_count == 1
+        # The >=2 gate fails even though a second "adequate" group existed.
+        assert receipt.status is EvaluationStatus.INSUFFICIENT_SAMPLE
+        assert receipt.verdict is None
+
+    def test_two_qualifying_adequate_domains_satisfy_gate(self) -> None:
+        receipt = self._evaluate_universe(
+            (DOMAIN_SOFTWARE_PACKAGES, DOMAIN_AI_MODELS), durable=True
+        )
+        assert receipt.qualifying_domain_count == 2
+        # The >=2 gate held: evaluation reaches the verdict (NOT_SUPPORTED,
+        # since pooled median lead time is zero under identical arms).
+        assert receipt.status is EvaluationStatus.COMPLETE
+        assert receipt.verdict == "NOT_SUPPORTED"
+
+
 def _counts(**overrides: int):
     values: dict[str, int] = {
         "opportunity_groups": 0,

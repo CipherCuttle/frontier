@@ -90,11 +90,12 @@ def _confirmatory_run_binding_failure(
     """Return why these runs cannot contribute confirmatory evidence.
 
     ``frozen_at`` records receipt creation, not canonical durability. The
-    caller must therefore supply ``durable_freeze_at`` from the GitHub ``main``
-    merge commit that made this exact freeze receipt durable. Missing or
+    caller must therefore supply ``durable_freeze_at`` as stamped by the
+    canonical DB insert transaction (migration 0010: ``clock_timestamp()`` at
+    insert-commit time, never any external/local clock). Missing or
     inconsistent durability evidence fails closed. Every confirmatory run must
     bind the exact receipt identity and its paired boundary must be strictly
-    after that durable-main timestamp.
+    after that durable-freeze timestamp.
     """
     if durable_freeze_at is None:
         return "durable candidate-freeze main-merge timestamp is required"
