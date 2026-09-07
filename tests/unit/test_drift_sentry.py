@@ -431,7 +431,12 @@ def _confirmatory_orchestrator(
     persistence = FakeShadowRunPersistence()
     orchestrator = ExperimentOrchestrator(
         attempts=attempts,
-        baseline_repository=FakeBaselineRepository(()),
+        baseline_repository=FakeBaselineRepository(
+            (),
+            confirmatory_source_registry_version=(
+                receipt.source_registry_digest or FABRICATED_REGISTRY
+            ),
+        ),
         persistence=persistence,
         source_registry_version=receipt.source_registry_digest or FABRICATED_REGISTRY,
         freeze_binding=StubBindingResolver(

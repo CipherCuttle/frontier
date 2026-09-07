@@ -59,6 +59,8 @@ PEF_CONFIG_DIGEST = Digest(
 class _UnusedBaselineRepository:
     """The drift path halts before any baseline work; never called."""
 
+    confirmatory_source_registry_version = Digest("sha256:" + "4" * 64)
+
     def list_baseline_observations_as_of(self, as_of: datetime) -> list[object]:
         raise AssertionError("drift sentry must halt before the baseline repository is used")
 

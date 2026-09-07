@@ -83,6 +83,9 @@ from frontier.adapters.postgres.experiment_attempts import (
     PostgresShadowRunPersister,
 )
 from frontier.adapters.postgres.experimental_read import PostgresExperimentalReadRepository
+from frontier.adapters.postgres.frozen_registry_intelligence import (
+    PostgresFrozenRegistryBaselineIntelligenceRepository,
+)
 from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligenceRepository
 from frontier.adapters.postgres.public_read import PostgresPublicReadRepository
 from frontier.adapters.postgres.readiness import (
@@ -454,9 +457,14 @@ def _bound_runner(freeze: CandidateFreezeReceipt) -> ShadowExperimentRunner:
 def _orchestrator(
     connection: ConnectionT, *, run_class: str, worker_id: str
 ) -> ExperimentOrchestrator:
+    baseline_repository = (
+        PostgresFrozenRegistryBaselineIntelligenceRepository(connection, load_source_registry(ROOT))
+        if run_class == "CONFIRMATORY"
+        else PostgresBaselineIntelligenceRepository(connection)
+    )
     return ExperimentOrchestrator(
         attempts=PostgresExperimentAttemptRepository(connection),
-        baseline_repository=PostgresBaselineIntelligenceRepository(connection),
+        baseline_repository=baseline_repository,
         persistence=PostgresShadowRunPersister(connection),
         source_registry_version=REGISTRY_VERSION,
         run_class=run_class,
