@@ -30,8 +30,8 @@ from frontier.domain.advanced_intelligence import (
 from frontier.domain.candidate_freeze import CandidateFreezeReceipt, FreezeStatus
 from frontier.domain.evaluation import (
     GLOBAL_RANK_CUTOFF_K,
-    MINIMUM_QUALIFYING_DOMAINS,
     MIN_RESOLVED_OPPORTUNITIES_PER_DOMAIN,
+    MINIMUM_QUALIFYING_DOMAINS,
     AnchorTracking,
     DomainEvaluation,
     EvaluationReceipt,
