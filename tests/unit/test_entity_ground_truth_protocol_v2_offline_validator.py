@@ -64,20 +64,14 @@ def _rebind_adjudication_chain(
     submissions = cast(list[dict[str, Any]], adjudication["submissions"])
     unseal = cast(dict[str, Any], adjudication["unseal_receipt"])
     unseal_payload = cast(dict[str, Any], unseal["payload"])
-    unseal_payload["submission_digests"] = [
-        submission["digest"] for submission in submissions
-    ]
+    unseal_payload["submission_digests"] = [submission["digest"] for submission in submissions]
     _resign(unseal, keys["submission"])
 
     bundle = cast(dict[str, Any], packet["label_bundle"])
     bundle_payload = cast(dict[str, Any], bundle["payload"])
-    bundle_payload["submission_digests"] = [
-        submission["digest"] for submission in submissions
-    ]
+    bundle_payload["submission_digests"] = [submission["digest"] for submission in submissions]
     bundle_payload["unseal_receipt_digest"] = unseal["digest"]
-    bundle_payload["labels"] = [
-        submission["payload"]["label"] for submission in submissions
-    ]
+    bundle_payload["labels"] = [submission["payload"]["label"] for submission in submissions]
     bundle_digest = protocol_digest(bundle_payload)
     bundle["digest"] = bundle_digest
     durability = cast(dict[str, Any], bundle["durability_receipt"])
@@ -197,12 +191,15 @@ def test_validator_rejects_packet_substitution_of_frozen_candidate_boundary() ->
     cases = cast(list[dict[str, Any]], corpus["cases"])
     case = next(case for case in cases if case["id"] == "EGT2-003")
     packet = expand_v2_case(case, corpus=corpus, builder=builder, schema=schema)
-    assert validate_v2_packet(
-        packet,
-        builder=builder,
-        schema=schema,
-        corpus=corpus,
-    ).required_action == "REJECT_CANDIDATE_LEAK"
+    assert (
+        validate_v2_packet(
+            packet,
+            builder=builder,
+            schema=schema,
+            corpus=corpus,
+        ).required_action
+        == "REJECT_CANDIDATE_LEAK"
+    )
 
     tampered = copy.deepcopy(packet)
     keys = _keys(builder)
