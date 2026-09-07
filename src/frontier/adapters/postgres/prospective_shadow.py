@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import cast
 
+import psycopg
 from psycopg.types.json import Jsonb
 
 from frontier.adapters.acquisition.config import SourceRegistry
@@ -27,7 +28,11 @@ def _payload(value: object) -> dict[str, object]:
 class PostgresFrozenRegistryGroupingRepository(PostgresGroupingRepository):
     """PIT grouping reads constrained to the immutable confirmatory source registry."""
 
-    def __init__(self, connection, registry: SourceRegistry) -> None:
+    def __init__(
+        self,
+        connection: psycopg.Connection[tuple[object, ...]],
+        registry: SourceRegistry,
+    ) -> None:
         super().__init__(connection)
         self._source_ids = tuple(sorted(registry.sources))
         self._roles_by_source = {
@@ -108,7 +113,11 @@ class PostgresFrozenRegistryGroupingRepository(PostgresGroupingRepository):
 class PostgresProspectiveBaselineIntelligenceRepository(PostgresBaselineIntelligenceRepository):
     """Permanent baseline replayed only through the frozen confirmatory registry."""
 
-    def __init__(self, connection, registry: SourceRegistry) -> None:
+    def __init__(
+        self,
+        connection: psycopg.Connection[tuple[object, ...]],
+        registry: SourceRegistry,
+    ) -> None:
         super().__init__(connection)
         self._source_ids = tuple(sorted(registry.sources))
         self._grouping = PostgresFrozenRegistryGroupingRepository(connection, registry)
