@@ -206,16 +206,6 @@ def run_worker(database_url: str, config_root: Path, *, once: bool, idle_seconds
     return 0
 
 
-def _parse_timestamp(value: str) -> datetime:
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError as error:
-        raise argparse.ArgumentTypeError("expected an ISO-8601 timestamp") from error
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise argparse.ArgumentTypeError("timestamp must be timezone-aware")
-    return parsed
-
-
 def _freeze_path(config_root: Path, value: Path) -> Path:
     return value if value.is_absolute() else config_root / value
 
@@ -241,7 +231,6 @@ def run_pef_shadow_worker(
     config_root: Path,
     *,
     freeze_receipt_path: Path,
-    durable_freeze_at: datetime,
     once: bool,
     idle_seconds: float,
 ) -> int:
@@ -251,8 +240,8 @@ def run_pef_shadow_worker(
         PostgresCandidateFreezeRepository,
         PostgresPefArtifactRepository,
     )
-    from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligenceRepository
     from frontier.adapters.postgres.prospective_shadow import (
+        PostgresProspectiveBaselineIntelligenceRepository,
         PostgresProspectiveShadowRunRepository,
     )
     from frontier.adapters.postgres.readiness import verify_database_readiness
@@ -261,23 +250,38 @@ def run_pef_shadow_worker(
         raise ValueError("idle_seconds must be positive")
     receipt_path = _freeze_path(config_root, freeze_receipt_path)
     receipt = load_candidate_freeze_receipt(receipt_path)
-    start = first_confirmatory_boundary(durable_freeze_at)
-    end = confirmatory_window_end(durable_freeze_at)
+    publication = require_runtime_freeze_material(
+        config_root,
+        receipt,
+        receipt_path=receipt_path,
+    )
+    registry = load_source_registry(config_root)
+    start = first_confirmatory_boundary(publication.committed_at)
+    end = confirmatory_window_end(publication.committed_at)
 
     with psycopg.connect(database_url) as conn:
         verify_database_readiness(conn)
-        baseline = PostgresBaselineIntelligenceRepository(conn)
+        baseline = PostgresProspectiveBaselineIntelligenceRepository(conn, registry)
         pef = PostgresPefArtifactRepository(conn)
         shadow = PostgresProspectiveShadowRunRepository(conn)
         freeze = PostgresCandidateFreezeRepository(conn)
+        shadow.record_window_binding(
+            candidate_freeze_receipt_id=receipt.receipt_id,
+            durable_freeze_commit=publication.commit,
+            durable_freeze_at=publication.committed_at,
+            window_start=start,
+            window_end=end,
+        )
+        conn.commit()
 
         while True:
-            require_runtime_freeze_material(
+            current_publication = require_runtime_freeze_material(
                 config_root,
                 receipt,
                 receipt_path=receipt_path,
             )
-            registry = load_source_registry(config_root)
+            if current_publication != publication:
+                raise RuntimeError("durable freeze publication authority changed during execution")
             existing = shadow.bound_run_boundaries(
                 candidate_freeze_receipt_id=receipt.receipt_id,
                 start=start,
@@ -285,7 +289,7 @@ def run_pef_shadow_worker(
             )
             now = datetime.now(UTC)
             due = due_confirmatory_boundaries(
-                durable_freeze_at=durable_freeze_at,
+                durable_freeze_at=publication.committed_at,
                 now=now,
                 existing_boundaries=existing,
             )
@@ -297,11 +301,12 @@ def run_pef_shadow_worker(
                     shadow_repository=shadow,
                     freeze_repository=freeze,
                     freeze_receipt=receipt,
-                    durable_freeze_at=durable_freeze_at,
+                    durable_freeze_at=publication.committed_at,
                     as_of=boundary,
                     generated_at=now,
                     source_registry_version=registry.source_registry_version,
                 )
+                conn.commit()
                 print(json.dumps(_shadow_payload(result), sort_keys=True), flush=True)
                 if result.execution.run.status is ShadowRunStatus.FAILED:
                     return 2
@@ -309,11 +314,14 @@ def run_pef_shadow_worker(
                     return 0
                 continue
 
+            conn.rollback()
             if once:
                 print(
                     json.dumps(
                         {
                             "candidate_freeze_receipt_id": receipt.receipt_id,
+                            "durable_freeze_at": publication.committed_at.isoformat(),
+                            "durable_freeze_commit": publication.commit,
                             "next_window_end": end.isoformat(),
                             "status": "NO_DUE_BOUNDARY",
                             "window_start": start.isoformat(),
@@ -368,7 +376,6 @@ def main() -> int:
     pef_shadow.add_argument("--database-url")
     pef_shadow.add_argument("--config-root", type=Path, default=Path("."))
     pef_shadow.add_argument("--freeze-receipt", type=Path, required=True)
-    pef_shadow.add_argument("--durable-freeze-at", type=_parse_timestamp, required=True)
     pef_shadow.add_argument("--once", action="store_true")
     pef_shadow.add_argument("--idle-seconds", type=float, default=5.0)
 
@@ -387,7 +394,6 @@ def main() -> int:
             database_url,
             args.config_root,
             freeze_receipt_path=args.freeze_receipt,
-            durable_freeze_at=args.durable_freeze_at,
             once=args.once,
             idle_seconds=args.idle_seconds,
         )
