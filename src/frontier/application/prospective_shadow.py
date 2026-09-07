@@ -97,7 +97,7 @@ def load_candidate_freeze_receipt(path: Path) -> CandidateFreezeReceipt:
     """Load an immutable canonical candidate-freeze receipt fail-closed."""
     try:
         raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
-    except OSError, UnicodeDecodeError, json.JSONDecodeError as error:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError(f"unable to load candidate freeze receipt: {path}") from error
     if not isinstance(raw, dict):
         raise ValueError("candidate freeze receipt must be a JSON object")
