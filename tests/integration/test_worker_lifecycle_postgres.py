@@ -137,16 +137,18 @@ def test_heartbeat_upsert_writes_single_mutable_row() -> None:
         )
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT count(*), max(beat_at), min(metrics) FROM worker_heartbeats "
-                "WHERE worker_id = %s",
+                "SELECT count(*), max(beat_at) FROM worker_heartbeats WHERE worker_id = %s",
                 (worker_id,),
             )
             row = cur.fetchone()
-        assert row is not None
-        count, beat_at, metrics = row
-        assert count == 1  # upsert, never accumulate
-        assert beat_at == second_at  # type: ignore[operator]
-        assert metrics == {"cycle_duration_ms": 2.0}
+            assert row is not None
+            count, beat_at = row
+            assert count == 1  # upsert, never accumulate
+            assert beat_at == second_at
+            cur.execute("SELECT metrics FROM worker_heartbeats WHERE worker_id = %s", (worker_id,))
+            metrics_row = cur.fetchone()
+            assert metrics_row is not None
+            assert metrics_row[0] == {"cycle_duration_ms": 2.0}
     finally:
         conn.close()
 

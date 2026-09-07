@@ -136,7 +136,10 @@ class PostgresExperimentalReadRepository:
                    control_snapshot_id, control_receipt_id, schema_version,
                    algorithm_version, ranking_policy_version,
                    configuration_digest, authority_state, failure_reason,
-                   artifact_json->>'generated_at',
+                   COALESCE(
+                       artifact_json->>'generated_at',
+                       to_char(as_of AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+                   ),
                    artifact_json->>'experiment_id',
                    artifact_json->>'candidate_id',
                    CASE WHEN status = 'RAN'

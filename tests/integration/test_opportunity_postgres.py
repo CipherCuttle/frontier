@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -74,7 +75,10 @@ def test_postgres_opportunity_state_is_append_only_and_idempotent() -> None:
             started_at=retrieved_at,
         )
         evidence.start_collection_run(run)
-        observation, inserted = evidence.append_observation(batch.candidates[0], run.run_id)
+        # The HN normalizer hardcodes its registry source id; rebind the
+        # candidate to the fixture source so the FK holds on a fresh database.
+        candidate = replace(batch.candidates[0], source_id=source.source_id)
+        observation, inserted = evidence.append_observation(candidate, run.run_id)
         assert inserted
 
         anchor = _build_anchor(observation.observation_id, observation.observed_at)

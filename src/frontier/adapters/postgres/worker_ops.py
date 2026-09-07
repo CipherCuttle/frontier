@@ -20,7 +20,11 @@ from frontier.adapters.acquisition.config import SourceRegistry
 # Dedicated singleton lease key derived from a stable constant name. Session
 # advisory locks are Postgres-native (D002/ADR-0011: no Redis, no Kafka).
 WORKER_LEASE_NAME = "frontier-worker-lease"
-WORKER_LEASE_KEY = int.from_bytes(hashlib.sha256(WORKER_LEASE_NAME.encode()).digest()[:8], "big")
+# pg_try_advisory_lock takes a SIGNED 64-bit key; mask the digest-derived
+# value into the bigint range so psycopg always binds it as an integer
+# (an unsigned value that exceeds bigint binds as numeric and fails).
+_DIGEST_KEY = int.from_bytes(hashlib.sha256(WORKER_LEASE_NAME.encode()).digest()[:8], "big")
+WORKER_LEASE_KEY = _DIGEST_KEY & ((1 << 63) - 1)
 
 ConnectionT = psycopg.Connection[tuple[object, ...]]
 
@@ -33,6 +37,11 @@ class PostgresWorkerLease:
         self._owner: str | None = None
 
     def acquire(self, *, owner: str) -> bool:
+        # Session advisory locks STACK: re-acquiring while this lease already
+        # holds the singleton must stay a no-op, otherwise a later release
+        # would leave the lock held by this session forever.
+        if self._owner == owner:
+            return True
         with self._connection.cursor() as cur:
             cur.execute("SELECT pg_try_advisory_lock(%s)", (WORKER_LEASE_KEY,))
             row = cur.fetchone()
@@ -48,13 +57,10 @@ class PostgresWorkerLease:
         if self._owner is not None and self._owner != owner:
             return
         with self._connection.cursor() as cur:
-            cur.execute(
-                "SELECT pg_advisory_unlock(%s) WHERE pg_try_advisory_lock(%s)",
-                (WORKER_LEASE_KEY, WORKER_LEASE_KEY),
-            )
+            cur.execute("SELECT pg_advisory_unlock(%s)", (WORKER_LEASE_KEY,))
             row = cur.fetchone()
         self._connection.commit()
-        if row is not None and not bool(row[0]):
+        if row is None or not bool(row[0]):
             raise RuntimeError("worker lease release failed: lock not held")
         self._owner = None
 
@@ -142,7 +148,10 @@ def build_ops_status(
     indicators. No mutation, no evaluation recomputation.
     """
     with connection.cursor() as cur:
-        cur.execute("SELECT worker_id, role, beat_at, metrics FROM worker_heartbeats")
+        cur.execute(
+            "SELECT worker_id, role, beat_at, metrics FROM worker_heartbeats "
+            "ORDER BY beat_at DESC, worker_id"
+        )
         heartbeats = [
             {
                 "worker_id": cast(str, row[0]),
