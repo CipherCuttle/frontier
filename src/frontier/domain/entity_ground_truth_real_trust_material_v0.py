@@ -528,6 +528,7 @@ def provenance_node_id(node: JsonObject) -> str:
 def _validate_provenance(
     manifest_value: object,
     *,
+    expected_upstream_equivalence_by_content_digest: Mapping[str, str],
     backend: OfflineVerificationBackend,
     as_of: datetime,
 ) -> set[str] | None:
@@ -542,8 +543,14 @@ def _validate_provenance(
     raw_bindings = _array(manifest.get("evidence_bindings"))
     if raw_nodes is None or raw_bindings is None or not raw_nodes or not raw_bindings:
         return None
+    if not expected_upstream_equivalence_by_content_digest or any(
+        not _valid_digest(content_digest) or not _valid_digest(equivalence)
+        for content_digest, equivalence in expected_upstream_equivalence_by_content_digest.items()
+    ):
+        return None
 
     nodes: dict[str, JsonObject] = {}
+    terminal_content_digests: set[str] = set()
     for raw_node in raw_nodes:
         node = _object(raw_node)
         if node is None or set(node) != {
@@ -558,7 +565,8 @@ def _validate_provenance(
         }:
             return None
         node_id = node.get("node_id")
-        if not _valid_digest(node_id) or not _valid_digest(node.get("content_digest")):
+        content_digest = node.get("content_digest")
+        if not _valid_digest(node_id) or not _valid_digest(content_digest):
             return None
         if node_id != provenance_node_id(node) or node_id in nodes:
             return None
@@ -569,6 +577,14 @@ def _validate_provenance(
         if not parents:
             if not _valid_digest(equivalence):
                 return None
+            content_digest_str = cast(str, content_digest)
+            equivalence_str = cast(str, equivalence)
+            expected_equivalence = expected_upstream_equivalence_by_content_digest.get(
+                content_digest_str
+            )
+            if expected_equivalence is None or equivalence_str != expected_equivalence:
+                return None
+            terminal_content_digests.add(content_digest_str)
             root_material = _decode_base64url(node.get("root_verification_material_b64u"))
             if root_material is None or node.get(
                 "root_verification_material_sha256"
@@ -582,8 +598,8 @@ def _validate_provenance(
             if (
                 root_payload
                 != {
-                    "content_digest": node.get("content_digest"),
-                    "upstream_equivalence_commitment": equivalence,
+                    "content_digest": content_digest_str,
+                    "upstream_equivalence_commitment": equivalence_str,
                     "terminal_upstream": True,
                 }
                 or root_proof is None
@@ -610,6 +626,9 @@ def _validate_provenance(
         ):
             return None
         nodes[cast(str, node_id)] = node
+
+    if set(expected_upstream_equivalence_by_content_digest) != terminal_content_digests:
+        return None
 
     for node in nodes.values():
         parents = _array(node["parents"])
@@ -679,8 +698,11 @@ def _validate_provenance(
         if parents is None:
             return None
         if not parents:
-            equivalence = nodes[node_id].get("upstream_equivalence_commitment")
-            if not isinstance(equivalence, str):
+            content_digest = nodes[node_id].get("content_digest")
+            if not isinstance(content_digest, str):
+                return None
+            equivalence = expected_upstream_equivalence_by_content_digest.get(content_digest)
+            if equivalence is None:
                 return None
             result = {equivalence}
         else:
@@ -847,6 +869,7 @@ def validate_real_trust_material_candidate(
     *,
     expected_current_authority_head_digest: str,
     expected_pop_challenges: Mapping[str, bytes],
+    expected_upstream_equivalence_by_content_digest: Mapping[str, str],
     backend: OfflineVerificationBackend,
     as_of: datetime,
 ) -> MaterialCandidateValidation:
@@ -942,6 +965,9 @@ def validate_real_trust_material_candidate(
 
     roots = _validate_provenance(
         obj.get("origin_provenance_manifest"),
+        expected_upstream_equivalence_by_content_digest=(
+            expected_upstream_equivalence_by_content_digest
+        ),
         backend=backend,
         as_of=as_of,
     )
