@@ -111,8 +111,14 @@ def test_repair_requires_versioned_v2_freeze_before_conformance() -> None:
     requirements = set(_array(required["requirements"], "requirements"))
     assert {
         "preserve the v1 authority/corpus/blob identities unchanged as historical artifacts",
-        "freeze a v2 builder or complete declarative builder specification with its own immutable content identity",
-        "independently recompute every v2 expected packet digest from the frozen builder/specification in CI",
+        (
+            "freeze a v2 builder or complete declarative builder specification with its own "
+            "immutable content identity"
+        ),
+        (
+            "independently recompute every v2 expected packet digest from the frozen "
+            "builder/specification in CI"
+        ),
         "leave entity quality exactly INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
     }.issubset(requirements)
 
