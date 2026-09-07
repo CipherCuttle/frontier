@@ -335,12 +335,27 @@ class PostgresShadowRunRepository:
 
 
 class PostgresCandidateFreezeRepository:
-    """Append-only persistence for candidate freeze receipts (R8)."""
+    """Append-only persistence for candidate freeze receipts (R8).
 
-    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
+    Writes are fail-closed by default. Read-only callers may construct the
+    repository normally, but any code path that persists a candidate freeze
+    must opt in explicitly after its own human/operator authorization gate.
+    This keeps the safety boundary below the CLI so a future non-CLI caller
+    cannot accidentally persist a real freeze merely by reaching this adapter.
+    """
+
+    def __init__(
+        self,
+        connection: psycopg.Connection[tuple[object, ...]],
+        *,
+        persistence_authorized: bool = False,
+    ) -> None:
         self._connection = connection
+        self._persistence_authorized = persistence_authorized
 
     def record_receipt(self, receipt: CandidateFreezeReceipt) -> None:
+        if not self._persistence_authorized:
+            raise PermissionError("candidate freeze persistence is not authorized")
         if receipt.candidate_id != PEF_CANDIDATE_ID:
             raise ValueError("candidate freeze receipt candidate id mismatch")
         if receipt.experiment_id != PEF_EXPERIMENT_ID:

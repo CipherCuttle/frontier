@@ -534,7 +534,7 @@ def freeze_derive(
 
     with psycopg.connect(database_url) as conn:
         verify_database_readiness(conn)
-        PostgresCandidateFreezeRepository(conn).record_receipt(receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(receipt)
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT durable_freeze_at FROM candidate_freeze_receipts WHERE receipt_id = %s",
