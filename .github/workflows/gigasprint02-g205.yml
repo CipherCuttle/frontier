@@ -36,6 +36,8 @@ jobs:
         with:
           version: "0.12.10"
       - run: uv sync --all-extras --frozen
+      - name: Repair guarded patch targeting
+        run: uv run python scripts/gigasprint02_g205_patch_repair.py
       - name: Apply G2-05
         run: uv run python scripts/gigasprint02_g205_patch.py
       - name: Verify G2-05
@@ -48,7 +50,7 @@ jobs:
       - name: Commit G2-05 and remove temporary runner
         shell: bash
         run: |
-          rm .github/workflows/gigasprint02-g205.yml scripts/gigasprint02_g205_patch.py
+          rm .github/workflows/gigasprint02-g205.yml scripts/gigasprint02_g205_patch.py scripts/gigasprint02_g205_patch_repair.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
