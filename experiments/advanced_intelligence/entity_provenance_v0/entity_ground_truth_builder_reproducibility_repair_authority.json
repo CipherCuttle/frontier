@@ -1,0 +1,87 @@
+{
+  "schema_version": "frontier-entity-ground-truth-builder-reproducibility-repair-authority-v0",
+  "phase_id": "ENTITY_GROUND_TRUTH_BUILDER_REPRODUCIBILITY_REPAIR_V0",
+  "authority_state": "FROZEN_REPRODUCIBILITY_REPAIR_AUTHORITY_CANDIDATE",
+  "parent_main_commit": "0d30b076cde0439bbd70f1d9390b6d7c5dff5c03",
+  "lineage": {
+    "entity_ground_truth_authority_merge_commit": "3449f642aaaa757cf93585a63f997eae059c3463",
+    "entity_ground_truth_final_reviewed_head": "fac5008898cd2875aa3c7a86fdde689d96da3e10",
+    "v1_authority_path": "experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_authority.json",
+    "v1_authority_git_blob_sha1": "4aa25903a9f8ee6d016111bbe48483661f327a79",
+    "v1_corpus_path": "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v0.json",
+    "v1_corpus_schema_version": "frontier-entity-ground-truth-protocol-corpus-v1",
+    "v1_corpus_git_blob_sha1": "664a86962b73bd1aae11feea25e41adbfbf5899a",
+    "v1_corpus_introducing_commit": "955b40d374e7ddc31337f70b89fe4456143adf3f"
+  },
+  "defect": {
+    "status": "BLOCKED_MISSING_FROZEN_BUILDER",
+    "finding": "The v1 corpus commits expected_packet_digest values and says cases expand using a frozen governance builder, but the merged repository contains no persisted builder/reference implementation or complete declarative packet-construction specification capable of reproducing those exact packets.",
+    "missing_frozen_elements": [
+      "complete expanded packet schema",
+      "deterministic base-vector-to-packet construction algorithm",
+      "default synthetic receipt payloads and construction order",
+      "synthetic signature construction and verification algorithm",
+      "default service sequence and timestamp rules",
+      "exact mutation application semantics against the expanded packet",
+      "content-addressing order for nested receipts/manifests",
+      "a content identity for the builder/specification itself"
+    ],
+    "scientific_consequence": "The 24 expected packet digests are commitments without a reproducible pre-frozen construction rule. Inventing a builder after the v1 freeze could fit or replace those commitments post hoc and therefore cannot count as prospective protocol validation."
+  },
+  "v1_preservation": {
+    "edit_v1_corpus_in_place": false,
+    "reinterpret_v1_expected_packet_digests": false,
+    "claim_v1_builder_reproduced_without_evidence": false,
+    "historical_v1_artifacts_remain_immutable": true
+  },
+  "implementation_gate": {
+    "v1_offline_packet_expander_conformance_authorized": false,
+    "v1_expected_packet_digest_conformance_claim_authorized": false,
+    "real_label_collection_authorized": false,
+    "candidate_quality_metrics_authorized": false,
+    "candidate_quality_pass_fail_authorized": false,
+    "candidate_promotion_authorized": false,
+    "canonical_entity_truth_authorized": false,
+    "persistence_authorized": false,
+    "migration_authorized": false,
+    "worker_scheduler_authorized": false,
+    "api_authorized": false,
+    "terminal_authorized": false,
+    "source_registry_change_authorized": false,
+    "ranking_change_authorized": false
+  },
+  "required_repair": {
+    "strategy": "VERSIONED_V2_PROTOCOL_FREEZE",
+    "requirements": [
+      "preserve the v1 authority/corpus/blob identities unchanged as historical artifacts",
+      "freeze a v2 builder or complete declarative builder specification with its own immutable content identity",
+      "freeze the complete expanded synthetic packet schema before validator conformance is claimed",
+      "freeze all synthetic cryptographic/signature test algorithms and test-only trust-root identities",
+      "freeze deterministic default timestamps, service sequences, construction order, and nested digest/signature ordering",
+      "freeze exact ordered mutation semantics for every hostile operation",
+      "generate a versioned v2 hostile corpus whose expected packet digests are computed by the frozen builder/specification",
+      "retain at least the 24 existing scientific attack categories unless an explicitly reviewed replacement is stronger",
+      "independently recompute every v2 expected packet digest from the frozen builder/specification in CI",
+      "keep all synthetic keys/roots TEST ONLY and incapable of authorizing real labels",
+      "leave entity quality exactly INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+      "grant no accuracy/precision/recall/PASS/FAIL/promotion/canonical-truth authority"
+    ]
+  },
+  "allowed_after_repair_authority_merge": {
+    "prepare_v2_builder_specification_candidate": true,
+    "prepare_v2_synthetic_corpus_candidate": true,
+    "prepare_v2_reproducibility_tests": true,
+    "runtime_validator_conformance_claim": false,
+    "real_world_label_collection": false,
+    "candidate_quality_evaluation": false
+  },
+  "closure": {
+    "required": [
+      "one bounded hostile review confirms the missing-builder defect and versioned-repair strategy",
+      "Critical/High findings are repaired under the standard bounded completion policy",
+      "full repository CI passes",
+      "merge leaves v1 unchanged and leaves all scientific quality/promotion states unchanged"
+    ],
+    "next_if_closed": "Freeze the v2 deterministic builder/specification, synthetic packet schema, versioned hostile corpus, and independent reproducibility tests before implementing or claiming offline validator conformance."
+  }
+}
