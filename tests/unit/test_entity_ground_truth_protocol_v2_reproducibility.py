@@ -380,9 +380,7 @@ def _expand_case(
             "unseal_receipt": unseal_receipt,
         },
         "label_bundle": label_bundle,
-        "non_escalation": cast(
-            dict[str, Any], copy.deepcopy(spec["non_escalation"])
-        ),
+        "non_escalation": cast(dict[str, Any], copy.deepcopy(spec["non_escalation"])),
     }
 
 
