@@ -33,7 +33,7 @@
     },
     "independent_recomputation_test": {
       "path": "tests/unit/test_entity_ground_truth_protocol_v2_reproducibility.py",
-      "git_blob_sha1": "3d0646d8fdf40c7abb6dc2a1578844ebe0888d58",
+      "git_blob_sha1": "ee03950d85d2258e0ee515a71c0ad9ce73b45529",
       "requirement": "CI independently reconstructs every complete expanded packet from the frozen v2 builder specification plus corpus and requires exact equality with all 24 expected_packet_digest commitments."
     }
   },
