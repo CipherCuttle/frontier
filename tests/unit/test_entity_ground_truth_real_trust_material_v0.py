@@ -343,11 +343,29 @@ def _refresh_bundle_identity(bundle: JsonObject) -> str:
     return digest
 
 
+def _test_expected_upstream_equivalence_by_content_digest(bundle: JsonObject) -> dict[str, str]:
+    """Derive positive-fixture expectations only; production callers must supply these independently."""
+
+    manifest = _obj(bundle["origin_provenance_manifest"])
+    expected: dict[str, str] = {}
+    for raw_node in _list(manifest["nodes"]):
+        node = _obj(raw_node)
+        parents = node.get("parents")
+        if not isinstance(parents, list) or parents:
+            continue
+        content_digest = node.get("content_digest")
+        equivalence = node.get("upstream_equivalence_commitment")
+        if isinstance(content_digest, str) and isinstance(equivalence, str):
+            expected.setdefault(content_digest, equivalence)
+    return expected
+
+
 def _validate(
     bundle: JsonObject,
     *,
     expected_current_authority_head_digest: str | None = None,
     expected_pop_challenges: dict[str, bytes] | None = None,
+    expected_upstream_equivalence_by_content_digest: dict[str, str] | None = None,
     backend: FakeOfflineBackend | None = None,
     as_of: datetime | None = None,
 ):
@@ -363,6 +381,11 @@ def _validate(
             dict(DEFAULT_POP_CHALLENGES)
             if expected_pop_challenges is None
             else expected_pop_challenges
+        ),
+        expected_upstream_equivalence_by_content_digest=(
+            _test_expected_upstream_equivalence_by_content_digest(bundle)
+            if expected_upstream_equivalence_by_content_digest is None
+            else expected_upstream_equivalence_by_content_digest
         ),
         backend=FakeOfflineBackend() if backend is None else backend,
         as_of=datetime(2026, 9, 7, 12, 0, tzinfo=UTC) if as_of is None else as_of,
@@ -569,6 +592,41 @@ def test_re_attested_same_upstream_equivalence_collapses_to_one_origin() -> None
     _refresh_bundle_identity(candidate)
 
     result = _validate(candidate)
+
+    assert result.status is MaterialCandidateStatus.REJECT
+    assert "origin-provenance-independence" in result.violations
+
+
+def test_conflicting_re_attestation_for_identical_terminal_content_fails_closed() -> None:
+    candidate = _candidate()
+    expected_mapping = _test_expected_upstream_equivalence_by_content_digest(candidate)
+    manifest = _obj(candidate["origin_provenance_manifest"])
+    nodes = _list(manifest["nodes"])
+    root_a = _obj(nodes[0])
+    root_b = _obj(nodes[1])
+
+    # Re-attest the exact same terminal content under root B's different equivalence commitment.
+    # The candidate remains internally signed/content-addressed, but the independent caller mapping
+    # still binds this content digest to root A's canonical equivalence commitment.
+    root_b["content_digest"] = root_a["content_digest"]
+    attestation = _obj(root_b["root_attestation"])
+    payload = _obj(attestation["payload"])
+    payload["content_digest"] = root_a["content_digest"]
+    root_b["root_attestation_digest"] = object_digest(attestation)
+    old_root_b_id = str(root_b["node_id"])
+    root_b["node_id"] = provenance_node_id(root_b)
+    bindings = _list(manifest["evidence_bindings"])
+    for raw_binding in bindings:
+        binding = _obj(raw_binding)
+        if binding["node_id"] == old_root_b_id:
+            binding["node_id"] = root_b["node_id"]
+    manifest["manifest_digest"] = object_digest({"nodes": nodes, "evidence_bindings": bindings})
+    _refresh_bundle_identity(candidate)
+
+    result = _validate(
+        candidate,
+        expected_upstream_equivalence_by_content_digest=expected_mapping,
+    )
 
     assert result.status is MaterialCandidateStatus.REJECT
     assert "origin-provenance-independence" in result.violations
