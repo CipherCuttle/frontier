@@ -8,26 +8,19 @@ from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER_PATH = (
-    ROOT
-    / "experiments/advanced_intelligence/entity_provenance_v0/"
+    ROOT / "experiments/advanced_intelligence/entity_provenance_v0/"
     "entity_ground_truth_protocol_builder_v2.json"
 )
 SCHEMA_PATH = (
-    ROOT
-    / "experiments/advanced_intelligence/entity_provenance_v0/"
+    ROOT / "experiments/advanced_intelligence/entity_provenance_v0/"
     "entity_ground_truth_expanded_packet_v2.schema.json"
 )
-CORPUS_PATH = (
-    ROOT
-    / "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v2.json"
-)
+CORPUS_PATH = ROOT / "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v2.json"
 V1_AUTHORITY_PATH = (
     ROOT
     / "experiments/advanced_intelligence/entity_provenance_v0/entity_ground_truth_authority.json"
 )
-V1_CORPUS_PATH = (
-    ROOT / "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v0.json"
-)
+V1_CORPUS_PATH = ROOT / "fixtures/entity_provenance/entity_ground_truth_protocol_corpus_v0.json"
 
 EXPECTED_V1_AUTHORITY_BLOB = "4aa25903a9f8ee6d016111bbe48483661f327a79"
 EXPECTED_V1_CORPUS_BLOB = "664a86962b73bd1aae11feea25e41adbfbf5899a"
@@ -144,17 +137,13 @@ def _expand_case(
         elif op == "SHARE_ORIGIN_ROOT":
             source_id = mutation["source_evidence_id"]
             target_id = mutation["target_evidence_id"]
-            evidence_map[target_id]["origin_root_id"] = (
-                evidence_map[source_id]["origin_root_id"]
-            )
+            evidence_map[target_id]["origin_root_id"] = evidence_map[source_id]["origin_root_id"]
         elif op == "ADD_CANDIDATE_DEPENDENCY":
-            evidence_map[mutation["evidence_id"]][
-                "candidate_dependency_digests"
-            ].append(boundary_digest)
+            evidence_map[mutation["evidence_id"]]["candidate_dependency_digests"].append(
+                boundary_digest
+            )
         elif op == "REMOVE_RAW_SNAPSHOT_DIGEST":
-            evidence_map[mutation["evidence_id"]][
-                "force_null_raw_snapshot_digest"
-            ] = True
+            evidence_map[mutation["evidence_id"]]["force_null_raw_snapshot_digest"] = True
         elif op == "SET_LABEL":
             labels[mutation["adjudicator_index"]] = mutation["label"]
         elif op == "SET_SUBJECT_EQUAL":
@@ -216,8 +205,7 @@ def _expand_case(
             raw_snapshot_digest = None
 
         origin_payload = {
-            "schema_version":
-                "frontier-entity-ground-truth-origin-receipt-v2",
+            "schema_version": "frontier-entity-ground-truth-origin-receipt-v2",
             "evidence_id": evidence_id,
             "origin_root_id": evidence["origin_root_id"],
             "captured_at": raw_snapshot["captured_at"],
@@ -229,9 +217,7 @@ def _expand_case(
                 "evidence_id": evidence_id,
                 "raw_snapshot": raw_snapshot,
                 "raw_snapshot_digest": raw_snapshot_digest,
-                "candidate_dependency_digests": list(
-                    evidence["candidate_dependency_digests"]
-                ),
+                "candidate_dependency_digests": list(evidence["candidate_dependency_digests"]),
                 "origin_receipt": _signed(origin_payload, keys["origin"]),
             }
         )
@@ -246,9 +232,7 @@ def _expand_case(
 
     if leaks and rendered_items:
         for signal_class in leaks:
-            rendered_items[0]["excerpt"] += (
-                f"\nLEAK::{signal_class}={boundary[signal_class]}"
-            )
+            rendered_items[0]["excerpt"] += f"\nLEAK::{signal_class}={boundary[signal_class]}"
 
     rendered_digest = _digest(rendered_items)
     rendered_text = json.dumps(
@@ -262,8 +246,7 @@ def _expand_case(
         if str(boundary[signal_class]) in rendered_text
     ]
     redaction_payload = {
-        "schema_version":
-            "frontier-entity-ground-truth-redaction-receipt-v2",
+        "schema_version": "frontier-entity-ground-truth-redaction-receipt-v2",
         "candidate_signal_boundary_digest": boundary_digest,
         "rendered_view_digest": rendered_digest,
         "scanned_signal_classes": signal_classes,
@@ -288,8 +271,7 @@ def _expand_case(
     if not empty_adjudication:
         for index in range(2):
             identity_payload = {
-                "schema_version":
-                    "frontier-entity-ground-truth-identity-receipt-v2",
+                "schema_version": "frontier-entity-ground-truth-identity-receipt-v2",
                 "subject_id": subject_ids[index],
                 "verified_unique_person": True,
                 "human": True,
@@ -297,9 +279,7 @@ def _expand_case(
                 "verifier": "TEST_ONLY_UNIQUE_PERSON_VERIFIER_V2",
                 "synthetic_only": True,
             }
-            identity_receipts.append(
-                _signed(identity_payload, keys["identity"])
-            )
+            identity_receipts.append(_signed(identity_payload, keys["identity"]))
 
         for index in range(2):
             if assessments_mode == "CONFLICTING":
@@ -307,9 +287,7 @@ def _expand_case(
                     {
                         "evidence_id": evidence_id,
                         "assessment": (
-                            "SUPPORTS_SAME"
-                            if evidence_id == "E1"
-                            else "SUPPORTS_DIFFERENT"
+                            "SUPPORTS_SAME" if evidence_id == "E1" else "SUPPORTS_DIFFERENT"
                         ),
                     }
                     for evidence_id in sorted(evidence_map)
@@ -324,8 +302,7 @@ def _expand_case(
                 ]
 
             submission_payload = {
-                "schema_version":
-                    "frontier-entity-ground-truth-sealed-submission-v2",
+                "schema_version": "frontier-entity-ground-truth-sealed-submission-v2",
                 "submission_id": f"{case_id}-SUB-{index + 1}",
                 "subject_id": subject_ids[index],
                 "origin": origins[index],
@@ -336,18 +313,14 @@ def _expand_case(
                 "peer_label_visible": False,
                 "synthetic_only": True,
             }
-            submissions.append(
-                _signed(submission_payload, keys["submission"])
-            )
+            submissions.append(_signed(submission_payload, keys["submission"]))
 
     unseal_payload = {
         "schema_version": "frontier-entity-ground-truth-unseal-receipt-v2",
         "case_id": case_id,
         "sequence_no": sequences_fixed["unseal"],
         "unsealed_at": times["unseal_at"],
-        "submission_digests": [
-            submission["digest"] for submission in submissions
-        ],
+        "submission_digests": [submission["digest"] for submission in submissions],
         "service": "TEST_ONLY_SEALED_SUBMISSION_SERVICE_V2",
         "synthetic_only": True,
     }
@@ -359,13 +332,9 @@ def _expand_case(
         "predecessor_digest": None,
         "case_id": case_id,
         "sample_manifest_digest": sample_manifest["digest"],
-        "submission_digests": [
-            submission["digest"] for submission in submissions
-        ],
+        "submission_digests": [submission["digest"] for submission in submissions],
         "unseal_receipt_digest": unseal_receipt["digest"],
-        "labels": [
-            submission["payload"]["label"] for submission in submissions
-        ],
+        "labels": [submission["payload"]["label"] for submission in submissions],
         "durable_at": times["bundle_durable_at"],
         "synthetic_only": True,
     }
@@ -378,17 +347,14 @@ def _expand_case(
 
     for mutation in case["mutations"]:
         if mutation["op"] == "MUTATE_LABEL_BUNDLE_AFTER_DIGEST":
-            label_bundle["payload"]["version"] = (
-                "synthetic-v2.0.0-mutated"
-            )
+            label_bundle["payload"]["version"] = "synthetic-v2.0.0-mutated"
 
     return {
         "schema_version": "frontier-entity-ground-truth-expanded-packet-v2",
         "protocol_id": "ENTITY_GROUND_TRUTH_PROTOCOL_V2",
         "case_id": case_id,
         "synthetic_only": True,
-        "builder_spec_payload_digest":
-            corpus["builder_spec_payload_digest"],
+        "builder_spec_payload_digest": corpus["builder_spec_payload_digest"],
         "packet_schema_digest": schema_digest,
         "internal_candidate_signal_boundary": {
             "payload": boundary_payload,
@@ -414,9 +380,7 @@ def test_v2_builder_and_schema_are_content_addressed() -> None:
 
     spec_payload = builder["spec_payload"]
     assert _digest(spec_payload) == builder["spec_payload_digest"]
-    assert builder["spec_payload_digest"] == (
-        corpus["builder_spec_payload_digest"]
-    )
+    assert builder["spec_payload_digest"] == (corpus["builder_spec_payload_digest"])
     assert _digest(schema) == corpus["packet_schema_digest"]
 
 
@@ -433,9 +397,7 @@ def test_v2_corpus_preserves_24_attack_categories_and_non_escalation() -> None:
     assert corpus["synthetic_only"] is True
 
     scientific = corpus["scientific_contract"]
-    assert scientific["quality_state"] == (
-        "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH"
-    )
+    assert scientific["quality_state"] == ("INSUFFICIENT_INDEPENDENT_GROUND_TRUTH")
     forbidden = [
         "runtime_validator_conformance_authorized",
         "real_label_collection_authorized",
@@ -469,14 +431,10 @@ def test_test_only_crypto_cannot_be_mistaken_for_real_authority() -> None:
     spec = builder["spec_payload"]
     crypto = spec["test_mac"]
 
-    assert crypto["security_status"] == (
-        "TEST_ONLY_NOT_A_REAL_SIGNATURE_SCHEME"
-    )
+    assert crypto["security_status"] == ("TEST_ONLY_NOT_A_REAL_SIGNATURE_SCHEME")
     assert crypto["real_label_authority"] is False
     for key in crypto["keys"].values():
         assert key["key_id"].startswith("TEST_ONLY_")
 
-    assert spec["non_escalation"]["entity_quality"] == (
-        "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH"
-    )
+    assert spec["non_escalation"]["entity_quality"] == ("INSUFFICIENT_INDEPENDENT_GROUND_TRUTH")
     assert spec["non_escalation"]["real_label_collection_authorized"] is False
