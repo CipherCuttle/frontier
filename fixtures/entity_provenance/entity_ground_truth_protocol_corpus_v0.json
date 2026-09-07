@@ -1,0 +1,179 @@
+{
+  "base_vectors": {
+    "VALID_DIFFERENT": {
+      "evidence": {
+        "E1": {
+          "origin_root_seed": "independent-origin-a",
+          "raw_payload": {
+            "candidate_dependency_digests": [],
+            "captured_at": "2026-09-01T12:00:00Z",
+            "evidence_id": "E1",
+            "raw_content_digest": "sha256:e02dba5992522c42d1d1745fc968435de3c21c7f8c9cc85128e7904a8bbb43bc",
+            "schema_version": "frontier-external-evidence-snapshot-v1",
+            "source_locator": "archive://evidence/e1"
+          },
+          "rendered_fields": {
+            "excerpt": "A signed archival record describes the project history and control transition.",
+            "title": "Archived project record"
+          }
+        },
+        "E2": {
+          "origin_root_seed": "independent-origin-b",
+          "raw_payload": {
+            "candidate_dependency_digests": [],
+            "captured_at": "2026-09-01T12:00:00Z",
+            "evidence_id": "E2",
+            "raw_content_digest": "sha256:c035ccb858bd97c2cae5743dbb8d24b0925d254ebe69192e5e1d1dc39d1545f0",
+            "schema_version": "frontier-external-evidence-snapshot-v1",
+            "source_locator": "archive://evidence/e2"
+          },
+          "rendered_fields": {
+            "excerpt": "A separately captured release archive records matching historical control facts.",
+            "title": "Independent release archive"
+          }
+        }
+      },
+      "labels": [
+        "DIFFERENT_ENTITY",
+        "DIFFERENT_ENTITY"
+      ],
+      "pair_id": "PAIR-SYNTHETIC-002",
+      "sample_role": "EVALUATION_RANDOM"
+    },
+    "VALID_SAME": {
+      "evidence": {
+        "E1": {
+          "origin_root_seed": "independent-origin-a",
+          "raw_payload": {
+            "candidate_dependency_digests": [],
+            "captured_at": "2026-09-01T12:00:00Z",
+            "evidence_id": "E1",
+            "raw_content_digest": "sha256:e02dba5992522c42d1d1745fc968435de3c21c7f8c9cc85128e7904a8bbb43bc",
+            "schema_version": "frontier-external-evidence-snapshot-v1",
+            "source_locator": "archive://evidence/e1"
+          },
+          "rendered_fields": {
+            "excerpt": "A signed archival record describes the project history and control transition.",
+            "title": "Archived project record"
+          }
+        },
+        "E2": {
+          "origin_root_seed": "independent-origin-b",
+          "raw_payload": {
+            "candidate_dependency_digests": [],
+            "captured_at": "2026-09-01T12:00:00Z",
+            "evidence_id": "E2",
+            "raw_content_digest": "sha256:c035ccb858bd97c2cae5743dbb8d24b0925d254ebe69192e5e1d1dc39d1545f0",
+            "schema_version": "frontier-external-evidence-snapshot-v1",
+            "source_locator": "archive://evidence/e2"
+          },
+          "rendered_fields": {
+            "excerpt": "A separately captured release archive records matching historical control facts.",
+            "title": "Independent release archive"
+          }
+        }
+      },
+      "labels": [
+        "SAME_ENTITY",
+        "SAME_ENTITY"
+      ],
+      "pair_id": "PAIR-SYNTHETIC-001",
+      "sample_role": "EVALUATION_RANDOM"
+    }
+  },
+  "candidate_signal_boundary": {
+    "ALIAS_OF": "alias-target-synthetic-001",
+    "RENAMED_FROM": "renamed-from-synthetic-001",
+    "candidate_output": "SAME_ENTITY",
+    "candidate_reason": "native_id_match",
+    "canonical_url": "https://candidate.invalid/entity/001",
+    "entity_name": "Candidate Synthetic Entity",
+    "entity_type": "REPOSITORY",
+    "native_ids": "native:synthetic-001",
+    "source_item_key": "provider/item/synthetic-001"
+  },
+  "candidate_under_future_evaluation": "transparent-entity-hybrid-v0",
+  "canonical_digest_contract": {
+    "algorithm": "sha256",
+    "rule": "Every expanded object digest is recomputed from its explicit payload; stored status assertions are non-authoritative.",
+    "serialization": "UTF-8 canonical JSON: sorted object keys, compact separators, ensure_ascii=false"
+  },
+  "case_count": 24,
+  "cases": [
+    {
+      "base_vector": "VALID_SAME",
+      "category": "valid_same_random",
+      "expected": {"forbidden_claims": [], "headline_metric_eligible": true, "label_status": "ADJUDICATED_SAME_ENTITY", "packet_status": "ACCEPT", "quality_claim": null, "required_action": "ACCEPT_LABEL"},
+      "expected_packet_digest": "sha256:c1038016f703540f1d9deda4ec457cf1083555dbf1be498521bec1befff4ef5d",
+      "id": "EGT-001",
+      "mutations": []
+    },
+    {
+      "base_vector": "VALID_DIFFERENT",
+      "category": "valid_different_random",
+      "expected": {"forbidden_claims": [], "headline_metric_eligible": true, "label_status": "ADJUDICATED_DIFFERENT_ENTITY", "packet_status": "ACCEPT", "quality_claim": null, "required_action": "ACCEPT_LABEL"},
+      "expected_packet_digest": "sha256:4ac551b8f287a28125a104de0c9d97f44026e499bd8cf72504c631ffcf977b70",
+      "id": "EGT-002",
+      "mutations": []
+    },
+    {"base_vector":"VALID_SAME","category":"candidate_output_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_CANDIDATE_LEAK"},"expected_packet_digest":"sha256:aad898ebe59344acedea33e581f24faf192ea94715522ccb8cec36c8fd9adc23","id":"EGT-003","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["candidate_output"]}]},
+    {"base_vector":"VALID_SAME","category":"candidate_reason_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_CANDIDATE_LEAK"},"expected_packet_digest":"sha256:27887f94864f0b95d8296d936fe5249153cf24163aa283f28b339e7ae97bf7d9","id":"EGT-004","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["candidate_reason"]}]},
+    {"base_vector":"VALID_SAME","category":"native_id_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"expected_packet_digest":"sha256:7a8b18788fc63b45ff802b9f267eef9955f0915820fd4456c70196b2bdfa84a9","id":"EGT-005","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["native_ids"]}]},
+    {"base_vector":"VALID_SAME","category":"canonical_url_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"expected_packet_digest":"sha256:5d4a78f80a3f36ee2ca65368d4df4175fab04de12a0ec128c96c3ee9456210d7","id":"EGT-006","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["canonical_url"]}]},
+    {"base_vector":"VALID_SAME","category":"entity_name_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"expected_packet_digest":"sha256:733a80596caa5743e8a6c036b621f94b5ef86727686ed594f63de28b2aa934d3","id":"EGT-007","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["entity_name"]}]},
+    {"base_vector":"VALID_SAME","category":"entity_type_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"expected_packet_digest":"sha256:2c948bef260484acd1cc23ae404c2f2f1123c0b5a368b1c2671f46c5a5234b41","id":"EGT-008","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["entity_type"]}]},
+    {"base_vector":"VALID_SAME","category":"source_item_key_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"expected_packet_digest":"sha256:32ce862aebc7258ac477d5db60246f309498c26a79e538857f0847e5a24b14ac","id":"EGT-009","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["source_item_key"]}]},
+    {"base_vector":"VALID_SAME","category":"alias_relation_leak","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_FEATURE_LEAK"},"expected_packet_digest":"sha256:d8e6ceba56ccc394c303de51f2ba23f0f2bb26015417c2fca989866ea050e72a","id":"EGT-010","mutations":[{"op":"LEAK_SIGNAL","signal_classes":["ALIAS_OF","RENAMED_FROM"]}]},
+    {"base_vector":"VALID_SAME","category":"single_decisive_evidence","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_INSUFFICIENT_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"expected_packet_digest":"sha256:656734df52d15f248d33341ee48c307deb8ce27c494baf82a204eb277a003a4c","id":"EGT-011","mutations":[{"evidence_id":"E2","op":"DROP_EVIDENCE"}]},
+    {"base_vector":"VALID_SAME","category":"mirrored_evidence_not_independent","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_INSUFFICIENT_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"expected_packet_digest":"sha256:a8b5cf216f32ef52c3fc36e3ad0d3c235eacca4821d085557be758996fef5d81","id":"EGT-012","mutations":[{"op":"SHARE_ORIGIN_ROOT","source_evidence_id":"E1","target_evidence_id":"E2"}]},
+    {"base_vector":"VALID_SAME","category":"candidate_derived_evidence","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_NONINDEPENDENT_EVIDENCE"},"expected_packet_digest":"sha256:0c5a169b2fbf560de792dffc03178cfa61a662006161ede802cd8744d81d4508","id":"EGT-013","mutations":[{"evidence_id":"E1","op":"ADD_CANDIDATE_DEPENDENCY"}]},
+    {"base_vector":"VALID_SAME","category":"missing_snapshot_digest","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_UNBOUND_EVIDENCE"},"expected_packet_digest":"sha256:07f60ed30d024f7f4af385f9810cfd628c1475c367643382458ed2207fe4a203","id":"EGT-014","mutations":[{"evidence_id":"E1","op":"REMOVE_RAW_SNAPSHOT_DIGEST"}]},
+    {"base_vector":"VALID_SAME","category":"adjudicator_disagreement","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_DISAGREEMENT","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"expected_packet_digest":"sha256:fb952432b5ae29ccee7402c679d45ee442aa0949053303a6d124d2cb374022e5","id":"EGT-015","mutations":[{"adjudicator_index":1,"label":"DIFFERENT_ENTITY","op":"SET_LABEL"}]},
+    {"base_vector":"VALID_SAME","category":"adjudicator_abstention","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_INSUFFICIENT_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"expected_packet_digest":"sha256:80dc990ba7981b25743c4da9353a0aaa7a3e9afb9b8a32c0b1c5917df851b847","id":"EGT-016","mutations":[{"adjudicator_index":1,"label":"ABSTAIN_INSUFFICIENT_EVIDENCE","op":"SET_LABEL"}]},
+    {"base_vector":"VALID_SAME","category":"same_person_double_vote","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_ADJUDICATOR_NONINDEPENDENCE"},"expected_packet_digest":"sha256:bf1ed2f1dd4e1c6b6fafe072c7c2b0bd86014ebcf3ff7f66807a5f9851fac298","id":"EGT-017","mutations":[{"op":"SET_SUBJECT_EQUAL","source_index":0,"target_index":1}]},
+    {"base_vector":"VALID_SAME","category":"adjudicator_sees_peer_label","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_ADJUDICATOR_NONINDEPENDENCE"},"expected_packet_digest":"sha256:029175897b9cd95f0f544f9ead6a5f127d5a99a9db6cac49c2daeb385a9d0183","id":"EGT-018","mutations":[{"adjudicator_index":1,"op":"SET_SUBMISSION_SEQUENCE","sequence_no":4,"submitted_at":"2026-09-01T12:40:00Z"}]},
+    {"base_vector":"VALID_SAME","category":"model_generated_label","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_NONHUMAN_GROUND_TRUTH"},"expected_packet_digest":"sha256:63953576634b42994d361b895ce81e89a7ffdd8b16cbacfa8493d0ee16c64836","id":"EGT-019","mutations":[{"adjudicator_index":0,"op":"SET_SUBMISSION_ORIGIN","origin":"MODEL_GENERATED"}]},
+    {"base_vector":"VALID_SAME","category":"candidate_aware_sampling","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_SELECTION_LEAK"},"expected_packet_digest":"sha256:3f259719e2be52b194bbf390c955e021f24f9059df92dcbf5e5ed6de973a3949","id":"EGT-020","mutations":[{"durable_at":"2026-09-01T14:00:00Z","op":"SET_SAMPLE_DURABLE_AT"}]},
+    {"base_vector":"VALID_SAME","category":"challenge_sample_not_headline","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ADJUDICATED_SAME_ENTITY","packet_status":"ACCEPT","quality_claim":null,"required_action":"ACCEPT_DIAGNOSTIC_ONLY"},"expected_packet_digest":"sha256:28f6cc15c885083493f221ce4e09aba0e8a35e98101978525627425faedb7c91","id":"EGT-021","mutations":[{"op":"SET_SAMPLE_ROLE","sample_role":"CHALLENGE_ONLY"}]},
+    {"base_vector":"VALID_SAME","category":"label_bundle_not_frozen","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"INVALID_PACKET","packet_status":"REJECT","quality_claim":null,"required_action":"REJECT_MUTABLE_LABEL"},"expected_packet_digest":"sha256:f16e67c320f04116ceb5adef1d78ddb0b584ff8f69862d9d75320520a9d8a448","id":"EGT-022","mutations":[{"op":"MUTATE_LABEL_BUNDLE_AFTER_DIGEST"}]},
+    {"base_vector":"VALID_SAME","category":"conflicting_evidence_directions","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"ABSTAIN_CONFLICTING_EVIDENCE","packet_status":"ACCEPT","quality_claim":null,"required_action":"ABSTAIN"},"expected_packet_digest":"sha256:8cae4daf29a216ad73d23d8b60c3d79f487a42ac257d3bd9bca1125d7f90e77b","id":"EGT-023","mutations":[{"op":"SET_CONFLICTING_ASSESSMENTS"}]},
+    {"base_vector":"VALID_SAME","category":"zero_evaluable_labels_no_quality_claim","expected":{"forbidden_claims":[],"headline_metric_eligible":false,"label_status":"NO_EVALUABLE_LABEL","packet_status":"ACCEPT","quality_claim":null,"required_action":"NO_QUALITY_CLAIM"},"expected_packet_digest":"sha256:1b1d6c9642672e5d0509d739263c8269fabd64c182fff02ea02372b6225dc106","id":"EGT-024","mutations":[{"op":"EMPTY_ADJUDICATION"}]}
+  ],
+  "mutation_language": {
+    "ADD_CANDIDATE_DEPENDENCY": "Bind raw evidence provenance to the candidate signal boundary digest.",
+    "DROP_EVIDENCE": "Remove evidence item before bundle construction.",
+    "EMPTY_ADJUDICATION": "Produce no evidence, identity attestations or submissions.",
+    "LEAK_SIGNAL": "Append exact candidate-boundary value(s) to one rendered view before all view/receipt digests are computed.",
+    "MUTATE_LABEL_BUNDLE_AFTER_DIGEST": "Mutate bundle payload after stored content digest is frozen.",
+    "REMOVE_RAW_SNAPSHOT_DIGEST": "Make one raw evidence snapshot unbound.",
+    "SET_CONFLICTING_ASSESSMENTS": "Seal conflicting per-item assessments and abstention labels.",
+    "SET_LABEL": "Change one sealed human submission label.",
+    "SET_SAMPLE_DURABLE_AT": "Change signed sample-manifest durability time.",
+    "SET_SAMPLE_ROLE": "Change frozen sample role.",
+    "SET_SUBJECT_EQUAL": "Make two verified adjudicator receipts resolve to the same unique-person subject.",
+    "SET_SUBMISSION_ORIGIN": "Change the sealed submission origin class.",
+    "SET_SUBMISSION_SEQUENCE": "Seal a submission at the specified authoritative service sequence/time.",
+    "SHARE_ORIGIN_ROOT": "Make target evidence derive from source verified origin root."
+  },
+  "phase_id": "ENTITY_GROUND_TRUTH_V0",
+  "resolver_contract": {
+    "adjudicator_identity": "Two distinct cryptographically verified unique-person subjects, separately service-sealed before peer-label unseal.",
+    "candidate_disjointness": "Scan every expanded rendered field against the exact candidate signal boundary; bind raw snapshot, boundary and view via recomputed redaction receipt.",
+    "direction_neutrality": "No adjudication outcome metadata appears in rendered evidence; per-item assessments occur only in sealed human submission receipts.",
+    "expansion": "Cases deterministically expand from immutable base_vectors plus ordered mutation operations using the frozen governance builder. expected_packet_digest binds the complete expanded packet.",
+    "label_bundle_freeze": "Versioned label bundle digest plus predecessor and durability receipt; later evaluation binds one exact bundle identity.",
+    "origin_independence": "Derive and cryptographically verify origin provenance roots; same verified root collapses mirrors. Packet group labels are not used.",
+    "real_label_gate": "Synthetic trust roots and vectors cannot authorize real labels. Real approved trust roots/keys must be separately frozen before real collection.",
+    "sample_freeze": "EVALUATION_RANDOM manifest digest must be durably bound strictly before first candidate scoring on that manifest."
+  },
+  "schema_version": "frontier-entity-ground-truth-protocol-corpus-v1",
+  "synthetic_only": true,
+  "test_vector_trust_roots": {
+    "durability_service_key": "TEST_ONLY_DURABILITY_SERVICE_KEY_V0",
+    "identity_verifier_key": "TEST_ONLY_ENTITY_GROUND_TRUTH_IDENTITY_KEY_V0",
+    "not_authorized_for_real_labels": true,
+    "origin_capture_service_key": "TEST_ONLY_ORIGIN_CAPTURE_SERVICE_KEY_V0",
+    "redaction_service_key": "TEST_ONLY_REDACTION_SERVICE_KEY_V0",
+    "sealed_submission_service_key": "TEST_ONLY_SEALED_SUBMISSION_SERVICE_KEY_V0"
+  }
+}
