@@ -5,7 +5,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from frontier.domain.entity_ground_truth_real_trust_material_v0 import (
     MaterialCandidateStatus,
@@ -27,6 +27,19 @@ PREFLIGHT_AUTHORITY_PATH = (
 PROTOCOL_V2_PATH = ROOT / "src/frontier/domain/entity_ground_truth_protocol_v2.py"
 EXPECTED_PREFLIGHT_AUTHORITY_BLOB = "955d98348df8622a5336c40762c3cd722f589c8d"
 EXPECTED_PROTOCOL_V2_BLOB = "3a5f383f0cdc84f2f75ca968931d423b56832ee7"
+
+JsonObject = dict[str, Any]
+JsonList = list[Any]
+
+
+def _obj(value: object) -> JsonObject:
+    assert isinstance(value, dict)
+    return cast(JsonObject, value)
+
+
+def _list(value: object) -> JsonList:
+    assert isinstance(value, list)
+    return cast(JsonList, value)
 
 
 def _git_blob_sha1(path: Path) -> str:
@@ -67,12 +80,12 @@ class FakeOfflineBackend:
         )
 
 
-def _identity_binding(index: int, controller: str) -> dict[str, object]:
+def _identity_binding(index: int, controller: str) -> JsonObject:
     role = f"ADJUDICATOR_{index}"
     subject = _commitment(f"human-subject-{index}")
     public_key = bytes([64 + index]) * 32
     public_key_digest = sha256_digest_bytes(public_key)
-    attestation = {
+    attestation: JsonObject = {
         "payload": {
             "role": "ADJUDICATOR",
             "subject_commitment": subject,
@@ -80,7 +93,7 @@ def _identity_binding(index: int, controller: str) -> dict[str, object]:
         },
         "proof": {"ok": True},
     }
-    binding = {
+    binding: JsonObject = {
         "role": role,
         "subject_commitment": subject,
         "public_key_b64u": _b64u(public_key),
@@ -94,7 +107,7 @@ def _identity_binding(index: int, controller: str) -> dict[str, object]:
     return binding
 
 
-def _verification_object(role: str, key_byte: int, controller: str) -> dict[str, object]:
+def _verification_object(role: str, key_byte: int, controller: str) -> JsonObject:
     public_key = bytes([key_byte]) * 32
     return {
         "role": role,
@@ -109,9 +122,9 @@ def _controller_attestation(
     controller: str,
     verification_material_sha256: str,
     index: int,
-) -> dict[str, object]:
+) -> JsonObject:
     material = f"controller-attestation-material-{index}".encode("ascii")
-    attestation = {
+    attestation: JsonObject = {
         "payload": {
             "role": role,
             "controller_commitment": controller,
@@ -129,14 +142,14 @@ def _controller_attestation(
     }
 
 
-def _root_node(label: str, index: int) -> dict[str, object]:
+def _root_node(label: str, index: int) -> JsonObject:
     content_digest = _commitment(label)
     verification_material = f"root-verification-material-{index}".encode("ascii")
-    attestation = {
+    attestation: JsonObject = {
         "payload": {"content_digest": content_digest, "terminal_upstream": True},
         "proof": {"ok": True},
     }
-    node: dict[str, object] = {
+    node: JsonObject = {
         "node_id": "",
         "content_digest": content_digest,
         "parents": [],
@@ -149,10 +162,10 @@ def _root_node(label: str, index: int) -> dict[str, object]:
     return node
 
 
-def _child_node(label: str, parent_node_id: str) -> dict[str, object]:
+def _child_node(label: str, parent_node_id: str) -> JsonObject:
     content_digest = _commitment(label)
     verification_material = b"provenance-edge-verification-material"
-    attestation = {
+    attestation: JsonObject = {
         "payload": {
             "child_content_digest": content_digest,
             "parent_node_id": parent_node_id,
@@ -160,7 +173,7 @@ def _child_node(label: str, parent_node_id: str) -> dict[str, object]:
         },
         "proof": {"ok": True},
     }
-    edge = {
+    edge: JsonObject = {
         "parent_node_id": parent_node_id,
         "relation": "MIRROR_OF",
         "verification_material_b64u": _b64u(verification_material),
@@ -168,7 +181,7 @@ def _child_node(label: str, parent_node_id: str) -> dict[str, object]:
         "attestation": attestation,
         "attestation_digest": object_digest(attestation),
     }
-    node: dict[str, object] = {
+    node: JsonObject = {
         "node_id": "",
         "content_digest": content_digest,
         "parents": [edge],
@@ -181,12 +194,12 @@ def _child_node(label: str, parent_node_id: str) -> dict[str, object]:
     return node
 
 
-def _provenance_manifest() -> dict[str, object]:
+def _provenance_manifest() -> JsonObject:
     root_a = _root_node("origin-a", 1)
     root_b = _root_node("origin-b", 2)
     child = _child_node("mirror-a", str(root_a["node_id"]))
     nodes = [root_a, root_b, child]
-    bindings = [
+    bindings: list[JsonObject] = [
         {"evidence_id": "evidence-a", "node_id": child["node_id"]},
         {"evidence_id": "evidence-b", "node_id": root_b["node_id"]},
     ]
@@ -197,7 +210,7 @@ def _provenance_manifest() -> dict[str, object]:
     }
 
 
-def _candidate() -> dict[str, object]:
+def _candidate() -> JsonObject:
     controllers = {
         "ADJUDICATOR_1": _commitment("controller-adjudicator-1"),
         "ADJUDICATOR_2": _commitment("controller-adjudicator-2"),
@@ -206,7 +219,7 @@ def _candidate() -> dict[str, object]:
         "IDENTITY_ATTESTATION_AUTHORITY": _commitment("controller-identity-authority"),
     }
     identity_material = b"external-identity-attestation-authority-material"
-    identity_authority = {
+    identity_authority: JsonObject = {
         "scheme_id": "EXTERNAL_OFFLINE_IDENTITY_SCHEME_V1",
         "verification_material_b64u": _b64u(identity_material),
         "verification_material_sha256": sha256_digest_bytes(identity_material),
@@ -214,7 +227,7 @@ def _candidate() -> dict[str, object]:
     }
     valid_from = "2026-01-01T00:00:00Z"
     valid_until = "2027-01-01T00:00:00Z"
-    validity_state: dict[str, object] = {
+    validity_state: JsonObject = {
         "state": "ACTIVE",
         "sequence": 0,
         "valid_from": valid_from,
@@ -264,7 +277,7 @@ def _candidate() -> dict[str, object]:
             start=1,
         )
     ]
-    bundle: dict[str, object] = {
+    bundle: JsonObject = {
         "schema_version": "frontier-entity-ground-truth-real-trust-material-v0",
         "bundle_id": "",
         "created_at": "2026-09-07T11:00:00Z",
@@ -298,9 +311,8 @@ def _candidate() -> dict[str, object]:
     return bundle
 
 
-def _refresh_bundle_identity(bundle: dict[str, object]) -> str:
-    state = bundle["validity_state"]
-    assert isinstance(state, dict)
+def _refresh_bundle_identity(bundle: JsonObject) -> str:
+    state = _obj(bundle["validity_state"])
     state["state_digest"] = validity_state_digest(state)
     state["material_core_digest"] = material_core_digest(bundle)
     digest = candidate_bundle_digest(bundle)
@@ -310,7 +322,7 @@ def _refresh_bundle_identity(bundle: dict[str, object]) -> str:
 
 
 def _validate(
-    bundle: dict[str, object],
+    bundle: JsonObject,
     *,
     expected_current_authority_head_digest: str | None = None,
     backend: FakeOfflineBackend | None = None,
@@ -368,8 +380,7 @@ def test_candidate_accept_never_grants_real_authority() -> None:
 
 def test_test_only_placeholder_or_example_material_is_rejected() -> None:
     candidate = _candidate()
-    identity = candidate["identity_attestation_authority"]
-    assert isinstance(identity, dict)
+    identity = _obj(candidate["identity_attestation_authority"])
     identity["scheme_id"] = "TEST_ONLY_IDENTITY_SCHEME"
     _refresh_bundle_identity(candidate)
 
@@ -381,8 +392,7 @@ def test_test_only_placeholder_or_example_material_is_rejected() -> None:
 
 def test_secret_material_field_is_rejected_before_other_validation() -> None:
     candidate = _candidate()
-    identity = candidate["identity_attestation_authority"]
-    assert isinstance(identity, dict)
+    identity = _obj(candidate["identity_attestation_authority"])
     identity["private_key"] = "do-not-commit"
     _refresh_bundle_identity(candidate)
 
@@ -394,8 +404,7 @@ def test_secret_material_field_is_rejected_before_other_validation() -> None:
 
 def test_fingerprint_without_complete_public_key_is_rejected() -> None:
     candidate = _candidate()
-    service = candidate["service_sealing_verification_object"]
-    assert isinstance(service, dict)
+    service = _obj(candidate["service_sealing_verification_object"])
     service.pop("public_key_b64u")
     _refresh_bundle_identity(candidate)
 
@@ -407,16 +416,12 @@ def test_fingerprint_without_complete_public_key_is_rejected() -> None:
 
 def test_duplicate_human_subject_cannot_masquerade_as_two_adjudicators() -> None:
     candidate = _candidate()
-    bindings = candidate["adjudicator_identity_key_bindings"]
-    assert isinstance(bindings, list)
-    first = bindings[0]
-    second = bindings[1]
-    assert isinstance(first, dict) and isinstance(second, dict)
+    bindings = _list(candidate["adjudicator_identity_key_bindings"])
+    first = _obj(bindings[0])
+    second = _obj(bindings[1])
     second["subject_commitment"] = first["subject_commitment"]
-    attestation = second["identity_attestation"]
-    assert isinstance(attestation, dict)
-    payload = attestation["payload"]
-    assert isinstance(payload, dict)
+    attestation = _obj(second["identity_attestation"])
+    payload = _obj(attestation["payload"])
     payload["subject_commitment"] = first["subject_commitment"]
     second["identity_attestation_digest"] = object_digest(attestation)
     _refresh_bundle_identity(candidate)
@@ -429,24 +434,16 @@ def test_duplicate_human_subject_cannot_masquerade_as_two_adjudicators() -> None
 
 def test_controller_reuse_across_roles_is_rejected() -> None:
     candidate = _candidate()
-    service = candidate["service_sealing_verification_object"]
-    durability = candidate["durability_publication_verification_object"]
-    attestations = candidate["role_controller_attestations"]
-    assert isinstance(service, dict)
-    assert isinstance(durability, dict)
-    assert isinstance(attestations, list)
+    service = _obj(candidate["service_sealing_verification_object"])
+    durability = _obj(candidate["durability_publication_verification_object"])
+    attestations = _list(candidate["role_controller_attestations"])
     durability["controller_commitment"] = service["controller_commitment"]
     durability_attestation = next(
-        item
-        for item in attestations
-        if isinstance(item, dict) and item["role"] == "DURABILITY_PUBLICATION"
+        item for item in map(_obj, attestations) if item["role"] == "DURABILITY_PUBLICATION"
     )
-    assert isinstance(durability_attestation, dict)
     durability_attestation["controller_commitment"] = service["controller_commitment"]
-    attestation = durability_attestation["attestation"]
-    assert isinstance(attestation, dict)
-    payload = attestation["payload"]
-    assert isinstance(payload, dict)
+    attestation = _obj(durability_attestation["attestation"])
+    payload = _obj(attestation["payload"])
     payload["controller_commitment"] = service["controller_commitment"]
     durability_attestation["attestation_digest"] = object_digest(attestation)
     _refresh_bundle_identity(candidate)
@@ -459,14 +456,11 @@ def test_controller_reuse_across_roles_is_rejected() -> None:
 
 def test_mirrored_evidence_collapses_to_one_origin_and_fails_closed() -> None:
     candidate = _candidate()
-    manifest = candidate["origin_provenance_manifest"]
-    assert isinstance(manifest, dict)
-    nodes = manifest["nodes"]
-    bindings = manifest["evidence_bindings"]
-    assert isinstance(nodes, list) and isinstance(bindings, list)
-    root_a = nodes[0]
-    child = nodes[2]
-    assert isinstance(root_a, dict) and isinstance(child, dict)
+    manifest = _obj(candidate["origin_provenance_manifest"])
+    nodes = _list(manifest["nodes"])
+    bindings = _list(manifest["evidence_bindings"])
+    root_a = _obj(nodes[0])
+    child = _obj(nodes[2])
     bindings[:] = [
         {"evidence_id": "evidence-a", "node_id": root_a["node_id"]},
         {"evidence_id": "evidence-b", "node_id": child["node_id"]},
@@ -482,29 +476,22 @@ def test_mirrored_evidence_collapses_to_one_origin_and_fails_closed() -> None:
 
 def test_missing_provenance_parent_fails_closed() -> None:
     candidate = _candidate()
-    manifest = candidate["origin_provenance_manifest"]
-    assert isinstance(manifest, dict)
-    nodes = manifest["nodes"]
-    assert isinstance(nodes, list)
-    child = nodes[2]
-    assert isinstance(child, dict)
-    parents = child["parents"]
-    assert isinstance(parents, list)
-    edge = parents[0]
-    assert isinstance(edge, dict)
+    manifest = _obj(candidate["origin_provenance_manifest"])
+    nodes = _list(manifest["nodes"])
+    child = _obj(nodes[2])
+    parents = _list(child["parents"])
+    edge = _obj(parents[0])
     missing_parent = _commitment("missing-parent")
     edge["parent_node_id"] = missing_parent
-    attestation = edge["attestation"]
-    assert isinstance(attestation, dict)
-    payload = attestation["payload"]
-    assert isinstance(payload, dict)
+    attestation = _obj(edge["attestation"])
+    payload = _obj(attestation["payload"])
     payload["parent_node_id"] = missing_parent
     edge["attestation_digest"] = object_digest(attestation)
     child["node_id"] = provenance_node_id(child)
-    bindings = manifest["evidence_bindings"]
-    assert isinstance(bindings, list)
-    for binding in bindings:
-        if isinstance(binding, dict) and binding["evidence_id"] == "evidence-a":
+    bindings = _list(manifest["evidence_bindings"])
+    for raw_binding in bindings:
+        binding = _obj(raw_binding)
+        if binding["evidence_id"] == "evidence-a":
             binding["node_id"] = child["node_id"]
     manifest["manifest_digest"] = object_digest({"nodes": nodes, "evidence_bindings": bindings})
     _refresh_bundle_identity(candidate)
@@ -581,8 +568,7 @@ def test_naive_as_of_is_rejected() -> None:
 
 def test_non_ascii_material_is_rejected_by_frozen_jcs_safe_subset() -> None:
     candidate = _candidate()
-    identity = candidate["identity_attestation_authority"]
-    assert isinstance(identity, dict)
+    identity = _obj(candidate["identity_attestation_authority"])
     identity["scheme_id"] = "EXTERNAL_ÅUTHORITY"
 
     result = _validate(candidate)
@@ -593,8 +579,7 @@ def test_non_ascii_material_is_rejected_by_frozen_jcs_safe_subset() -> None:
 
 def test_controller_attestation_cannot_be_replayed_onto_different_role_key() -> None:
     candidate = _candidate()
-    service = candidate["service_sealing_verification_object"]
-    assert isinstance(service, dict)
+    service = _obj(candidate["service_sealing_verification_object"])
     new_key = b"Z" * 32
     service["public_key_b64u"] = _b64u(new_key)
     service["public_key_sha256"] = sha256_digest_bytes(new_key)
@@ -608,24 +593,16 @@ def test_controller_attestation_cannot_be_replayed_onto_different_role_key() -> 
 
 def test_signing_verification_material_reuse_is_rejected() -> None:
     candidate = _candidate()
-    service = candidate["service_sealing_verification_object"]
-    durability = candidate["durability_publication_verification_object"]
-    attestations = candidate["role_controller_attestations"]
-    assert isinstance(service, dict)
-    assert isinstance(durability, dict)
-    assert isinstance(attestations, list)
+    service = _obj(candidate["service_sealing_verification_object"])
+    durability = _obj(candidate["durability_publication_verification_object"])
+    attestations = _list(candidate["role_controller_attestations"])
     durability["public_key_b64u"] = service["public_key_b64u"]
     durability["public_key_sha256"] = service["public_key_sha256"]
     durability_attestation = next(
-        item
-        for item in attestations
-        if isinstance(item, dict) and item["role"] == "DURABILITY_PUBLICATION"
+        item for item in map(_obj, attestations) if item["role"] == "DURABILITY_PUBLICATION"
     )
-    assert isinstance(durability_attestation, dict)
-    attestation = durability_attestation["attestation"]
-    assert isinstance(attestation, dict)
-    payload = attestation["payload"]
-    assert isinstance(payload, dict)
+    attestation = _obj(durability_attestation["attestation"])
+    payload = _obj(attestation["payload"])
     payload["verification_material_sha256"] = service["public_key_sha256"]
     durability_attestation["attestation_digest"] = object_digest(attestation)
     _refresh_bundle_identity(candidate)
@@ -638,18 +615,15 @@ def test_signing_verification_material_reuse_is_rejected() -> None:
 
 def test_provenance_cycle_fails_closed() -> None:
     candidate = _candidate()
-    manifest = candidate["origin_provenance_manifest"]
-    assert isinstance(manifest, dict)
-    nodes = manifest["nodes"]
-    assert isinstance(nodes, list)
-    root_a = nodes[0]
-    child = nodes[2]
-    assert isinstance(root_a, dict) and isinstance(child, dict)
+    manifest = _obj(candidate["origin_provenance_manifest"])
+    nodes = _list(manifest["nodes"])
+    root_a = _obj(nodes[0])
+    child = _obj(nodes[2])
 
     child_id = str(child["node_id"])
     root_content = str(root_a["content_digest"])
     verification_material = b"cycle-edge-verification-material"
-    attestation = {
+    attestation: JsonObject = {
         "payload": {
             "child_content_digest": root_content,
             "parent_node_id": child_id,
@@ -674,36 +648,27 @@ def test_provenance_cycle_fails_closed() -> None:
     root_a["node_id"] = provenance_node_id(root_a)
 
     # Rebind the child's parent to the changed root id; the two nodes now form a cycle.
-    child_parents = child["parents"]
-    assert isinstance(child_parents, list)
-    child_edge = child_parents[0]
-    assert isinstance(child_edge, dict)
+    child_parents = _list(child["parents"])
+    child_edge = _obj(child_parents[0])
     child_edge["parent_node_id"] = root_a["node_id"]
-    child_attestation = child_edge["attestation"]
-    assert isinstance(child_attestation, dict)
-    child_payload = child_attestation["payload"]
-    assert isinstance(child_payload, dict)
+    child_attestation = _obj(child_edge["attestation"])
+    child_payload = _obj(child_attestation["payload"])
     child_payload["parent_node_id"] = root_a["node_id"]
     child_edge["attestation_digest"] = object_digest(child_attestation)
     child["node_id"] = provenance_node_id(child)
 
     # Rebind root -> child one final time after the child id changed. This intentionally
     # creates an impossible fixed-point content-addressing cycle, which must fail closed.
-    root_edge = root_a["parents"]
-    assert isinstance(root_edge, list)
-    edge = root_edge[0]
-    assert isinstance(edge, dict)
+    root_parents = _list(root_a["parents"])
+    edge = _obj(root_parents[0])
     edge["parent_node_id"] = child["node_id"]
-    root_attestation = edge["attestation"]
-    assert isinstance(root_attestation, dict)
-    root_payload = root_attestation["payload"]
-    assert isinstance(root_payload, dict)
+    root_attestation = _obj(edge["attestation"])
+    root_payload = _obj(root_attestation["payload"])
     root_payload["parent_node_id"] = child["node_id"]
     edge["attestation_digest"] = object_digest(root_attestation)
     root_a["node_id"] = provenance_node_id(root_a)
 
-    bindings = manifest["evidence_bindings"]
-    assert isinstance(bindings, list)
+    bindings = _list(manifest["evidence_bindings"])
     manifest["manifest_digest"] = object_digest({"nodes": nodes, "evidence_bindings": bindings})
     _refresh_bundle_identity(candidate)
 
@@ -715,8 +680,7 @@ def test_provenance_cycle_fails_closed() -> None:
 
 def test_validity_authorization_signature_shape_is_required() -> None:
     candidate = _candidate()
-    state = candidate["validity_state"]
-    assert isinstance(state, dict)
+    state = _obj(candidate["validity_state"])
     state["service_sealing_signature_b64u"] = _b64u(b"too-short")
     _refresh_bundle_identity(candidate)
 

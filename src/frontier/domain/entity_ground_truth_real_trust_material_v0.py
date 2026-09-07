@@ -647,7 +647,7 @@ def _validate_provenance(
             return None
         if evidence_id in evidence_ids:
             return None
-        derived = roots(cast(str, node_id))
+        derived = roots(node_id)
         if derived is None:
             return None
         evidence_ids.add(evidence_id)
