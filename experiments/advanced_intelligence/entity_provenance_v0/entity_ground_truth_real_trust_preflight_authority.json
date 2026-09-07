@@ -1,0 +1,218 @@
+{
+  "schema_version": "frontier-entity-ground-truth-real-trust-preflight-authority-v1",
+  "phase_id": "ENTITY_GROUND_TRUTH_REAL_TRUST_PREFLIGHT_V0",
+  "authority_state": "BLOCKED_PENDING_REAL_TRUST_ROOT_MATERIAL",
+  "parent_main_commit": "bd2e910ebdc908b1002efbefda8fe030686cea99",
+  "lineage": {
+    "protocol_v2_freeze_merge_commit": "a0b419b8e7eda254834295a78edf95447d538689",
+    "offline_validator_merge_commit": "bd2e910ebdc908b1002efbefda8fe030686cea99",
+    "offline_validator_source_path": "src/frontier/domain/entity_ground_truth_protocol_v2.py",
+    "offline_validator_source_git_blob_sha1": "3a5f383f0cdc84f2f75ca968931d423b56832ee7"
+  },
+  "objective": "Freeze fail-closed prerequisites for externally verifiable real human entity-ground-truth trust material without creating credentials, collecting labels, evaluating candidate quality, or changing production authority.",
+  "real_trust_material_gate": {
+    "status": "BLOCKED_PENDING_REAL_TRUST_ROOT_MATERIAL",
+    "minimum_distinct_human_adjudicators": 2,
+    "private_key_material_in_repository_forbidden": true,
+    "synthetic_test_material_can_satisfy_gate": false,
+    "placeholder_or_example_material_can_satisfy_gate": false,
+    "candidate_or_frontier_generated_identity_assertions_can_satisfy_gate": false,
+    "fingerprint_only_material_can_satisfy_gate": false,
+    "self_declared_origin_root_ids_can_satisfy_independence": false,
+    "required_bundle_fields": [
+      "schema_version",
+      "bundle_id",
+      "created_at",
+      "identity_attestation_authority",
+      "adjudicator_identity_key_bindings",
+      "service_sealing_verification_object",
+      "durability_publication_verification_object",
+      "role_controller_attestations",
+      "origin_provenance_manifest",
+      "revocation_policy",
+      "expiry_policy",
+      "rotation_lineage",
+      "validity_state",
+      "bundle_digest"
+    ]
+  },
+  "signature_policy": {
+    "adjudicator_signature_scheme": "ED25519",
+    "service_sealing_signature_scheme": "ED25519",
+    "durability_signature_scheme": "ED25519",
+    "identity_attestation_scheme": "EXTERNALLY_DECLARED_AND_OFFLINE_VERIFIABLE_NOT_FIXED_TO_ED25519",
+    "ed25519_public_key_encoding": "BASE64URL_NOPAD_32_RAW_BYTES",
+    "complete_public_verification_object_required": true,
+    "fingerprints_are_derived_identifiers_only": true,
+    "fingerprint_only_material_rejected": true,
+    "fingerprint_derivation": "sha256:<lowercase-hex-of-exact-public-key-or-verification-object-bytes>",
+    "private_keys_repository_forbidden": true,
+    "test_only_key_ids_forbidden": true
+  },
+  "identity_key_binding_policy": {
+    "repository_subject_identifiers": "OPAQUE_STABLE_SUBJECT_COMMITMENTS",
+    "real_names_required_in_repository": false,
+    "externally_verifiable_human_identity_attestation_required": true,
+    "identity_attestation_must_bind_exact_subject_commitment": true,
+    "identity_attestation_must_bind_exact_adjudicator_public_key_bytes": true,
+    "identity_attestation_must_bind_role": "ADJUDICATOR",
+    "subject_controlled_proof_of_possession_required": true,
+    "proof_of_possession_signature_scheme": "ED25519",
+    "proof_of_possession_domain_separator": "FRONTIER_ENTITY_GROUND_TRUTH_ADJUDICATOR_POP_V0",
+    "proof_of_possession_message_fields": [
+      "phase_id",
+      "subject_commitment",
+      "adjudicator_public_key_sha256",
+      "identity_attestation_digest",
+      "proof_challenge_nonce"
+    ],
+    "proof_of_possession_must_verify_under_bound_adjudicator_key": true,
+    "two_adjudicator_slots_must_resolve_to_distinct_human_subjects": true,
+    "candidate_builder_or_evaluator_identity_may_not_self_attest_independence": true,
+    "frontier_model_or_runtime_may_not_generate_human_identity_attestations": true,
+    "proof_challenge_nonce_minimum_bits": 128
+  },
+  "verification_object_policy": {
+    "adjudicator_verification_object_requires_complete_public_key": true,
+    "service_sealing_verification_object_requires_complete_public_key": true,
+    "durability_publication_verification_object_requires_complete_public_key": true,
+    "identity_attestation_authority_requires_complete_offline_verification_material": true,
+    "identity_attestation_authority_requires_scheme_id": true,
+    "identity_attestation_authority_requires_trust_anchor_or_certificate_chain": true,
+    "unavailable_or_unverifiable_public_material_fails_closed": true,
+    "derived_fingerprint_mismatch_fails_closed": true
+  },
+  "role_separation_policy": {
+    "key_ids_are_non_authoritative_labels": true,
+    "pairwise_distinct_verification_material_required_across_all_signing_roles": true,
+    "byte_level_key_or_verification_object_reuse_across_roles_forbidden": true,
+    "pairwise_distinct_controller_commitments_required": true,
+    "controller_separation_must_be_externally_attested": true,
+    "roles_requiring_distinct_controllers": [
+      "ADJUDICATOR_1",
+      "ADJUDICATOR_2",
+      "SERVICE_SEALING",
+      "DURABILITY_PUBLICATION",
+      "IDENTITY_ATTESTATION_AUTHORITY"
+    ],
+    "identity_attestation_authority_must_be_independent_of_candidate_builder_evaluator_and_frontier_runtime": true,
+    "unknown_controller_or_separation_evidence_fails_closed": true
+  },
+  "origin_independence_policy": {
+    "authoritative_input": "CONTENT_ADDRESSED_PROVENANCE_GRAPH",
+    "self_declared_origin_root_ids_are_non_authoritative": true,
+    "per_evidence_content_digest_required": true,
+    "provenance_node_content_addressing_required": true,
+    "verified_parent_edges_required": true,
+    "required_parent_relation_classes": [
+      "MIRROR_OF",
+      "SYNDICATED_FROM",
+      "REPUBLISHED_FROM",
+      "DERIVED_FROM",
+      "CANONICAL_SOURCE"
+    ],
+    "future_validator_must_derive_terminal_upstream_roots": true,
+    "future_validator_must_traverse_verified_parent_edges": true,
+    "common_upstream_roots_must_collapse_to_one_independent_origin": true,
+    "mirrored_syndicated_or_republished_evidence_cannot_count_as_independent_roots": true,
+    "missing_ambiguous_or_unverified_parentage_fails_closed_for_independence": true,
+    "signed_root_labels_alone_cannot_establish_independence": true
+  },
+  "content_addressing_policy": {
+    "canonicalization": "RFC8785_JCS",
+    "digest_algorithm": "SHA-256",
+    "digest_prefix": "sha256:",
+    "domain_separator": "FRONTIER_ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0\\u0000",
+    "digest_coverage": "COMPLETE_AUTHORITATIVE_BUNDLE_PAYLOAD_EXCLUDING_BUNDLE_ID_AND_BUNDLE_DIGEST",
+    "bundle_id_derivation": "egt-real-trust-v0:<64-lowercase-hex-from-bundle-digest>",
+    "all_subject_bindings_keys_verification_objects_controller_attestations_provenance_policies_rotation_and_validity_are_digest_covered": true,
+    "future_validator_must_recompute_digest_and_bundle_id": true,
+    "unknown_or_extra_authoritative_fields_are_digest_covered_not_ignored": true
+  },
+  "rotation_and_validity_policy": {
+    "key_rotation_requires_new_material_bundle": true,
+    "genesis_sequence": 0,
+    "genesis_predecessor_bundle_digest": null,
+    "non_genesis_requires_predecessor_bundle_digest": true,
+    "predecessor_must_equal_previously_pinned_current_authority_head_digest": true,
+    "sequence_must_increment_by_one": true,
+    "successor_requires_authenticated_supersession_statement": true,
+    "supersession_statement_must_bind_predecessor_and_successor_digests": true,
+    "supersession_must_be_authorized_by_predecessor_service_sealing_and_durability_keys": true,
+    "revocation_state_must_be_content_addressed_and_authenticated": true,
+    "validity_state_values": [
+      "ACTIVE",
+      "REVOKED",
+      "SUPERSEDED"
+    ],
+    "valid_from_required": true,
+    "valid_until_required": true,
+    "unknown_expiry_or_revocation_state_fails_closed": true,
+    "future_validator_requires_expected_current_authority_head_digest": true,
+    "internally_valid_stale_bundle_must_be_rejected_when_not_current_head": true,
+    "next_material_phase_must_pin_exact_current_bundle_digest_and_validity_state_digest": true
+  },
+  "secret_hygiene": {
+    "allowed_repository_material": [
+      "complete public verification keys or public certificate/attestation verification objects",
+      "derived fingerprints",
+      "opaque subject commitments",
+      "public identity attestations",
+      "public proof-of-possession signatures",
+      "content-addressed provenance manifests",
+      "public revocation expiry rotation and validity receipts"
+    ],
+    "forbidden_repository_material": [
+      "private keys",
+      "seed material",
+      "recovery material",
+      "signing tokens",
+      "service secrets",
+      "credential-equivalent secrets"
+    ]
+  },
+  "collection_authority": {
+    "real_label_collection": false,
+    "candidate_quality_evaluation": false,
+    "candidate_quality_metrics": false,
+    "candidate_quality_pass_fail": false,
+    "candidate_promotion": false,
+    "canonical_entity_truth": false,
+    "persistence": false,
+    "migrations": false,
+    "workers_or_schedulers": false,
+    "api": false,
+    "terminal": false,
+    "source_registry_changes": false,
+    "production_provenance_truth": false,
+    "ranking_changes": false
+  },
+  "authorized_after_merge": {
+    "prepare_real_trust_material_bundle_candidate": true,
+    "prepare_real_trust_material_validation_tests": true,
+    "prepare_offline_real_trust_material_validator": true,
+    "real_label_collection": false,
+    "candidate_quality_evaluation": false,
+    "candidate_promotion": false,
+    "production_authority_expansion": false
+  },
+  "scientific_state": {
+    "candidate": "transparent-entity-hybrid-v0",
+    "entity_quality": "INSUFFICIENT_INDEPENDENT_GROUND_TRUTH",
+    "quality_claim": null,
+    "promotion_status": "UNAVAILABLE"
+  },
+  "closure_requirements": {
+    "full_repository_ci": "PASS",
+    "one_bounded_hostile_review": "SPENT_ON_D9C155F23E8A6DDBE4EEB71C9B56C5E7331CCC60",
+    "critical_high_findings": "FIVE_P1_REPAIRED_PENDING_TARGETED_REREVIEW",
+    "targeted_rereview_if_repairs_needed": "ONE_REQUIRED_AFTER_FULL_CI",
+    "merge_action": "EXPLICIT_USER_AUTHORIZATION_REQUIRED"
+  },
+  "next_phase_if_merged": {
+    "phase_id": "ENTITY_GROUND_TRUTH_REAL_TRUST_MATERIAL_V0",
+    "objective": "Freeze actual externally supplied non-placeholder public trust material and opaque human-subject-to-key attestations, then validate proof of possession, complete verification objects, controller separation, derived provenance roots, expiry, revocation, content addressing, rotation lineage, and anti-rollback current-head binding before any real label collection.",
+    "required_precondition": "Actual external adjudicator identity attestations bound to exact public keys, subject-controlled proofs of possession, complete public verification material, independent role-controller attestations, and content-addressed provenance material must be supplied out-of-band; Frontier may not invent, synthesize, or self-attest them.",
+    "still_forbidden": "No real label collection, candidate scoring, quality PASS/FAIL, promotion, persistence, API, workers, terminal, registry, production provenance truth, or ranking expansion until a later separately authorized phase."
+  }
+}
