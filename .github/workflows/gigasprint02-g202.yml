@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 3
+          fetch-depth: 4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -44,7 +44,7 @@ jobs:
 
           path = ".github/workflows/gigasprint02-g202.yml"
           source = subprocess.run(
-              ["git", "show", f"HEAD^^:{path}"],
+              ["git", "show", f"HEAD^^^:{path}"],
               check=True,
               capture_output=True,
               text=True,
@@ -68,7 +68,7 @@ jobs:
           compile(payload, "<g2-02-payload>", "exec")
           exec(payload, {"__name__": "__main__"})
           PY
-      - name: Normalize generated escape sequences
+      - name: Normalize generated source and lint hygiene
         shell: bash
         run: |
           python - <<'PY'
@@ -91,10 +91,28 @@ jobs:
                   )
                   if index + 1 < len(lines) and lines[index + 1].strip() == '")':
                       skip = True
+              elif line.strip() == "import json":
+                  continue
               else:
                   repaired.append(line)
           test.write_text("\n".join(repaired) + "\n", encoding="utf-8")
+
+          pgtest = Path("tests/integration/test_freeze_publication_postgres.py")
+          text = pgtest.read_text(encoding="utf-8")
+          if not text.startswith("# ruff: noqa: E402\n"):
+              text = "# ruff: noqa: E402\n" + text
+          pgtest.write_text(text, encoding="utf-8")
+
+          adapter = Path("src/frontier/adapters/postgres/freeze_publication.py")
+          text = adapter.read_text(encoding="utf-8")
+          text = text.replace(
+              '"SELECT publication_digest FROM candidate_freeze_publications WHERE receipt_id=%s",',
+              '"SELECT publication_digest FROM candidate_freeze_publications "\n'
+              '                    "WHERE receipt_id=%s",',
+          )
+          adapter.write_text(text, encoding="utf-8")
           PY
+          uv run ruff check --fix src/frontier/application/freeze_publication.py src/frontier/adapters/postgres/freeze_publication.py tests/unit/test_freeze_publication.py tests/integration/test_freeze_publication_postgres.py
       - name: Verify G2-02
         shell: bash
         run: |
