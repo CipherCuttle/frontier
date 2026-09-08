@@ -29,7 +29,7 @@ jobs:
         run: uv sync --all-extras --frozen
       - name: Replay all retained PEF V0 boundaries through V1
         env:
-          GROUPING_REPLAY_URL: https://br-calm-queen-b1ppga6i-groupingreplay.compute.c-5.eu-central-1.aws.neon.tech/grouping-inputs
+          GROUPING_REPLAY_URL: https://ep-crimson-king-b1bnulzq.apirest.c-5.eu-central-1.aws.neon.tech/frontier/rest/v1/grouping_inputs
         run: |
           uv run python - <<'PY'
           from __future__ import annotations
@@ -38,6 +38,7 @@ jobs:
           import json
           import os
           import time
+          import urllib.parse
           import urllib.request
           from datetime import datetime
 
@@ -58,15 +59,30 @@ jobs:
               '2026-09-08T15:50:00+00:00': (1520, 1679, '738122ac9bd0def3a24c7042e5c471c95ee199cf3839c74ab6f19b0264bfe2df'),
           }
 
-          rows = []
-          for page in range(4):
-              url = f"{os.environ['GROUPING_REPLAY_URL']}?page={page}"
+          columns = ','.join((
+              'observation_id', 'source_id', 'source_item_key', 'kind', 'observed_at',
+              'canonical_url', 'title', 'text', 'artifact_type', 'artifact_name',
+              'artifact_version', 'signal_roles',
+          ))
+          rows: list[dict[str, object]] = []
+          for offset in range(0, 2000, 500):
+              query = urllib.parse.urlencode({
+                  'select': columns,
+                  'order': 'observation_id.asc',
+                  'limit': '500',
+                  'offset': str(offset),
+              })
+              url = f"{os.environ['GROUPING_REPLAY_URL']}?{query}"
               payload = None
               for attempt in range(1, 4):
                   try:
                       request = urllib.request.Request(
                           url,
-                          headers={'Accept': 'application/json', 'User-Agent': 'frontier-grouping-v1-replay/1'},
+                          headers={
+                              'Accept': 'application/json',
+                              'Accept-Profile': 'replay',
+                              'User-Agent': 'frontier-grouping-v1-replay/1',
+                          },
                       )
                       with urllib.request.urlopen(request, timeout=60) as response:
                           payload = json.load(response)
@@ -75,26 +91,27 @@ jobs:
                       if attempt == 3:
                           raise
                       time.sleep(2 * attempt)
-              assert payload is not None
-              assert payload['page'] == page, payload
-              rows.extend(payload['rows'])
+              assert isinstance(payload, list), type(payload)
+              rows.extend(payload)
+              if len(payload) < 500:
+                  break
 
           assert len(rows) == 1679, len(rows)
-          assert len({row['observation_id'] for row in rows}) == 1679
+          assert len({str(row['observation_id']) for row in rows}) == 1679
 
           inputs = tuple(
               GroupingInput(
-                  observation_id=row['observation_id'],
-                  source_id=row['source_id'],
-                  source_item_key=row['source_item_key'],
-                  kind=row['kind'],
-                  observed_at=datetime.fromisoformat(row['observed_at'].replace('Z', '+00:00')),
-                  canonical_url=row.get('canonical_url'),
-                  title=row.get('title'),
-                  text=row.get('text'),
-                  artifact_type=row.get('artifact_type'),
-                  artifact_name=row.get('artifact_name'),
-                  artifact_version=row.get('artifact_version'),
+                  observation_id=str(row['observation_id']),
+                  source_id=str(row['source_id']),
+                  source_item_key=str(row['source_item_key']),
+                  kind=str(row['kind']),
+                  observed_at=datetime.fromisoformat(str(row['observed_at']).replace('Z', '+00:00')),
+                  canonical_url=row.get('canonical_url') if isinstance(row.get('canonical_url'), str) else None,
+                  title=row.get('title') if isinstance(row.get('title'), str) else None,
+                  text=row.get('text') if isinstance(row.get('text'), str) else None,
+                  artifact_type=row.get('artifact_type') if isinstance(row.get('artifact_type'), str) else None,
+                  artifact_name=row.get('artifact_name') if isinstance(row.get('artifact_name'), str) else None,
+                  artifact_version=row.get('artifact_version') if isinstance(row.get('artifact_version'), str) else None,
                   signal_roles=tuple(row.get('signal_roles') or ()),
               )
               for row in rows
