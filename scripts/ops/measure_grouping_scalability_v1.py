@@ -168,6 +168,19 @@ def main() -> int:
         failures.append(f"wall {wall_seconds:.3f}s exceeds {case.wall_seconds_max:.3f}s")
     if projection.eligible_observation_count != case.count:
         failures.append("eligible observation count does not match generated benchmark count")
+
+    if args.case == "dense-5000":
+        expected_group_pairs = case.count * (case.count - 1) // 2
+        if len(projection.groups) != 1:
+            failures.append("dense reference corpus must produce exactly one V0-equivalent group")
+        if projection.ungrouped_observation_ids:
+            failures.append("dense reference corpus must have zero ungrouped observations")
+        if projection.group_pair_count != expected_group_pairs:
+            failures.append(
+                "dense reference corpus must preserve the complete V0 GROUP relation "
+                f"({projection.group_pair_count} != {expected_group_pairs})"
+            )
+
     if failures:
         for failure in failures:
             print(f"FAIL: {failure}")
