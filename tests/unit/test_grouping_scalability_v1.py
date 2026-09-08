@@ -180,6 +180,7 @@ def _partition_json(partition: tuple[tuple[str, ...], ...]) -> list[list[str]]:
 
 
 def test_immutable_v0_oracle_artifacts_are_exactly_pinned() -> None:
+    assert _git_blob_sha(Path("src/frontier/domain/grouping.py")) == GROUPING_V1_ORACLE_BLOB
     assert (
         _git_blob_sha(Path("fixtures/grouping/oracle_guarded_hybrid_v0.txt"))
         == GROUPING_V1_ORACLE_BLOB
