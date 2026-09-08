@@ -1,0 +1,111 @@
+name: temp-retained-grouping-v1-replay
+
+on:
+  push:
+    branches:
+      - feature/grouping-scalability-v1
+
+permissions:
+  contents: read
+
+jobs:
+  retained-replay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/grouping-scalability-v1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.14'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: '0.12.10'
+          enable-cache: true
+      - name: Verify frozen lock
+        run: uv lock --check
+      - name: Sync frozen environment
+        run: uv sync --all-extras --frozen
+      - name: Replay all retained PEF V0 boundaries through V1
+        env:
+          GROUPING_REPLAY_URL: https://br-calm-queen-b1ppga6i-groupingreplay.compute.c-5.eu-central-1.aws.neon.tech/grouping-inputs
+        run: |
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime
+
+          from frontier.domain.grouping import GroupingInput
+          from frontier.domain.grouping_v1 import build_compact_grouping_projection
+
+          expected = {
+              '2026-09-08T15:00:00+00:00': (756, 796, '7a70ce4c23d16c105263d37d8930625e2d1e9bd19ce146849ccb690356040f9e'),
+              '2026-09-08T15:05:00+00:00': (815, 858, '34a15107140739198d99048bd207eda690cac261dd518969d10492ac6165ce59'),
+              '2026-09-08T15:10:00+00:00': (887, 932, '763534bab07e3b877578471ce6172ce4b5d5d36a729af3aa99697e6a8e29679e'),
+              '2026-09-08T15:15:00+00:00': (955, 1001, '358c651131aec1bfa4756e888c62a59655e5017bed010933fd9e2b7aac161574'),
+              '2026-09-08T15:20:00+00:00': (1041, 1092, '5111268de51f279e179d7d5284b9e1db69688af16c8c637c4ea63dcb5a76ac27'),
+              '2026-09-08T15:25:00+00:00': (1138, 1192, '9eeaeeb7b5489696032bad298d53958d754a173cadd3a92c035e663240cff1e9'),
+              '2026-09-08T15:30:00+00:00': (1199, 1257, '6158b3802ebd01e0033237b0b92649e77c254fb1c6c26c10f794ac61e4ad1397'),
+              '2026-09-08T15:35:00+00:00': (1280, 1340, '8857cf526572799aec69bee43f8a8b89f9b9bd1f5f5a25932f36e99bed42b759'),
+              '2026-09-08T15:40:00+00:00': (1357, 1498, '33488d8b44ca108806f52a52f7620cb7e194085ca0f33e88a55ddb8a4754bf2c'),
+              '2026-09-08T15:45:00+00:00': (1436, 1582, '98fb83f670ccd289456ebb97adc44a82cef87ccae532841a3fc5c3edfcc5f245'),
+              '2026-09-08T15:50:00+00:00': (1520, 1679, '738122ac9bd0def3a24c7042e5c471c95ee199cf3839c74ab6f19b0264bfe2df'),
+          }
+
+          request = urllib.request.Request(
+              os.environ['GROUPING_REPLAY_URL'],
+              headers={'Accept': 'application/json', 'User-Agent': 'frontier-grouping-v1-replay/1'},
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              payload = json.load(response)
+
+          rows = payload['rows']
+          assert len(rows) == 1679, len(rows)
+
+          inputs = tuple(
+              GroupingInput(
+                  observation_id=row['observation_id'],
+                  source_id=row['source_id'],
+                  source_item_key=row['source_item_key'],
+                  kind=row['kind'],
+                  observed_at=datetime.fromisoformat(row['observed_at'].replace('Z', '+00:00')),
+                  canonical_url=row.get('canonical_url'),
+                  title=row.get('title'),
+                  text=row.get('text'),
+                  artifact_type=row.get('artifact_type'),
+                  artifact_name=row.get('artifact_name'),
+                  artifact_version=row.get('artifact_version'),
+                  signal_roles=tuple(row.get('signal_roles') or ()),
+              )
+              for row in rows
+          )
+
+          for boundary_text, (expected_episode_count, expected_observation_count, expected_digest) in expected.items():
+              as_of = datetime.fromisoformat(boundary_text)
+              projection = build_compact_grouping_projection(inputs, relations=(), as_of=as_of)
+              memberships = [','.join(sorted(group.observation_ids)) for group in projection.groups]
+              memberships.extend(projection.ungrouped_observation_ids)
+              partition_text = '|'.join(sorted(memberships))
+              digest = hashlib.sha256(partition_text.encode('utf-8')).hexdigest()
+              episode_count = len(memberships)
+              observation_count = projection.eligible_observation_count
+              result = {
+                  'as_of': boundary_text,
+                  'episode_count': episode_count,
+                  'observation_count': observation_count,
+                  'partition_sha256': digest,
+                  'candidate_pair_count': projection.candidate_pair_count,
+                  'group_pair_count': projection.group_pair_count,
+              }
+              print(json.dumps(result, sort_keys=True))
+              assert episode_count == expected_episode_count, result
+              assert observation_count == expected_observation_count, result
+              assert digest == expected_digest, result
+
+          print('retained-grouping-v1-replay: PASS 11/11 exact membership partitions')
+          PY
