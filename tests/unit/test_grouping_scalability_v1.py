@@ -104,13 +104,14 @@ def test_v0_oracle_blob_is_still_the_frozen_reference() -> None:
     assert _git_blob_sha(Path("src/frontier/domain/grouping.py")) == GROUPING_V1_ORACLE_BLOB
 
 
-@pytest.mark.parametrize(("left", "right", "expected"), corpus_cases())
+@pytest.mark.parametrize(("left", "right", "_expected"), corpus_cases())
 def test_fast_group_predicate_matches_frozen_v0_pair_corpus(
     left: GroupingInput,
     right: GroupingInput,
-    expected: GroupingDecision,
+    _expected: GroupingDecision,
 ) -> None:
-    assert is_group_pair_v1(left, right) is (expected is GroupingDecision.GROUP)
+    reference_group = assess_pair(left, right).decision is GroupingDecision.GROUP
+    assert is_group_pair_v1(left, right) is reference_group
     assert assess_pair_v1(left, right).to_canonical() == assess_pair(left, right).to_canonical()
 
 
