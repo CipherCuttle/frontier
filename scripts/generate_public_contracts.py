@@ -179,9 +179,7 @@ def typescript_text(document: JsonObject) -> str:
                 fields.append(f"{parameter['name']}{optional}: {_parameter_type(parameter)};")
             query_shape = "{ " + " ".join(fields) + " }"
             query_default = (
-                ""
-                if any(parameter.get("required") for parameter in query_parameters)
-                else " = {}"
+                "" if any(parameter.get("required") for parameter in query_parameters) else " = {}"
             )
             required_args.append(f"query: {query_shape}{query_default}")
 
