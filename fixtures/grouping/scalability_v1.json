@@ -1,0 +1,185 @@
+{
+  "schema_version": "grouping-scalability-corpus-v1",
+  "authority": "GROUPING_SCALABILITY_V1",
+  "reference_algorithm": "guarded-hybrid-v0",
+  "candidate_algorithm_family": "deterministic-group-complete-blocking-v1",
+  "semantic_invariants": {
+    "pair_decisions": ["GROUP", "NO_GROUP", "AMBIGUOUS"],
+    "omitted_pair_means_no_stronger_than": "AMBIGUOUS",
+    "entity_authority": false,
+    "provenance_root_authority": false,
+    "confirmation_authority": false,
+    "transitive_group_relaxation": false
+  },
+  "hostile_cases": [
+    {
+      "id": "S01_EXPLICIT_RELATION_GROUP",
+      "attack": "candidate generator ignores an eligible explicit CORRECTS/RETRACTS relation",
+      "required": "exact reference GROUP relation and identical episode membership"
+    },
+    {
+      "id": "S02_FUTURE_RELATION_LEAK",
+      "attack": "explicit relation created after as_of is admitted into grouping",
+      "required": "future relation excluded"
+    },
+    {
+      "id": "S03_SAME_URL_ATTENTION",
+      "attack": "same canonical URL ATTENTION pair is omitted by blocking",
+      "required": "reference GROUP preserved"
+    },
+    {
+      "id": "S04_SAME_URL_SEMANTIC_MATCH",
+      "attack": "same URL pair with exact semantic/substantive title match is missed",
+      "required": "reference GROUP preserved within far-window rules"
+    },
+    {
+      "id": "S05_SAME_URL_CONFLICT",
+      "attack": "same URL is treated as unconditional GROUP",
+      "required": "reference AMBIGUOUS/NO_GROUP behavior preserved"
+    },
+    {
+      "id": "S06_EXACT_TEXT_NEAR",
+      "attack": "equal semantic text within NEAR_WINDOW is missed",
+      "required": "reference GROUP preserved"
+    },
+    {
+      "id": "S07_TITLE_EQUAL_NEAR",
+      "attack": "equal normalized substantive title within NEAR_WINDOW is missed",
+      "required": "reference GROUP preserved"
+    },
+    {
+      "id": "S08_JACCARD_BOUNDARY",
+      "attack": "deterministic blocking loses a title-token pair at exactly Jaccard 0.80",
+      "required": "candidate generation is complete at threshold boundary"
+    },
+    {
+      "id": "S09_JACCARD_BELOW_BOUNDARY",
+      "attack": "blocking approximation promotes a 0.799... pair",
+      "required": "exact reference assessment determines final decision"
+    },
+    {
+      "id": "S10_PUNCTUATION_CONFLICT",
+      "attack": "token-equivalent punctuation-sensitive titles are force-grouped",
+      "required": "reference AMBIGUOUS preserved"
+    },
+    {
+      "id": "S11_ARTIFACT_VERSION_SPLIT",
+      "attack": "same artifact different versions collapse through a shared candidate bucket",
+      "required": "reference NO_GROUP preserved"
+    },
+    {
+      "id": "S12_FAR_WINDOW",
+      "attack": "matching text/URL across the far window creates a group",
+      "required": "reference NO_GROUP preserved"
+    },
+    {
+      "id": "S13_LOW_OVERLAP_IMPLICIT_AMBIGUITY",
+      "attack": "non-candidate low-overlap pair is interpreted as NO_GROUP/independent evidence",
+      "required": "omission carries no stronger state than AMBIGUOUS"
+    },
+    {
+      "id": "S14_FALSE_TRANSITIVITY",
+      "attack": "A-B GROUP and B-C GROUP are allowed to merge A,C when A-C is not GROUP",
+      "required": "clique-conservative V0 membership preserved"
+    },
+    {
+      "id": "S15_GROUP_CANDIDATE_OMISSION",
+      "attack": "remove one true GROUP pair from candidate generation",
+      "required": "equivalence suite fails closed"
+    },
+    {
+      "id": "S16_FALSE_GROUP_INJECTION",
+      "attack": "inject one non-GROUP pair as GROUP",
+      "required": "precision/equivalence suite fails closed"
+    },
+    {
+      "id": "S17_GROUP_ID_VERSIONING",
+      "attack": "V1 reuses V0 group IDs despite a changed algorithm identity",
+      "required": "V1 group IDs bind V1 algorithm version and sorted members"
+    },
+    {
+      "id": "S18_RECEIPT_OMITS_INPUT",
+      "attack": "streaming/compact digest drops a membership-relevant field or eligible relation",
+      "required": "input mutation changes receipt/input digest deterministically"
+    },
+    {
+      "id": "S19_RECEIPT_O_N2_EXPANSION",
+      "attack": "digest path recreates exhaustive ambiguous pair dict/list materialization",
+      "required": "production-path scale gates remain within frozen RSS/time ceilings"
+    },
+    {
+      "id": "S20_REPLAY_DRIFT",
+      "attack": "candidate iteration/hash ordering changes compact projection or receipt",
+      "required": "byte/digest-identical deterministic replay"
+    },
+    {
+      "id": "S21_PIT_OBSERVATION_LEAK",
+      "attack": "observation first known after as_of influences historical grouping",
+      "required": "historical projection unchanged"
+    },
+    {
+      "id": "S22_POOLER_ENDPOINT",
+      "attack": "successor confirmatory worker uses a -pooler endpoint with session advisory lock",
+      "required": "preflight fails closed before acquisition/experiment execution"
+    },
+    {
+      "id": "S23_STALE_LEASE_OWNER",
+      "attack": "unlock/connection failure leaves cached owner that bypasses database reacquisition",
+      "required": "next acquire performs real DB lock operation or fails closed"
+    },
+    {
+      "id": "S24_SILENT_RECONNECT",
+      "attack": "transient PostgreSQL OperationalError restarts a cycle without operator-visible cause",
+      "required": "bounded reconnect cause is logged without secret disclosure"
+    },
+    {
+      "id": "S25_EVIDENCE_POOLING",
+      "attack": "11 retained PEF_V0 boundaries are counted as confirmatory evidence for a V1 freeze",
+      "required": "forbidden; successor starts a fresh window"
+    }
+  ],
+  "scale_cases": [
+    {
+      "id": "K01_INCIDENT_2425_SPARSE",
+      "shape": "2425 same-day low-overlap observations",
+      "required_peak_rss_mib_max": 512,
+      "required_wall_seconds_max": 30,
+      "must_include_receipt_path": true
+    },
+    {
+      "id": "K02_SPARSE_10000",
+      "shape": "10000 same-day low-overlap observations",
+      "required_peak_rss_mib_max": 768,
+      "required_wall_seconds_max": 60,
+      "must_include_receipt_path": true
+    },
+    {
+      "id": "K03_SPARSE_25000",
+      "shape": "25000 same-day low-overlap observations",
+      "required_peak_rss_mib_max": 1024,
+      "required_wall_seconds_max": 180,
+      "must_include_receipt_path": true
+    },
+    {
+      "id": "K04_DENSE_5000",
+      "shape": "5000 observations with deterministic high-collision same-URL and exact-title/semantic buckets",
+      "required_peak_rss_mib_max": 1024,
+      "required_wall_seconds_max": 180,
+      "must_include_receipt_path": true,
+      "required_reference_membership_equivalence": true
+    }
+  ],
+  "retained_v0_equivalence_boundaries_utc": [
+    "2026-09-08T15:00:00Z",
+    "2026-09-08T15:05:00Z",
+    "2026-09-08T15:10:00Z",
+    "2026-09-08T15:15:00Z",
+    "2026-09-08T15:20:00Z",
+    "2026-09-08T15:25:00Z",
+    "2026-09-08T15:30:00Z",
+    "2026-09-08T15:35:00Z",
+    "2026-09-08T15:40:00Z",
+    "2026-09-08T15:45:00Z",
+    "2026-09-08T15:50:00Z"
+  ]
+}
