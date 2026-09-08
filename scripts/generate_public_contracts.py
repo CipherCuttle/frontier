@@ -139,7 +139,7 @@ def _parameter_type(parameter: JsonObject) -> str:
 def typescript_text(document: JsonObject) -> str:
     lines = [
         "// GENERATED from contracts/public/openapi_v0.json. DO NOT EDIT.",
-        "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0.",
+        "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0 / EVIDENCE_QUERY_V0.",
         "",
         "export interface FrontierPublicReadTransport {",
         (
@@ -178,7 +178,10 @@ def typescript_text(document: JsonObject) -> str:
                 optional = "" if parameter.get("required") else "?"
                 fields.append(f"{parameter['name']}{optional}: {_parameter_type(parameter)};")
             query_shape = "{ " + " ".join(fields) + " }"
-            required_args.append(f"query: {query_shape} = {{}}")
+            query_default = (
+                "" if any(parameter.get("required") for parameter in query_parameters) else " = {}"
+            )
+            required_args.append(f"query: {query_shape}{query_default}")
 
         rendered_path = json.dumps(path)
         for parameter in path_parameters:

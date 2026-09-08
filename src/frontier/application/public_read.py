@@ -5,6 +5,7 @@ from typing import Protocol
 
 from frontier.domain.public_read import (
     EpisodeEvidenceRead,
+    EvidenceQueryPage,
     ObservationEvidenceRead,
     ObservationNotFoundError,
     ObservationResponseRead,
@@ -15,7 +16,10 @@ from frontier.domain.public_read import (
     SnapshotIntegrityError,
     SourceHealthRead,
     episode_observation_ids,
+    evidence_query_snapshot_observation_ids,
     find_episode,
+    normalize_evidence_query,
+    select_evidence_query,
     select_public_view,
 )
 
@@ -48,6 +52,37 @@ class PublicReadService:
     ) -> PublicViewPage:
         snapshot = self._repository.resolve_snapshot(snapshot_id)
         return select_public_view(snapshot, view=view, limit=limit, offset=offset)
+
+    def search_evidence(
+        self,
+        query: str,
+        *,
+        snapshot_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> EvidenceQueryPage:
+        normalized_tokens = normalize_evidence_query(query)
+        snapshot = self._repository.resolve_snapshot(snapshot_id)
+        expected_ids = evidence_query_snapshot_observation_ids(snapshot)
+        as_of = _parse_canonical_timestamp(snapshot.binding.as_of)
+        observations = self._repository.list_observations(expected_ids, as_of=as_of)
+        by_id = {item.observation_id: item for item in observations}
+        if len(by_id) != len(observations):
+            raise SnapshotIntegrityError(
+                "public evidence repository returned duplicate query observations"
+            )
+        if set(by_id) != set(expected_ids):
+            raise SnapshotIntegrityError(
+                "query evidence does not exactly match snapshot observation membership"
+            )
+        return select_evidence_query(
+            snapshot,
+            by_id,
+            query=query,
+            normalized_tokens=normalized_tokens,
+            limit=limit,
+            offset=offset,
+        )
 
     def get_episode(
         self, episode_id: str, *, snapshot_id: str | None = None

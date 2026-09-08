@@ -9,11 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from frontier.application.public_read import PublicReadService
 from frontier.domain.public_read import (
+    EVIDENCE_QUERY_MAX_CODEPOINTS,
     PUBLIC_READ_API_VERSION,
     PUBLIC_READ_DEFAULT_LIMIT,
     PUBLIC_READ_MAX_LIMIT,
     PUBLIC_READ_RESPONSE_SCHEMA,
     EpisodeNotFoundError,
+    EvidenceQueryInvalidError,
+    EvidenceQueryPage,
     NoCompleteSnapshotError,
     ObservationNotFoundError,
     PublicReadFailure,
@@ -29,6 +32,7 @@ if TYPE_CHECKING:
 SnapshotQuery = Annotated[str | None, Query()]
 LimitQuery = Annotated[int, Query(ge=1, le=PUBLIC_READ_MAX_LIMIT)]
 OffsetQuery = Annotated[int, Query(ge=0)]
+EvidenceSearchQuery = Annotated[str, Query(min_length=1, max_length=EVIDENCE_QUERY_MAX_CODEPOINTS)]
 
 
 class SnapshotBindingResponse(BaseModel):
@@ -94,6 +98,33 @@ class ViewResponse(BaseModel):
     limit: int
     offset: int
     items: list[EpisodeResponse]
+
+
+class EvidenceQueryItemResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    episode: EpisodeResponse
+    matched_observation_ids: list[str]
+
+
+class EvidenceQueryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = PUBLIC_READ_RESPONSE_SCHEMA
+    snapshot: SnapshotBindingResponse
+    generated_at: str
+    transport_state: str
+    freshness_state: str
+    coverage_state: str
+    schema_state: str
+    query_policy_version: str
+    semantic_scope: str
+    query: str
+    normalized_tokens: list[str]
+    total: int
+    limit: int
+    offset: int
+    items: list[EvidenceQueryItemResponse]
 
 
 class CollectionOccurrenceResponse(BaseModel):
@@ -204,6 +235,8 @@ class ErrorResponse(BaseModel):
 
 
 def _failure_status(exc: PublicReadFailure) -> int:
+    if isinstance(exc, EvidenceQueryInvalidError):
+        return 400
     if isinstance(exc, (SnapshotNotFoundError, EpisodeNotFoundError, ObservationNotFoundError)):
         return 404
     if isinstance(exc, (NoCompleteSnapshotError, SnapshotIntegrityError)):
@@ -212,6 +245,8 @@ def _failure_status(exc: PublicReadFailure) -> int:
 
 
 def _failure_detail(exc: PublicReadFailure) -> str:
+    if isinstance(exc, EvidenceQueryInvalidError):
+        return "The evidence query is invalid."
     if isinstance(exc, NoCompleteSnapshotError):
         return "No publishable COMPLETE baseline snapshot is available."
     if isinstance(exc, SnapshotNotFoundError):
@@ -243,6 +278,10 @@ def _view_response(page: PublicViewPage) -> ViewResponse:
             "items": list(page.items),
         }
     )
+
+
+def _evidence_query_response(page: EvidenceQueryPage) -> EvidenceQueryResponse:
+    return EvidenceQueryResponse.model_validate(asdict(page))
 
 
 def create_public_read_app(
@@ -309,6 +348,15 @@ def create_public_read_app(
     ) -> ViewResponse:
         return view_endpoint(PublicViewKind.TRENDING, snapshot_id, limit, offset)
 
+    def search_evidence(
+        q: EvidenceSearchQuery,
+        snapshot_id: SnapshotQuery = None,
+        limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,
+        offset: OffsetQuery = 0,
+    ) -> EvidenceQueryResponse:
+        page = service.search_evidence(q, snapshot_id=snapshot_id, limit=limit, offset=offset)
+        return _evidence_query_response(page)
+
     def episode(episode_id: str, snapshot_id: SnapshotQuery = None) -> EpisodeEvidenceResponse:
         value = service.get_episode(episode_id, snapshot_id=snapshot_id)
         return EpisodeEvidenceResponse.model_validate(asdict(value))
@@ -352,6 +400,13 @@ def create_public_read_app(
         methods=["GET"],
         response_model=ViewResponse,
         operation_id="getTrending",
+    )
+    app.add_api_route(
+        "/v0/search",
+        search_evidence,
+        methods=["GET"],
+        response_model=EvidenceQueryResponse,
+        operation_id="searchEvidence",
     )
     app.add_api_route(
         "/v0/episodes/{episode_id}",

@@ -11,6 +11,10 @@ PUBLIC_READ_VIEW_POLICY_VERSION = "baseline-read-views-v0"
 PUBLIC_READ_SEMANTIC_SCOPE = "BASELINE_SUBSTRATE"
 PUBLIC_READ_DEFAULT_LIMIT = 50
 PUBLIC_READ_MAX_LIMIT = 100
+EVIDENCE_QUERY_POLICY_VERSION = "evidence-query-lexical-filter-v0"
+EVIDENCE_QUERY_SEMANTIC_SCOPE = "BASELINE_SUBSTRATE_QUERY"
+EVIDENCE_QUERY_MAX_CODEPOINTS = 256
+EVIDENCE_QUERY_MAX_TOKENS = 12
 
 
 class PublicReadFailure(RuntimeError):
@@ -35,6 +39,10 @@ class EpisodeNotFoundError(PublicReadFailure):
 
 class ObservationNotFoundError(PublicReadFailure):
     code = "OBSERVATION_NOT_FOUND"
+
+
+class EvidenceQueryInvalidError(PublicReadFailure):
+    code = "INVALID_QUERY"
 
 
 class PublicViewKind(StrEnum):
@@ -168,6 +176,30 @@ class PublicHealthRead:
     sources: tuple[SourceHealthRead, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class EvidenceQueryItem:
+    episode: dict[str, CanonicalValue]
+    matched_observation_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceQueryPage:
+    snapshot: SnapshotBinding
+    generated_at: str
+    transport_state: str
+    freshness_state: str
+    coverage_state: str
+    schema_state: str
+    query_policy_version: str
+    semantic_scope: str
+    query: str
+    normalized_tokens: tuple[str, ...]
+    total: int
+    limit: int
+    offset: int
+    items: tuple[EvidenceQueryItem, ...]
+
+
 def _episode_int(episode: dict[str, CanonicalValue], field: str) -> int:
     value = episode.get(field)
     if isinstance(value, bool) or not isinstance(value, int):
@@ -255,3 +287,115 @@ def episode_observation_ids(episode: dict[str, CanonicalValue]) -> tuple[str, ..
     if len(result) != len(set(result)):
         raise SnapshotIntegrityError("baseline episode contains duplicate observation id")
     return tuple(result)
+
+
+def normalize_evidence_query(query: str) -> tuple[str, ...]:
+    trimmed = query.strip()
+    if not trimmed or len(trimmed) > EVIDENCE_QUERY_MAX_CODEPOINTS:
+        raise EvidenceQueryInvalidError("query length is outside the frozen bounds")
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for raw_token in trimmed.split():
+        token = raw_token.casefold()
+        if token not in seen:
+            seen.add(token)
+            tokens.append(token)
+    if not tokens or len(tokens) > EVIDENCE_QUERY_MAX_TOKENS:
+        raise EvidenceQueryInvalidError("query token count is outside the frozen bounds")
+    return tuple(tokens)
+
+
+def _append_payload_string_leaves(value: CanonicalValue, result: list[str]) -> None:
+    if isinstance(value, str):
+        result.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            _append_payload_string_leaves(item, result)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _append_payload_string_leaves(item, result)
+
+
+def _observation_token_hits(
+    observation: ObservationEvidenceRead,
+    normalized_tokens: tuple[str, ...],
+) -> frozenset[str]:
+    searchable = [observation.source_item_key, observation.kind]
+    _append_payload_string_leaves(observation.payload, searchable)
+    folded = tuple(value.casefold() for value in searchable)
+    return frozenset(
+        token for token in normalized_tokens if any(token in value for value in folded)
+    )
+
+
+def evidence_query_snapshot_observation_ids(
+    snapshot: ResolvedPublicSnapshot,
+) -> tuple[str, ...]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for episode in _ordered_episodes(snapshot.episodes):
+        for observation_id in episode_observation_ids(episode):
+            if observation_id not in seen:
+                seen.add(observation_id)
+                result.append(observation_id)
+    return tuple(result)
+
+
+def select_evidence_query(
+    snapshot: ResolvedPublicSnapshot,
+    observations_by_id: dict[str, ObservationEvidenceRead],
+    *,
+    query: str,
+    normalized_tokens: tuple[str, ...],
+    limit: int = PUBLIC_READ_DEFAULT_LIMIT,
+    offset: int = 0,
+) -> EvidenceQueryPage:
+    expected_tokens = normalize_evidence_query(query)
+    if normalized_tokens != expected_tokens:
+        raise EvidenceQueryInvalidError("normalized query tokens do not match query")
+    if limit < 1 or limit > PUBLIC_READ_MAX_LIMIT:
+        raise ValueError(f"limit must be between 1 and {PUBLIC_READ_MAX_LIMIT}")
+    if offset < 0:
+        raise ValueError("offset must be non-negative")
+
+    expected_observation_ids = evidence_query_snapshot_observation_ids(snapshot)
+    if set(observations_by_id) != set(expected_observation_ids):
+        raise SnapshotIntegrityError(
+            "query evidence does not exactly match snapshot observation membership"
+        )
+
+    matches: list[EvidenceQueryItem] = []
+    for episode in _ordered_episodes(snapshot.episodes):
+        member_ids = episode_observation_ids(episode)
+        covered_tokens: set[str] = set()
+        matched_ids: list[str] = []
+        for observation_id in member_ids:
+            observation = observations_by_id[observation_id]
+            hits = _observation_token_hits(observation, normalized_tokens)
+            if hits:
+                matched_ids.append(observation_id)
+                covered_tokens.update(hits)
+        if all(token in covered_tokens for token in normalized_tokens):
+            matches.append(
+                EvidenceQueryItem(
+                    episode=episode,
+                    matched_observation_ids=tuple(matched_ids),
+                )
+            )
+
+    return EvidenceQueryPage(
+        snapshot=snapshot.binding,
+        generated_at=snapshot.generated_at,
+        transport_state=snapshot.transport_state,
+        freshness_state=snapshot.freshness_state,
+        coverage_state=snapshot.coverage_state,
+        schema_state=snapshot.schema_state,
+        query_policy_version=EVIDENCE_QUERY_POLICY_VERSION,
+        semantic_scope=EVIDENCE_QUERY_SEMANTIC_SCOPE,
+        query=query,
+        normalized_tokens=normalized_tokens,
+        total=len(matches),
+        limit=limit,
+        offset=offset,
+        items=tuple(matches[offset : offset + limit]),
+    )

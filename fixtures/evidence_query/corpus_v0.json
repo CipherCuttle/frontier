@@ -1,0 +1,140 @@
+{
+  "schema_version": "evidence-query-hostile-corpus-v0",
+  "query_policy_version": "evidence-query-lexical-filter-v0",
+  "semantic_scope": "BASELINE_SUBSTRATE_QUERY",
+  "cases": [
+    {
+      "id": "EQ01_CASEFOLD_STRING_VALUE",
+      "family": "lexical-normalization",
+      "given": "payload string leaf contains 'Frontier Agent'",
+      "query": "frontier AGENT",
+      "expected": "MATCH"
+    },
+    {
+      "id": "EQ02_AND_ACROSS_OBSERVATIONS",
+      "family": "episode-match",
+      "given": "token alpha occurs only in observation A and token beta only in observation B of one episode",
+      "query": "alpha beta",
+      "expected": "MATCH_EPISODE_AND_REPORT_A_B"
+    },
+    {
+      "id": "EQ03_PAYLOAD_KEY_NOT_SEARCHABLE",
+      "family": "searchable-surface",
+      "given": "payload key is secretword but no string value contains secretword",
+      "query": "secretword",
+      "expected": "NO_MATCH"
+    },
+    {
+      "id": "EQ04_NONSTRING_NOT_COERCED",
+      "family": "searchable-surface",
+      "given": "payload contains integer 12345, boolean true, and null but no string leaf with those lexical forms",
+      "query": "12345",
+      "expected": "NO_MATCH"
+    },
+    {
+      "id": "EQ05_CONFUSABLE_NOT_COMPATIBILITY_NORMALIZED",
+      "family": "unicode-boundary",
+      "given": "payload contains ASCII 'paypal'",
+      "query": "paypa\u217c",
+      "expected": "NO_MATCH"
+    },
+    {
+      "id": "EQ06_OUTSIDE_SNAPSHOT_FORBIDDEN",
+      "family": "snapshot-confinement",
+      "given": "repository contains matching observation not named by any episode in selected snapshot",
+      "query": "needle",
+      "expected": "OUTSIDE_OBSERVATION_NEVER_QUERIED_OR_RETURNED"
+    },
+    {
+      "id": "EQ07_MISSING_MEMBER_FAILS_CLOSED",
+      "family": "snapshot-integrity",
+      "given": "selected snapshot names two observations but repository returns only one at snapshot as_of",
+      "query": "needle",
+      "expected": "SNAPSHOT_INTEGRITY_FAILURE"
+    },
+    {
+      "id": "EQ08_EXTRA_MEMBER_FAILS_CLOSED",
+      "family": "snapshot-integrity",
+      "given": "repository returns an observation not present in exact selected snapshot membership",
+      "query": "needle",
+      "expected": "SNAPSHOT_INTEGRITY_FAILURE"
+    },
+    {
+      "id": "EQ09_DUPLICATE_MEMBER_FAILS_CLOSED",
+      "family": "snapshot-integrity",
+      "given": "repository returns the same snapshot-member observation twice",
+      "query": "needle",
+      "expected": "SNAPSHOT_INTEGRITY_FAILURE"
+    },
+    {
+      "id": "EQ10_BASELINE_ORDER_BEATS_MATCH_FREQUENCY",
+      "family": "non-ranking",
+      "given": "rank 1 matches token once and rank 9 matches it many times",
+      "query": "needle",
+      "expected": "RESULT_ORDER_RANK_1_THEN_RANK_9_NO_SCORE"
+    },
+    {
+      "id": "EQ11_FILTER_BEFORE_PAGINATION",
+      "family": "pagination",
+      "given": "matching baseline ranks are 2, 5, 8 and request limit=1 offset=1",
+      "query": "needle",
+      "expected": "RETURN_ONLY_RANK_5_TOTAL_3"
+    },
+    {
+      "id": "EQ12_ZERO_MATCH",
+      "family": "empty-result",
+      "given": "no authorized string value contains query token",
+      "query": "absent-token",
+      "expected": "HTTP_200_TOTAL_0_ITEMS_EMPTY"
+    },
+    {
+      "id": "EQ13_EMPTY_QUERY_REJECTED",
+      "family": "query-bounds",
+      "given": "query contains only Unicode whitespace",
+      "query": "   ",
+      "expected": "REJECT"
+    },
+    {
+      "id": "EQ14_OVERLONG_QUERY_REJECTED",
+      "family": "query-bounds",
+      "given": "trimmed query exceeds 256 Unicode code points",
+      "expected": "REJECT"
+    },
+    {
+      "id": "EQ15_TOO_MANY_TOKENS_REJECTED",
+      "family": "query-bounds",
+      "given": "query normalizes to 13 distinct whitespace-delimited tokens",
+      "expected": "REJECT"
+    },
+    {
+      "id": "EQ16_DUPLICATE_TOKENS_DEDUPED_STABLY",
+      "family": "lexical-normalization",
+      "given": "query is 'Alpha alpha BETA beta'",
+      "expected_normalized_tokens": ["alpha", "beta"]
+    },
+    {
+      "id": "EQ17_SOURCE_ITEM_KEY_AND_KIND_SEARCHABLE",
+      "family": "searchable-surface",
+      "given": "query appears in source_item_key or kind but not payload",
+      "expected": "MATCH"
+    },
+    {
+      "id": "EQ18_SOURCE_ID_NOT_IMPLICIT_TEXT",
+      "family": "searchable-surface",
+      "given": "query appears only in source_id",
+      "expected": "NO_MATCH"
+    },
+    {
+      "id": "EQ19_NO_MUTATION_SURFACE",
+      "family": "transport-boundary",
+      "given": "generated public OpenAPI after query endpoint addition",
+      "expected": "ALL_OPERATIONS_GET"
+    },
+    {
+      "id": "EQ20_NO_AGENT_CONTEXT_ESCALATION",
+      "family": "authority-boundary",
+      "given": "query endpoint is available to external clients",
+      "expected": "RETRIEVAL_FILTER_ONLY_NO_AGENT_CONTEXT_OR_PROMOTION_AUTHORITY"
+    }
+  ]
+}
