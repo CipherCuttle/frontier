@@ -39,6 +39,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP INDEX IF EXISTS shadow_experiment_runs_experiment_boundary_class_uidx;"
-    )
+    op.execute("DROP INDEX IF EXISTS shadow_experiment_runs_experiment_boundary_class_uidx;")
