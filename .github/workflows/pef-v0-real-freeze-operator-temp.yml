@@ -9,9 +9,11 @@ permissions:
   contents: read
 
 jobs:
-  offline-sql:
+  neon-readiness:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      FRONTIER_DATABASE_URL: postgresql://frontier@ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech/frontier?sslmode=require&channel_binding=require
     steps:
       - name: Checkout exact canonical implementation
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -37,16 +39,5 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "d106f66580b4b843e086f9c833daff10aec8fdda"
           test "$(git rev-parse 'HEAD^{tree}')" = "807c0157219c8075874053357def5a0ad658b0c0"
-      - name: Generate canonical Alembic offline SQL
-        shell: bash
-        run: |
-          set -euo pipefail
-          FRONTIER_DATABASE_URL='postgresql+psycopg://offline:offline@localhost/offline' uv run alembic upgrade head --sql > frontier-schema.sql
-          sha256sum frontier-schema.sql
-      - name: Upload canonical schema SQL
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: frontier-canonical-schema-sql
-          path: frontier-schema.sql
-          if-no-files-found: error
-          retention-days: 1
+      - name: Read-only canonical database readiness
+        run: uv run frontier doctor
