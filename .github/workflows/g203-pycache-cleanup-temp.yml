@@ -1,0 +1,45 @@
+name: G2-03 pycache cleanup temp
+
+on:
+  push:
+    branches:
+      - agent/g203-pycache-cleanup-temp
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d3602c8538e339cb7a4cf95a98caea1792385d81
+          fetch-depth: 1
+      - name: Remove tracked Python bytecode and prevent recurrence
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET=agent/gigasprint-02-prefreeze-launch-integrity
+          EXPECTED=d3602c8538e339cb7a4cf95a98caea1792385d81
+          git fetch origin "$TARGET"
+          test "$(git rev-parse "origin/$TARGET")" = "$EXPECTED"
+
+          git ls-files -z | grep -zE '(^|/)__pycache__/' | xargs -0 -r git rm --
+          printf '__pycache__/\n*.py[cod]\n' > .gitignore
+          git add .gitignore
+
+          test -z "$(git ls-files | grep -E '(^|/)__pycache__/' || true)"
+          git diff --cached --check
+          git diff --cached --name-only > /tmp/changed
+          test -s /tmp/changed
+          test "$(grep -c '^\.gitignore$' /tmp/changed)" = 1
+          test -z "$(grep -Ev '^\.gitignore$|(^|/)__pycache__/' /tmp/changed || true)"
+          test -z "$(git diff --cached --diff-filter=ACMR --name-only | grep -v '^\.gitignore$' || true)"
+
+          git fetch origin "$TARGET"
+          test "$(git rev-parse "origin/$TARGET")" = "$EXPECTED"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'chore(gigasprint02): remove tracked Python bytecode'
+          git push origin "HEAD:$TARGET"
