@@ -19,7 +19,6 @@ from .grouping import (
     GroupingInput,
     GroupingRelationInput,
     PairAssessment,
-    _explicit_pairs,
     assess_pair,
     grouping_jaccard,
     grouping_token_sequence,
@@ -395,6 +394,34 @@ def _eligible_inputs(
     return eligible
 
 
+def _explicit_pairs_v1(
+    relations: Iterable[GroupingRelationInput],
+    *,
+    as_of: datetime,
+    allowed_ids: frozenset[str],
+) -> frozenset[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for relation in relations:
+        if relation.created_at > as_of:
+            continue
+        if relation.authority != "EXPLICIT":
+            continue
+        if relation.relation_type not in {"CORRECTS", "RETRACTS"}:
+            continue
+        if (
+            relation.from_observation_id not in allowed_ids
+            or relation.target_observation_id not in allowed_ids
+        ):
+            continue
+        pairs.add(
+            ordered_pair(
+                relation.from_observation_id,
+                relation.target_observation_id,
+            )
+        )
+    return frozenset(pairs)
+
+
 def build_compact_grouping_projection(
     inputs: Iterable[GroupingInput],
     *,
@@ -404,7 +431,7 @@ def build_compact_grouping_projection(
     eligible = _eligible_inputs(inputs, as_of=as_of)
     relation_values = tuple(relations)
     ids = tuple(item.observation_id for item in eligible)
-    explicit_pairs = _explicit_pairs(
+    explicit_pairs = _explicit_pairs_v1(
         relation_values,
         as_of=as_of,
         allowed_ids=frozenset(ids),
