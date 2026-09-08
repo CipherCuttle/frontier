@@ -49,6 +49,11 @@ jobs:
           uv run pyright
           uv run alembic upgrade head
           uv run pytest -q tests/unit/test_drift_sentry.py tests/integration/test_freeze_workflow_postgres.py tests/integration/test_postgres_store.py
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              *__pycache__/*) git restore -- "$path" ;;
+            esac
+          done < <(git ls-files -m -z)
           printf '%s\n' \
             tests/integration/test_freeze_workflow_postgres.py \
             tests/integration/test_postgres_store.py \
