@@ -34,13 +34,17 @@ jobs:
         run: uv sync --all-extras --frozen
       - name: Apply bounded runtime changes
         run: python scripts/_temp_evidence_query_patch.py
-      - name: Format bounded Python changes and temporary helper
+      - name: Format bounded product changes
         run: |
-          uv run ruff format src/frontier/domain/public_read.py src/frontier/application/public_read.py src/frontier/adapters/api/public_read.py tests/unit/test_public_read.py tests/unit/test_public_read_api.py scripts/generate_public_contracts.py scripts/_temp_evidence_query_patch.py
+          uv run ruff format src/frontier/domain/public_read.py src/frontier/application/public_read.py src/frontier/adapters/api/public_read.py tests/unit/test_public_read.py tests/unit/test_public_read_api.py scripts/generate_public_contracts.py
+          uv run ruff check --fix src/frontier/application/public_read.py
+          uv run ruff format src/frontier/application/public_read.py
       - name: Generate deterministic public contracts
         run: uv run python scripts/generate_public_contracts.py
       - name: Focused EVIDENCE_QUERY_V0 tests
         run: uv run pytest -q tests/unit/test_public_read.py tests/unit/test_public_read_api.py
+      - name: Remove temporary helper before repository verification
+        run: rm scripts/_temp_evidence_query_patch.py
       - name: Full repository verification
         run: uv run python scripts/verify.py
       - name: Guard frozen PEF surfaces
