@@ -19,8 +19,10 @@ import pytest
 from frontier.application.candidate_freeze import collect_freeze_inputs
 from frontier.cli.main import (
     FREEZE_PERSIST_AUTHORIZED_ENV,
+    FREEZE_PUBLICATION_PERSIST_AUTHORIZED_ENV,
     durability_payload,
     freeze_derive,
+    freeze_publish,
     freeze_verify,
 )
 from frontier.domain.candidate_freeze import (
@@ -183,3 +185,26 @@ def test_durability_payload_stamped_is_durable() -> None:
 def test_persist_guard_env_is_documented_name() -> None:
     # The guard name is a stable operator contract; the safe default is absolute.
     assert FREEZE_PERSIST_AUTHORIZED_ENV == "FRONTIER_FREEZE_PERSIST_AUTHORIZED"
+
+
+def test_publication_persist_guard_refuses_before_db_or_git_access(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(FREEZE_PUBLICATION_PERSIST_AUTHORIZED_ENV, raising=False)
+    rc = freeze_publish(
+        REPO_ROOT,
+        receipt_id="freezereceipt_" + "a" * 64,
+        database_url="postgresql://invalid.invalid/db",
+    )
+    assert rc == 2
+    captured = capsys.readouterr()
+    refusal = json.loads(captured.err)
+    assert refusal["error"] == "FREEZE_PUBLICATION_PERSIST_UNAUTHORIZED"
+    assert captured.out == ""
+
+
+def test_publication_persist_guard_env_is_documented_name() -> None:
+    assert (
+        FREEZE_PUBLICATION_PERSIST_AUTHORIZED_ENV
+        == "FRONTIER_FREEZE_PUBLICATION_PERSIST_AUTHORIZED"
+    )

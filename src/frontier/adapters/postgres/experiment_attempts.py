@@ -21,7 +21,10 @@ from frontier.application.experiment_orchestration import (
     FreezeBinding,
     ShadowRunPersistence,
 )
-from frontier.application.freeze_publication import require_confirmatory_boundary
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    require_confirmatory_boundary,
+)
 from frontier.domain.advanced_intelligence import PEF_EXPERIMENT_ID, ShadowExperimentRun
 from frontier.domain.candidate_freeze import (
     CandidateFreezeReceipt,
@@ -277,7 +280,12 @@ class PostgresExperimentAttemptRepository:
 
             cur.execute(
                 """
-                SELECT r.status, r.durable_freeze_at, p.publication_committer_at
+                SELECT r.status, r.durable_freeze_at, r.receipt_digest,
+                       r.implementation_commit, r.implementation_tree_digest,
+                       p.freeze_receipt_digest, p.implementation_commit,
+                       p.implementation_tree_digest, p.publication_commit,
+                       p.publication_committer_at, p.publication_digest,
+                       p.publication_json
                 FROM candidate_freeze_receipts r
                 LEFT JOIN candidate_freeze_publications p ON p.receipt_id = r.receipt_id
                 WHERE r.receipt_id = %s AND r.experiment_id = %s
@@ -292,9 +300,30 @@ class PostgresExperimentAttemptRepository:
             durable_freeze_at = cast(datetime | None, authority[1])
             if durable_freeze_at is None:
                 return skip("bound freeze receipt has durable_freeze_at NULL (not durable)")
-            publication_committer_at = cast(datetime | None, authority[2])
-            if publication_committer_at is None:
+            if authority[9] is None:
                 return skip("bound freeze receipt has no verified Git publication")
+            try:
+                publication = CandidateFreezePublication(
+                    freeze_receipt_id=expected_receipt_id,
+                    freeze_receipt_digest=Digest(cast(str, authority[5])),
+                    implementation_commit=cast(str, authority[6]),
+                    implementation_tree_digest=cast(str, authority[7]),
+                    publication_commit=cast(str, authority[8]),
+                    publication_committer_at=cast(datetime, authority[9]),
+                )
+            except TypeError, ValueError:
+                return skip("bound Git publication identity is invalid")
+            if (
+                str(publication.freeze_receipt_digest) != cast(str, authority[2])
+                or publication.implementation_commit != cast(str, authority[3])
+                or publication.implementation_tree_digest != cast(str, authority[4])
+            ):
+                return skip("bound Git publication identity does not match freeze receipt")
+            if str(publication.publication_digest) != cast(str, authority[10]):
+                return skip("bound Git publication digest mismatch")
+            if publication.to_canonical() != cast(dict[str, object], authority[11]):
+                return skip("bound Git publication canonical payload mismatch")
+            publication_committer_at = publication.publication_committer_at
             if publication_committer_at < durable_freeze_at:
                 return skip("Git publication precedes canonical DB durability")
             try:
@@ -463,7 +492,10 @@ class PostgresFreezeBindingResolver:
                        r.source_registry_digest, r.registry_entry_digests,
                        r.receipt_digest, r.frozen_at, r.verified_at,
                        r.original_receipt_digest, r.durable_freeze_at,
-                       p.publication_commit, p.publication_committer_at
+                       p.freeze_receipt_digest, p.implementation_commit,
+                       p.implementation_tree_digest, p.publication_commit,
+                       p.publication_committer_at, p.publication_digest,
+                       p.publication_json
                 FROM candidate_freeze_receipts r
                 LEFT JOIN candidate_freeze_publications p ON p.receipt_id = r.receipt_id
                 WHERE r.experiment_id = %s
@@ -501,11 +533,37 @@ class PostgresFreezeBindingResolver:
         )
         if receipt.receipt_digest.value != cast(str, row[9]):
             raise RuntimeError("freeze receipt row does not bind its stored digest")
+        publication_commit: str | None = None
+        publication_committer_at: datetime | None = None
+        if row[18] is not None:
+            try:
+                publication = CandidateFreezePublication(
+                    freeze_receipt_id=receipt.receipt_id,
+                    freeze_receipt_digest=Digest(cast(str, row[14])),
+                    implementation_commit=cast(str, row[15]),
+                    implementation_tree_digest=cast(str, row[16]),
+                    publication_commit=cast(str, row[17]),
+                    publication_committer_at=cast(datetime, row[18]),
+                )
+            except (TypeError, ValueError) as error:
+                raise RuntimeError("freeze publication row is invalid") from error
+            if publication.freeze_receipt_digest != receipt.receipt_digest:
+                raise RuntimeError("freeze publication row does not bind freeze receipt digest")
+            if publication.implementation_commit != receipt.implementation_commit:
+                raise RuntimeError("freeze publication row does not bind implementation commit")
+            if publication.implementation_tree_digest != receipt.implementation_tree_digest:
+                raise RuntimeError("freeze publication row does not bind implementation tree")
+            if str(publication.publication_digest) != cast(str, row[19]):
+                raise RuntimeError("freeze publication row does not bind its stored digest")
+            if publication.to_canonical() != cast(dict[str, object], row[20]):
+                raise RuntimeError("freeze publication row does not bind its canonical payload")
+            publication_commit = publication.publication_commit
+            publication_committer_at = publication.publication_committer_at
         return FreezeBinding(
             receipt=receipt,
             durable_freeze_at=None if row[13] is None else cast(datetime, row[13]),
-            publication_commit=None if row[14] is None else cast(str, row[14]),
-            publication_committer_at=None if row[15] is None else cast(datetime, row[15]),
+            publication_commit=publication_commit,
+            publication_committer_at=publication_committer_at,
         )
 
 

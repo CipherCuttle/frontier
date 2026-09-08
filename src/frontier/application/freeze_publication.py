@@ -14,6 +14,8 @@ from frontier.domain.digests import Digest, sha256_digest
 
 FREEZE_PUBLICATION_SCHEMA_VERSION = "candidate-freeze-publication-v0"
 RANKING_WINDOW_SECONDS = 2_419_200
+GITHUB_PUBLICATION_REPOSITORY = "CipherCuttle/frontier"
+GITHUB_PUBLICATION_REF = "refs/heads/main"
 _FREEZE_RECEIPT_PUBLICATION_PATH_RE = re.compile(
     r"^experiments/advanced_intelligence/pef_v0/candidate_freeze_receipt_v[0-9]+\.json$"
 )
@@ -28,6 +30,8 @@ class CandidateFreezePublication:
     implementation_tree_digest: str
     publication_commit: str
     publication_committer_at: datetime
+    publication_repository: str = GITHUB_PUBLICATION_REPOSITORY
+    publication_ref: str = GITHUB_PUBLICATION_REF
     schema_version: str = FREEZE_PUBLICATION_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -43,6 +47,10 @@ class CandidateFreezePublication:
             or self.publication_committer_at.utcoffset() is None
         ):
             raise ValueError("publication committer timestamp must be timezone-aware")
+        if self.publication_repository != GITHUB_PUBLICATION_REPOSITORY:
+            raise ValueError("freeze publication repository mismatch")
+        if self.publication_ref != GITHUB_PUBLICATION_REF:
+            raise ValueError("freeze publication ref mismatch")
         if self.schema_version != FREEZE_PUBLICATION_SCHEMA_VERSION:
             raise ValueError("freeze publication schema mismatch")
 
@@ -54,6 +62,8 @@ class CandidateFreezePublication:
             "implementation_tree_digest": self.implementation_tree_digest,
             "publication_commit": self.publication_commit,
             "publication_committer_at": canonical_timestamp(self.publication_committer_at),
+            "publication_ref": self.publication_ref,
+            "publication_repository": self.publication_repository,
             "schema_version": self.schema_version,
         }
 
@@ -95,6 +105,44 @@ def _git_text(root: Path, args: list[str]) -> str:
     except (OSError, subprocess.SubprocessError) as error:
         raise RuntimeError("candidate freeze Git publication cannot be verified") from error
     return result.stdout.strip()
+
+
+def _github_repository_from_remote(remote_url: str) -> str | None:
+    value = remote_url.strip()
+    prefixes = (
+        "https://github.com/",
+        "ssh://git@github.com/",
+        "git@github.com:",
+    )
+    for prefix in prefixes:
+        if value.startswith(prefix):
+            repository = value[len(prefix) :]
+            if repository.endswith(".git"):
+                repository = repository[:-4]
+            return repository.strip("/")
+    return None
+
+
+def require_github_main_publication(root: Path, publication: CandidateFreezePublication) -> None:
+    """Prove that the locally derived publication commit is GitHub ``main``.
+
+    ``derive_freeze_publication`` proves the local immutable Git shape. This
+    second gate resolves ``origin/refs/heads/main`` from GitHub itself and
+    requires that remote commit to be exactly the derived publication commit.
+    """
+    remote_url = _git_text(root, ["remote", "get-url", "origin"])
+    repository = _github_repository_from_remote(remote_url)
+    if repository is None or repository.lower() != GITHUB_PUBLICATION_REPOSITORY.lower():
+        raise RuntimeError("candidate freeze publication origin is not canonical GitHub repository")
+    remote = _git_text(root, ["ls-remote", "--exit-code", "origin", GITHUB_PUBLICATION_REF])
+    lines = [line for line in remote.splitlines() if line.strip()]
+    if len(lines) != 1:
+        raise RuntimeError("GitHub main publication ref did not resolve uniquely")
+    fields = lines[0].split()
+    if len(fields) != 2 or fields[1] != GITHUB_PUBLICATION_REF:
+        raise RuntimeError("GitHub main publication ref response is malformed")
+    if fields[0] != publication.publication_commit:
+        raise RuntimeError("derived publication commit is not current GitHub main")
 
 
 def _matching_receipt_path(root: Path, receipt: CandidateFreezeReceipt) -> Path:
@@ -199,12 +247,24 @@ def derive_freeze_publication(
     )
 
 
+def derive_github_main_freeze_publication(
+    root: Path, receipt: CandidateFreezeReceipt, *, receipt_path: Path | None = None
+) -> CandidateFreezePublication:
+    publication = derive_freeze_publication(root, receipt, receipt_path=receipt_path)
+    require_github_main_publication(root, publication)
+    return publication
+
+
 __all__ = [
     "FREEZE_PUBLICATION_SCHEMA_VERSION",
+    "GITHUB_PUBLICATION_REF",
+    "GITHUB_PUBLICATION_REPOSITORY",
     "RANKING_WINDOW_SECONDS",
     "CandidateFreezePublication",
     "confirmatory_window_end",
     "derive_freeze_publication",
+    "derive_github_main_freeze_publication",
     "first_confirmatory_boundary",
     "require_confirmatory_boundary",
+    "require_github_main_publication",
 ]

@@ -242,7 +242,7 @@ def _publish_freeze(
     )
     PostgresCandidateFreezePublicationRepository(
         conn, persistence_authorized=True
-    ).record_publication(publication)
+    ).record_fixture_publication(publication)
     return publication
 
 

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import cast
 
 import psycopg
 from psycopg.types.json import Jsonb
 
-from frontier.application.freeze_publication import CandidateFreezePublication
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    derive_github_main_freeze_publication,
+)
+from frontier.domain.candidate_freeze import CandidateFreezeReceipt
 from frontier.domain.digests import Digest
 
 
@@ -21,8 +26,34 @@ class PostgresCandidateFreezePublicationRepository:
         self._persistence_authorized = persistence_authorized
 
     def record_publication(self, publication: CandidateFreezePublication) -> None:
+        del publication
+        raise PermissionError(
+            "raw candidate freeze publication persistence is forbidden; "
+            "use record_verified_publication or the explicit fixture seam"
+        )
+
+    def record_verified_publication(
+        self,
+        receipt: CandidateFreezeReceipt,
+        *,
+        root: Path,
+        receipt_path: Path | None = None,
+    ) -> CandidateFreezePublication:
         if not self._persistence_authorized:
             raise PermissionError("candidate freeze publication persistence is not authorized")
+        publication = derive_github_main_freeze_publication(
+            root, receipt, receipt_path=receipt_path
+        )
+        self._record(publication)
+        return publication
+
+    def record_fixture_publication(self, publication: CandidateFreezePublication) -> None:
+        """Explicit test/fixture seam; never use for operator publication."""
+        if not self._persistence_authorized:
+            raise PermissionError("candidate freeze publication persistence is not authorized")
+        self._record(publication)
+
+    def _record(self, publication: CandidateFreezePublication) -> None:
         with self._connection.transaction(), self._connection.cursor() as cur:
             cur.execute(
                 """INSERT INTO candidate_freeze_publications (
@@ -58,14 +89,15 @@ class PostgresCandidateFreezePublicationRepository:
         with self._connection.cursor() as cur:
             cur.execute(
                 """SELECT freeze_receipt_digest, implementation_commit, implementation_tree_digest,
-                       publication_commit, publication_committer_at
+                       publication_commit, publication_committer_at, publication_digest,
+                       publication_json
                        FROM candidate_freeze_publications WHERE receipt_id=%s""",
                 (receipt_id,),
             )
             row = cur.fetchone()
         if row is None:
             return None
-        return CandidateFreezePublication(
+        publication = CandidateFreezePublication(
             freeze_receipt_id=receipt_id,
             freeze_receipt_digest=Digest(cast(str, row[0])),
             implementation_commit=cast(str, row[1]),
@@ -73,6 +105,11 @@ class PostgresCandidateFreezePublicationRepository:
             publication_commit=cast(str, row[3]),
             publication_committer_at=cast(datetime, row[4]),
         )
+        if str(publication.publication_digest) != cast(str, row[5]):
+            raise RuntimeError("freeze publication row does not bind its stored digest")
+        if publication.to_canonical() != cast(dict[str, object], row[6]):
+            raise RuntimeError("freeze publication row does not bind its canonical payload")
+        return publication
 
 
 __all__ = ["PostgresCandidateFreezePublicationRepository"]

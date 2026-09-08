@@ -85,7 +85,7 @@ def _persist_authority(conn: ConnectionT, seed: str) -> tuple[CandidateFreezeRec
     )
     PostgresCandidateFreezePublicationRepository(
         conn, persistence_authorized=True
-    ).record_publication(publication)
+    ).record_fixture_publication(publication)
     return receipt, publication_at
 
 

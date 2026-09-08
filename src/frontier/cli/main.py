@@ -406,6 +406,7 @@ def ops_status_command(database_url: str, config_root: Path) -> int:
 # persisted during this sprint: ``--persist`` refuses unless the explicit
 # environment override below is present.
 FREEZE_PERSIST_AUTHORIZED_ENV = "FRONTIER_FREEZE_PERSIST_AUTHORIZED"
+FREEZE_PUBLICATION_PERSIST_AUTHORIZED_ENV = "FRONTIER_FREEZE_PUBLICATION_PERSIST_AUTHORIZED"
 
 
 def _freeze_persist_refusal_payload() -> dict[str, str]:
@@ -416,6 +417,17 @@ def _freeze_persist_refusal_payload() -> dict[str, str]:
             "NOT authorized during this sprint. The final freeze happens only "
             f"after the GIGASPRINT branch merges AND a human sets "
             f"{FREEZE_PERSIST_AUTHORIZED_ENV}=1 explicitly. Dry-run only."
+        ),
+    }
+
+
+def _freeze_publication_persist_refusal_payload() -> dict[str, str]:
+    return {
+        "error": "FREEZE_PUBLICATION_PERSIST_UNAUTHORIZED",
+        "message": (
+            "Refusing to persist Git publication authority unless the final "
+            "candidate-freeze receipt has been merged to GitHub main and "
+            f"{FREEZE_PUBLICATION_PERSIST_AUTHORIZED_ENV}=1 is set explicitly."
         ),
     }
 
@@ -553,6 +565,64 @@ def freeze_derive(
     return 0
 
 
+def freeze_publish(root: Path, *, receipt_id: str, database_url: str) -> int:
+    """Verify GitHub main publication authority, then persist that exact evidence."""
+    if os.getenv(FREEZE_PUBLICATION_PERSIST_AUTHORIZED_ENV) != "1":
+        print(
+            json.dumps(_freeze_publication_persist_refusal_payload(), sort_keys=True),
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        receipt = _load_freeze_receipt(None, receipt_id, database_url)
+    except ValueError as error:
+        print(
+            json.dumps({"error": "FREEZE_RECEIPT_UNLOADABLE", "detail": str(error)}),
+            file=sys.stderr,
+        )
+        return 2
+    if receipt is None:
+        print(
+            json.dumps({"error": "FREEZE_RECEIPT_NOT_FOUND", "receipt_id": receipt_id}),
+            file=sys.stderr,
+        )
+        return 2
+
+    import psycopg
+
+    from frontier.adapters.postgres.freeze_publication import (
+        PostgresCandidateFreezePublicationRepository,
+    )
+    from frontier.adapters.postgres.readiness import verify_database_readiness
+
+    try:
+        with psycopg.connect(database_url) as conn:
+            verify_database_readiness(conn)
+            publication = PostgresCandidateFreezePublicationRepository(
+                conn, persistence_authorized=True
+            ).record_verified_publication(receipt, root=root)
+    except (RuntimeError, ValueError) as error:
+        print(
+            json.dumps(
+                {"error": "FREEZE_PUBLICATION_VERIFICATION_FAILED", "detail": str(error)},
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+    print(
+        json.dumps(
+            {
+                "publication": publication.to_canonical(),
+                "publication_digest": str(publication.publication_digest),
+                "receipt_id": receipt_id,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def freeze_verify(
     root: Path,
     *,
@@ -675,6 +745,12 @@ def _dispatch_freeze(args: argparse.Namespace, parser: argparse.ArgumentParser) 
             receipt_id=args.receipt_id,
             database_url=url,
         )
+    if args.freeze_command == "publish":
+        return freeze_publish(
+            args.root,
+            receipt_id=args.receipt_id,
+            database_url=_freeze_database_url(args.database_url, parser),
+        )
     return freeze_durability(
         args.receipt_id, database_url=_freeze_database_url(args.database_url, parser)
     )
@@ -757,6 +833,13 @@ def main() -> int:
     freeze_verify_source.add_argument("--receipt-file", type=Path)
     freeze_verify_source.add_argument("--receipt-id")
     freeze_verify_parser.add_argument("--database-url")
+
+    freeze_publish_parser = freeze_sub.add_parser(
+        "publish", help="verify and persist the exact GitHub main freeze publication"
+    )
+    freeze_publish_parser.add_argument("--root", type=Path, default=Path("."))
+    freeze_publish_parser.add_argument("--receipt-id", required=True)
+    freeze_publish_parser.add_argument("--database-url")
 
     freeze_durability_parser = freeze_sub.add_parser(
         "durability", help="report durable_freeze_at for a stored receipt id"

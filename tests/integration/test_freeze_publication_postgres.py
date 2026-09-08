@@ -52,9 +52,12 @@ def test_publication_requires_authority_and_binds_durable_receipt():
         )
         repo = PostgresCandidateFreezePublicationRepository(conn)
         with pytest.raises(PermissionError):
-            repo.record_publication(publication)
-        PostgresCandidateFreezePublicationRepository(
+            repo.record_fixture_publication(publication)
+        authorized_repo = PostgresCandidateFreezePublicationRepository(
             conn, persistence_authorized=True
-        ).record_publication(publication)
+        )
+        with pytest.raises(PermissionError):
+            authorized_repo.record_publication(publication)
+        authorized_repo.record_fixture_publication(publication)
         loaded = repo.get_publication(receipt.receipt_id)
         assert loaded == publication

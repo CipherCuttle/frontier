@@ -36,6 +36,17 @@ def upgrade() -> None:
       IF NEW.freeze_receipt_digest <> r.receipt_digest OR NEW.implementation_commit <> r.implementation_commit OR NEW.implementation_tree_digest <> r.implementation_tree_digest THEN
         RAISE EXCEPTION 'freeze publication identity does not match receipt';
       END IF;
+      IF NEW.publication_json->>'schema_version' IS DISTINCT FROM NEW.schema_version
+         OR NEW.publication_json->>'freeze_receipt_id' IS DISTINCT FROM NEW.receipt_id
+         OR NEW.publication_json->>'freeze_receipt_digest' IS DISTINCT FROM NEW.freeze_receipt_digest
+         OR NEW.publication_json->>'implementation_commit' IS DISTINCT FROM NEW.implementation_commit
+         OR NEW.publication_json->>'implementation_tree_digest' IS DISTINCT FROM NEW.implementation_tree_digest
+         OR NEW.publication_json->>'publication_commit' IS DISTINCT FROM NEW.publication_commit
+         OR (NEW.publication_json->>'publication_committer_at')::timestamptz IS DISTINCT FROM NEW.publication_committer_at
+         OR NEW.publication_json->>'publication_repository' IS DISTINCT FROM 'CipherCuttle/frontier'
+         OR NEW.publication_json->>'publication_ref' IS DISTINCT FROM 'refs/heads/main' THEN
+        RAISE EXCEPTION 'freeze publication canonical evidence is not bound to GitHub main';
+      END IF;
       IF NEW.publication_committer_at < r.durable_freeze_at OR NEW.publication_committer_at < r.frozen_at THEN
         RAISE EXCEPTION 'freeze publication timestamp precedes durable receipt';
       END IF;

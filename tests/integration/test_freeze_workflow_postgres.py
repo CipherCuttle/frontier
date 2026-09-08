@@ -172,7 +172,7 @@ def test_full_freeze_operator_workflow(
         publication_repo = PostgresCandidateFreezePublicationRepository(
             conn, persistence_authorized=True
         )
-        publication_repo.record_publication(publication)
+        publication_repo.record_fixture_publication(publication)
         assert publication_repo.get_publication(receipt_id) == publication
 
     published_binding = FreezeBinding(

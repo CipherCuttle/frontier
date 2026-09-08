@@ -111,7 +111,7 @@ def test_stored_drifted_receipt_skips_the_confirmatory_attempt_in_postgres() -> 
         publication_at = binding.durable_freeze_at + timedelta(days=30, seconds=1)
         PostgresCandidateFreezePublicationRepository(
             conn, persistence_authorized=True
-        ).record_publication(
+        ).record_fixture_publication(
             CandidateFreezePublication(
                 freeze_receipt_id=receipt.receipt_id,
                 freeze_receipt_digest=receipt.receipt_digest,

@@ -4,11 +4,16 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
+import frontier.application.freeze_publication as freeze_publication_module
 from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
     confirmatory_window_end,
     derive_freeze_publication,
     first_confirmatory_boundary,
     require_confirmatory_boundary,
+    require_github_main_publication,
 )
 from frontier.domain.candidate_freeze import FreezeInputs, build_candidate_freeze_receipt
 from frontier.domain.canonical_json import canonical_json_text
@@ -65,3 +70,42 @@ def test_exact_publication_merge_is_derived_from_git(tmp_path: Path):
     assert publication.implementation_commit == implementation
     assert publication.publication_commit == git("rev-parse", "HEAD")
     assert publication.publication_committer_at.tzinfo is not None
+
+
+def test_github_main_publication_requires_canonical_remote_and_exact_remote_head(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    publication = CandidateFreezePublication(
+        freeze_receipt_id="freezereceipt_" + "a" * 64,
+        freeze_receipt_digest=Digest("sha256:" + "b" * 64),
+        implementation_commit="c" * 40,
+        implementation_tree_digest="d" * 40,
+        publication_commit="e" * 40,
+        publication_committer_at=PUB,
+    )
+    responses: dict[tuple[str, ...], str] = {
+        ("remote", "get-url", "origin"): "https://github.com/CipherCuttle/frontier.git",
+        (
+            "ls-remote",
+            "--exit-code",
+            "origin",
+            "refs/heads/main",
+        ): f"{publication.publication_commit}\trefs/heads/main",
+    }
+
+    def git_text(root: Path, args: list[str]) -> str:
+        assert root == tmp_path
+        return responses[tuple(args)]
+
+    monkeypatch.setattr(freeze_publication_module, "_git_text", git_text)
+    require_github_main_publication(tmp_path, publication)
+
+    responses[("ls-remote", "--exit-code", "origin", "refs/heads/main")] = (
+        "f" * 40 + "\trefs/heads/main"
+    )
+    with pytest.raises(RuntimeError, match="not current GitHub main"):
+        require_github_main_publication(tmp_path, publication)
+
+    responses[("remote", "get-url", "origin")] = "https://github.com/attacker/fork.git"
+    with pytest.raises(RuntimeError, match="not canonical GitHub repository"):
+        require_github_main_publication(tmp_path, publication)
