@@ -1,0 +1,111 @@
+name: G2-02 publication authority repair temp v3
+
+on:
+  push:
+    branches:
+      - agent/g202-publication-authority-repair-temp
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: frontier
+          POSTGRES_PASSWORD: frontier
+          POSTGRES_DB: frontier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frontier -d frontier"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TARGET_SHA: 332b9927613566e78d987278c0f6f6e4d77cd3d1
+      TARGET_BRANCH: agent/gigasprint-02-prefreeze-launch-integrity
+      CANDIDATE_BRANCH: agent/g202-publication-authority-candidate
+      FRONTIER_TEST_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+      FRONTIER_DATABASE_URL: postgresql+psycopg://frontier:frontier@localhost:5432/frontier
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.10"
+      - name: Prepare exact target and apply bounded repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/g202_publication_authority_repair_temp.py /tmp/repair.py
+          remote_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$TARGET_SHA"
+          git checkout --detach "$TARGET_SHA"
+          uv run python /tmp/repair.py
+          uv run python - <<'PY'
+          from pathlib import Path
+          path = Path("tests/unit/test_freeze_publication.py")
+          text = path.read_text(encoding="utf-8")
+          old = "    responses = {\n"
+          new = "    responses: dict[tuple[str, ...], str] = {\n"
+          if text.count(old) != 1:
+              raise SystemExit("expected exactly one responses test mapping")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          changed="$(git diff --name-only)"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          while IFS= read -r path; do
+            case "$path" in
+              src/frontier/application/freeze_publication.py|src/frontier/adapters/postgres/freeze_publication.py|src/frontier/adapters/postgres/experiment_attempts.py|src/frontier/cli/main.py|migrations/versions/0013_freeze_publication_authority.py|tests/*.py|tests/*/*.py|tests/*/*/*.py) ;;
+              *) echo "unexpected repair path: $path" >&2; exit 1 ;;
+            esac
+          done <<< "$changed"
+      - name: Verify repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --all-extras --frozen
+          mapfile -t pyfiles < <(git diff --name-only -- '*.py')
+          uv run ruff check --fix "${pyfiles[@]}"
+          uv run ruff format "${pyfiles[@]}"
+          uv run ruff check "${pyfiles[@]}"
+          uv run pyright
+          uv run alembic upgrade head
+          uv run pytest -q \
+            tests/unit/test_freeze_publication.py \
+            tests/unit/test_freeze_cli.py \
+            tests/unit/test_drift_sentry.py \
+            tests/integration/test_freeze_publication_postgres.py \
+            tests/integration/test_confirmatory_claim_postgres.py \
+            tests/integration/test_freeze_workflow_postgres.py \
+            tests/integration/test_evaluation_persisted_postgres.py \
+            tests/integration/test_experiment_lifecycle_postgres.py
+          git diff --check
+          raw_count="$(grep -R '\.record_publication(' tests --include='*.py' | wc -l)"
+          test "$raw_count" -eq 1
+          grep -q 'authorized_repo.record_publication(publication)' tests/integration/test_freeze_publication_postgres.py
+      - name: Materialize product-only candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$TARGET_SHA"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add migrations/versions/0013_freeze_publication_authority.py \
+            src/frontier/application/freeze_publication.py \
+            src/frontier/adapters/postgres/freeze_publication.py \
+            src/frontier/adapters/postgres/experiment_attempts.py \
+            src/frontier/cli/main.py \
+            tests
+          git commit -m "fix(gigasprint02): bind publication authority to GitHub main"
+          git push origin HEAD:"refs/heads/$CANDIDATE_BRANCH"
