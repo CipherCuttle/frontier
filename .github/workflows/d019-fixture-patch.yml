@@ -1,0 +1,83 @@
+name: d019-fixture-patch
+
+on:
+  push:
+    branches: [feature/post-pef-v0-d019-experiment-run-identity]
+    paths: [.github/workflows/d019-fixture-patch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: feature/post-pef-v0-d019-experiment-run-identity
+      - name: Apply exact fixture repairs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "tests/integration/test_evaluation_persisted_postgres.py",
+              '''def test_artifact_tampering_is_refused_and_loader_stays_intact(conn: ConnectionT) -> None:\n    _, candidate, run, _ = _persisted_paired(conn, as_of=BOUNDARY, run_class="DEV")''',
+              '''def test_artifact_tampering_is_refused_and_loader_stays_intact(conn: ConnectionT) -> None:\n    as_of = BOUNDARY + timedelta(seconds=600)\n    _, candidate, run, _ = _persisted_paired(conn, as_of=as_of, run_class="DEV")''',
+          )
+          replace_once(
+              "tests/integration/test_evaluation_persisted_postgres.py",
+              '''    loaded = load_paired_snapshot(store, run.run_id, as_of=BOUNDARY)\n    assert loaded.run == run\n\n\ndef test_dev_run_cannot_feed_a_confirmatory_evaluation''',
+              '''    loaded = load_paired_snapshot(store, run.run_id, as_of=as_of)\n    assert loaded.run == run\n\n\ndef test_dev_run_cannot_feed_a_confirmatory_evaluation''',
+          )
+
+          replay = Path("tests/replay/test_experiment_gauntlet_postgres.py")
+          text = replay.read_text()
+          start_marker = "    def test_g10_c09_db_delete_mid_window_run_is_refused_by_trigger("
+          end_marker = "    def test_g10_c10_duplicate_experiment_as_of_insert_is_idempotent_noop("
+          if text.count(start_marker) != 1 or text.count(end_marker) != 1:
+              raise SystemExit("replay test markers are not unique")
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          block = text[start:end]
+          old_world = "        world = _build_world(_observations(BOUNDARY), as_of=BOUNDARY)"
+          old_load = "        loaded = load_paired_snapshot(store, world.run.run_id, as_of=BOUNDARY)"
+          if block.count(old_world) != 1 or block.count(old_load) != 1:
+              raise SystemExit("replay hostile block did not match expected boundary uses")
+          block = block.replace(
+              old_world,
+              "        boundary = BOUNDARY + timedelta(seconds=300)\n"
+              "        world = _build_world(_observations(boundary), as_of=boundary)",
+              1,
+          ).replace(
+              old_load,
+              "        loaded = load_paired_snapshot(store, world.run.run_id, as_of=boundary)",
+              1,
+          )
+          replay.write_text(text[:start] + block + text[end:])
+
+          replace_once(
+              "tests/integration/test_experiment_lifecycle_postgres.py",
+              '            assert readiness.migration_revision == "0013_freeze_publication"',
+              '            assert readiness.migration_revision == "0014_shadow_run_identity"',
+          )
+          PY
+      - name: Commit bounded repairs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/integration/test_evaluation_persisted_postgres.py \
+                  tests/replay/test_experiment_gauntlet_postgres.py \
+                  tests/integration/test_experiment_lifecycle_postgres.py
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m "test(db): isolate D019 boundary fixtures"
+          git push origin HEAD:feature/post-pef-v0-d019-experiment-run-identity
