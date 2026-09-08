@@ -11,7 +11,7 @@ evidence; the DB-bound case G10-C10 lives in
 ``test_experiment_gauntlet_postgres.py``):
 
 - POSITIVE : full pipeline replay reproduces the candidate artifact digest and
-  the evaluation receipt digest byte-identically.
+  evaluation receipts byte-identically, including a fully sampled COMPLETE receipt.
 - G10-C01  : flip a candidate rank in artifact_json -> replay digest mismatch.
 - G10-C02  : observed_at +1s on an input observation -> run refuses (PIT).
 - G10-C03  : observation with observed_at > as_of injected -> excluded.
@@ -567,6 +567,140 @@ class TestPositiveReplayControl:
             generated_at=horizon,
         )
         assert first.evaluation_id == second.evaluation_id
+        assert canonical_json_text(first.to_canonical()) == canonical_json_text(
+            second.to_canonical()
+        )
+
+    def test_complete_evaluation_receipt_replay_is_byte_identical(self) -> None:
+        """Persisted replay crosses the real >=2-domain gate deterministically."""
+        freeze = _freeze()
+        publication_at = DURABLE_AT + timedelta(seconds=1)
+        complete_as_of = first_confirmatory_boundary(publication_at)
+        source_ids = ("pypi.updates", "hf.models")
+        observations: list[BaselineObservationInput] = []
+        grouped: list[tuple[str, ...]] = []
+        opportunity_groups: list[OpportunityGroup] = []
+        observed_at = complete_as_of - timedelta(minutes=1)
+
+        for domain_index, source_id in enumerate(source_ids):
+            domain_members: list[str] = []
+            for index in range(30):
+                label = f"complete-{domain_index}-{index}"
+                base = _observation_at(label, observed_at)
+                observation = replace(
+                    base,
+                    grouping=replace(
+                        base.grouping,
+                        source_id=source_id,
+                        canonical_url=f"https://example.test/{label}",
+                    ),
+                )
+                observations.append(observation)
+                domain_members.append(observation.observation_id)
+
+                anchor = AnchorObservation(
+                    observation_id=observation.observation_id,
+                    source_id=source_id,
+                    role=PEF_PRIMARY_EMISSION_ROLE,
+                    observed_at=observed_at,
+                )
+                attention = AnchorObservation(
+                    observation_id=(
+                        "obs_" + hashlib.sha256(f"{label}-attention".encode()).hexdigest()
+                    ),
+                    source_id="hn.frontpage",
+                    role=ATTENTION_ROLE,
+                    observed_at=observed_at + timedelta(minutes=5),
+                )
+                opportunity_groups.append(
+                    OpportunityGroup(
+                        resolution_episode_id=f"resolution-{label}",
+                        primary_emission_anchors=(anchor,),
+                        member_observations=(anchor, attention),
+                    )
+                )
+            grouped.append(tuple(domain_members))
+
+        observation_tuple = tuple(observations)
+        projection = _projection(
+            observation_tuple,
+            grouped=tuple(grouped),
+            as_of=complete_as_of,
+        )
+        health = tuple(
+            BaselineHealthInput(
+                source_id=source_id,
+                as_of=complete_as_of - timedelta(minutes=1),
+                transport=HealthValue.OK,
+                freshness=HealthValue.OK,
+                completeness=HealthValue.OK,
+                schema=HealthValue.OK,
+            )
+            for source_id in source_ids
+        )
+        snapshot = build_baseline_snapshot(
+            observation_tuple,
+            grouping_projection=projection,
+            enabled_source_ids=source_ids,
+            health=health,
+            as_of=complete_as_of,
+        )
+        control_receipt = build_baseline_receipt(
+            snapshot,
+            observations=observation_tuple,
+            grouping_projection=projection,
+            enabled_source_ids=source_ids,
+            health=health,
+            generated_at=complete_as_of,
+            source_registry_version=REGISTRY,
+        )
+        candidate = run_pef_v0_ranking(
+            observation_tuple,
+            control_snapshot=snapshot,
+            control_receipt=control_receipt,
+            generated_at=complete_as_of,
+            source_registry_version=REGISTRY,
+        )
+        run = build_shadow_experiment_run(
+            control_snapshot=snapshot,
+            control_receipt=control_receipt,
+            candidate_artifact=candidate.artifact,
+            candidate_receipt=candidate.receipt,
+            as_of=complete_as_of,
+            generated_at=complete_as_of,
+            candidate_freeze_receipt_id=freeze.receipt_id,
+        )
+        assert run.status is ShadowRunStatus.RAN
+        assert len(snapshot.episodes) == 2
+
+        paired = _Paired(snapshot, control_receipt, candidate, run)
+        store = FakeStore()
+        _seed(store, paired, run_class=CONFIRMATORY_RUN_CLASS)
+        _seed_freeze(store, freeze, durable=DURABLE_AT)
+        _seed_publication(store, freeze, publication_at=publication_at)
+        refs = (PersistedRunRef(run.run_id, run.as_of),)
+        horizon = complete_as_of + timedelta(days=1)
+
+        def replay_evaluation() -> EvaluationReceipt:
+            return evaluate_shadow_experiment_from_persisted(
+                store=store,
+                runs=refs,
+                opportunity_groups=tuple(opportunity_groups),
+                evaluation_horizon=horizon,
+                generated_at=horizon,
+                confirmatory=True,
+                canonical_context=True,
+                durable_freeze_at=DURABLE_AT,
+            )
+
+        first = replay_evaluation()
+        second = replay_evaluation()
+
+        assert first.status is EvaluationStatus.COMPLETE
+        assert first.verdict == "NOT_SUPPORTED"
+        assert first.qualifying_domain_count == 2
+        assert first.evaluation_id == second.evaluation_id
+        assert first.receipt_digest == second.receipt_digest
         assert canonical_json_text(first.to_canonical()) == canonical_json_text(
             second.to_canonical()
         )
