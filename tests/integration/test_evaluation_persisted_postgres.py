@@ -35,6 +35,9 @@ from frontier.adapters.postgres.evaluation_store import (
 from frontier.adapters.postgres.experiment_attempts import (
     PostgresShadowRunPersister,
 )
+from frontier.adapters.postgres.freeze_publication import (
+    PostgresCandidateFreezePublicationRepository,
+)
 from frontier.adapters.postgres.intelligence import (
     PostgresBaselineIntelligenceRepository,
 )
@@ -50,6 +53,10 @@ from frontier.application.evaluation_loaders import (
     PersistedEvaluationError,
     PersistedRunRef,
     load_paired_snapshot,
+)
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    first_confirmatory_boundary,
 )
 from frontier.domain.advanced_intelligence import (
     ShadowExperimentRun,
@@ -211,6 +218,40 @@ def _persisted_paired(
     return snapshot, candidate, run, freeze
 
 
+def _publish_freeze(
+    conn: ConnectionT,
+    freeze: CandidateFreezeReceipt,
+    *,
+    publication_offset: timedelta = timedelta(seconds=1),
+) -> CandidateFreezePublication:
+    row = conn.execute(
+        "SELECT durable_freeze_at FROM candidate_freeze_receipts WHERE receipt_id=%s",
+        (freeze.receipt_id,),
+    ).fetchone()
+    assert row is not None and row[0] is not None
+    durable = cast(datetime, row[0])
+    assert freeze.implementation_commit is not None
+    assert freeze.implementation_tree_digest is not None
+    publication = CandidateFreezePublication(
+        freeze_receipt_id=freeze.receipt_id,
+        freeze_receipt_digest=freeze.receipt_digest,
+        implementation_commit=freeze.implementation_commit,
+        implementation_tree_digest=freeze.implementation_tree_digest,
+        publication_commit="c" * 64,
+        publication_committer_at=durable + publication_offset,
+    )
+    PostgresCandidateFreezePublicationRepository(
+        conn, persistence_authorized=True
+    ).record_publication(publication)
+    return publication
+
+
+def _future_boundary() -> datetime:
+    now = datetime.now(UTC) + timedelta(days=1)
+    epoch = int(now.timestamp())
+    return datetime.fromtimestamp((epoch // 300 + 1) * 300, tz=UTC)
+
+
 def test_persisted_run_evaluates_end_to_end_and_appends_receipt(conn: ConnectionT) -> None:
     snapshot, candidate, run, _ = _persisted_paired(conn, as_of=BOUNDARY, run_class="DEV")
     store = PostgresEvaluationArtifactStore(conn)
@@ -324,3 +365,78 @@ def test_dev_run_cannot_feed_a_confirmatory_evaluation(conn: ConnectionT) -> Non
     )
     assert receipt.status is not EvaluationStatus.COMPLETE
     assert receipt.confirmatory_evidence is False
+
+
+def test_persisted_confirmatory_infers_authority_when_caller_false(conn: ConnectionT) -> None:
+    as_of = _future_boundary()
+    _, _, run, freeze = _persisted_paired(conn, as_of=as_of, run_class="CONFIRMATORY")
+    publication = _publish_freeze(conn, freeze)
+    assert as_of >= first_confirmatory_boundary(publication.publication_committer_at)
+    horizon = as_of + timedelta(hours=1)
+    receipt = evaluate_shadow_experiment_from_persisted(
+        store=PostgresEvaluationArtifactStore(conn),
+        runs=(PersistedRunRef(run.run_id, as_of),),
+        opportunity_groups=(),
+        evaluation_horizon=horizon,
+        generated_at=horizon,
+        confirmatory=False,
+    )
+    assert receipt.status is EvaluationStatus.INSUFFICIENT_SAMPLE
+    assert receipt.status is not EvaluationStatus.INVALID_DRIFT
+
+
+def test_persisted_confirmatory_missing_publication_fails_closed(conn: ConnectionT) -> None:
+    as_of = _future_boundary() + timedelta(seconds=300)
+    _, _, run, _ = _persisted_paired(conn, as_of=as_of, run_class="CONFIRMATORY")
+    with pytest.raises(PersistedEvaluationError, match="no persisted Git publication"):
+        evaluate_shadow_experiment_from_persisted(
+            store=PostgresEvaluationArtifactStore(conn),
+            runs=(PersistedRunRef(run.run_id, as_of),),
+            opportunity_groups=(),
+            evaluation_horizon=as_of + timedelta(hours=1),
+            generated_at=as_of + timedelta(hours=1),
+            confirmatory=False,
+        )
+
+
+def test_caller_cannot_escalate_dev_or_forge_authority_timestamps(conn: ConnectionT) -> None:
+    as_of = _future_boundary() + timedelta(seconds=600)
+    _, _, run, _ = _persisted_paired(conn, as_of=as_of, run_class="DEV")
+    store = PostgresEvaluationArtifactStore(conn)
+    with pytest.raises(PersistedEvaluationError, match="cannot escalate"):
+        evaluate_shadow_experiment_from_persisted(
+            store=store,
+            runs=(PersistedRunRef(run.run_id, as_of),),
+            opportunity_groups=(),
+            evaluation_horizon=as_of + timedelta(hours=1),
+            generated_at=as_of + timedelta(hours=1),
+            confirmatory=True,
+        )
+    with pytest.raises(
+        PersistedEvaluationError, match="cannot accept confirmatory authority timestamps"
+    ):
+        evaluate_shadow_experiment_from_persisted(
+            store=store,
+            runs=(PersistedRunRef(run.run_id, as_of),),
+            opportunity_groups=(),
+            evaluation_horizon=as_of + timedelta(hours=1),
+            generated_at=as_of + timedelta(hours=1),
+            durable_freeze_at=as_of - timedelta(days=1),
+            window_start=as_of,
+        )
+
+
+def test_persisted_confirmatory_rejects_forged_caller_clock_assertion(conn: ConnectionT) -> None:
+    as_of = _future_boundary() + timedelta(seconds=900)
+    _, _, run, freeze = _persisted_paired(conn, as_of=as_of, run_class="CONFIRMATORY")
+    publication = _publish_freeze(conn, freeze)
+    start = first_confirmatory_boundary(publication.publication_committer_at)
+    with pytest.raises(PersistedEvaluationError, match="window_start assertion"):
+        evaluate_shadow_experiment_from_persisted(
+            store=PostgresEvaluationArtifactStore(conn),
+            runs=(PersistedRunRef(run.run_id, as_of),),
+            opportunity_groups=(),
+            evaluation_horizon=as_of + timedelta(hours=1),
+            generated_at=as_of + timedelta(hours=1),
+            window_start=start + timedelta(seconds=300),
+        )
