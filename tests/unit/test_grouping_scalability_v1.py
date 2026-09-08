@@ -94,7 +94,6 @@ def _obs(
         canonical_url=canonical_url,
         title=title,
         text=text,
-        artifact_type=artifact_type,
         artifact_name=artifact_name,
         artifact_version=artifact_version,
         signal_roles=signal_roles,
