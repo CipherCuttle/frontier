@@ -15,6 +15,8 @@ from frontier.domain.grouping import (
     GroupingDecision,
     GroupingInput,
     GroupingRelationInput,
+    assess_pair,
+    build_grouping_projection,
 )
 from frontier.domain.grouping_v1 import (
     GROUPING_V1_OMITTED_PAIR_SEMANTICS,
@@ -187,24 +189,26 @@ def test_immutable_v0_oracle_artifacts_are_exactly_pinned() -> None:
     assert _git_blob_sha(Path("fixtures/grouping/corpus_v0.json")) == FROZEN_CORPUS_BLOB
 
 
-@pytest.mark.parametrize(("left", "right", "expected"), corpus_cases())
+@pytest.mark.parametrize(("left", "right", "_expected"), corpus_cases())
 def test_fast_group_predicate_matches_frozen_v0_pair_corpus(
     left: GroupingInput,
     right: GroupingInput,
-    expected: GroupingDecision,
+    _expected: GroupingDecision,
 ) -> None:
-    assert is_group_pair_v1(left, right) is (expected is GroupingDecision.GROUP)
-    assert assess_pair_v1(left, right).decision is expected
+    reference = assess_pair(left, right).decision
+    assert is_group_pair_v1(left, right) is (reference is GroupingDecision.GROUP)
+    assert assess_pair_v1(left, right).decision is reference
 
 
-@pytest.mark.parametrize(("left", "right", "expected"), corpus_cases())
+@pytest.mark.parametrize(("left", "right", "_expected"), corpus_cases())
 def test_two_item_membership_matches_frozen_v0_pair_corpus(
     left: GroupingInput,
     right: GroupingInput,
-    expected: GroupingDecision,
+    _expected: GroupingDecision,
 ) -> None:
     as_of = max(left.observed_at, right.observed_at) + timedelta(seconds=1)
-    if expected is GroupingDecision.GROUP:
+    reference = assess_pair(left, right).decision
+    if reference is GroupingDecision.GROUP:
         expected_partition = (tuple(sorted((left.observation_id, right.observation_id))),)
     else:
         expected_partition = tuple(sorted(((left.observation_id,), (right.observation_id,))))
@@ -260,6 +264,29 @@ def test_explicit_relation_is_point_in_time_and_group_complete() -> None:
     assert not before.groups
     assert len(after.groups) == 1
     assert after.group_pair_count == 1
+
+
+def test_explicit_self_relation_is_excluded_from_v0_pair_diagnostics() -> None:
+    item = _obs(12, title="self relation must remain a singleton")
+    relation = GroupingRelationInput(
+        relation_type="CORRECTS",
+        from_observation_id=item.observation_id,
+        target_observation_id=item.observation_id,
+        authority="EXPLICIT",
+        created_at=NOW,
+    )
+    reference = build_grouping_projection((item,), relations=(relation,), as_of=NOW)
+    projection = build_compact_grouping_projection((item,), relations=(relation,), as_of=NOW)
+
+    assert projection.candidate_pair_count == 0
+    assert projection.group_pair_count == 0
+    assert _partition(projection.groups, projection.ungrouped_observation_ids) == _partition(
+        reference.groups,
+        reference.ungrouped_observation_ids,
+    )
+    assert _partition(reference.groups, reference.ungrouped_observation_ids) == (
+        (item.observation_id,),
+    )
 
 
 def test_clique_conservative_membership_matches_pinned_false_transitivity_case() -> None:

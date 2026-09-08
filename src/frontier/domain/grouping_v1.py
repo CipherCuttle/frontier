@@ -413,6 +413,8 @@ def _explicit_pairs_v1(
             or relation.target_observation_id not in allowed_ids
         ):
             continue
+        if relation.from_observation_id == relation.target_observation_id:
+            continue
         pairs.add(
             ordered_pair(
                 relation.from_observation_id,
