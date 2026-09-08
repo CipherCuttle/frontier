@@ -36,7 +36,7 @@ jobs:
         run: python scripts/_temp_evidence_query_patch.py
       - name: Remove redundant API-test cast
         run: |
-          python -c 'from pathlib import Path; p=Path("tests/unit/test_public_read_api.py"); t=p.read_text(); old="    assert cast(dict[str, Any], response.json()) == {"; assert t.count(old) == 1; p.write_text(t.replace(old, "    assert response.json() == {", 1))'
+          python -c 'from pathlib import Path; import re; p=Path("tests/unit/test_public_read_api.py"); t=p.read_text(); t,n=re.subn(r"    assert cast\(\s*dict\[str, Any\],\s*response\.json\(\)\s*\) == \{", "    assert response.json() == {", t, count=1); assert n == 1; p.write_text(t)'
       - name: Format bounded product changes
         run: |
           uv run ruff format src/frontier/domain/public_read.py src/frontier/application/public_read.py src/frontier/adapters/api/public_read.py tests/unit/test_public_read.py tests/unit/test_public_read_api.py scripts/generate_public_contracts.py
