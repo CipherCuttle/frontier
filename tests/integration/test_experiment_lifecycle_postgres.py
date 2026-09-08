@@ -698,7 +698,7 @@ def test_g11_full_experiment_lifecycle_on_live_postgres(tmp_path: Path) -> None:
         with psycopg.connect(database_url, autocommit=True) as connection:
             readiness = verify_database_readiness(connection)
             assert readiness.migration_revision == EXPECTED_DATABASE_REVISION
-            assert readiness.migration_revision == "0013_freeze_publication"
+            assert readiness.migration_revision == "0014_shadow_run_identity"
 
         # --- canonical acquisition through the hostile boundary -------------
         acquired = _acquire_sources(database_url)
