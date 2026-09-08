@@ -305,10 +305,14 @@ def test_candidate_omission_attack_fails_equivalence_guard(
 ) -> None:
     left, right = _bounded_oracle_basis()[3:5]
     expected = (tuple(sorted((left.observation_id, right.observation_id))),)
+
+    def omit_candidates(_self: object, _left: object) -> tuple[str, ...]:
+        return ()
+
     monkeypatch.setattr(
-        grouping_v1._CandidateIndex,
+        grouping_v1._CandidateIndex,  # pyright: ignore[reportPrivateUsage]
         "candidate_right_ids",
-        lambda _self, _left: (),
+        omit_candidates,
     )
     with pytest.raises(AssertionError):
         assert _v1_partition((left, right), as_of=NOW) == expected
@@ -319,7 +323,11 @@ def test_false_group_injection_attack_fails_equivalence_guard(
 ) -> None:
     left, right = _bounded_oracle_basis()[7:9]
     expected = tuple(sorted(((left.observation_id,), (right.observation_id,))))
-    monkeypatch.setattr(grouping_v1, "_is_group_fast", lambda *_args, **_kwargs: True)
+
+    def always_group(*_args: object, **_kwargs: object) -> bool:
+        return True
+
+    monkeypatch.setattr(grouping_v1, "_is_group_fast", always_group)
     with pytest.raises(AssertionError):
         assert _v1_partition((left, right), as_of=NOW) == expected
 
