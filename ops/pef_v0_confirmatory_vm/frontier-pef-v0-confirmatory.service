@@ -1,0 +1,40 @@
+[Unit]
+Description=FRONTIER PEF_V0 canonical confirmatory worker
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=frontier
+Group=frontier
+WorkingDirectory=/opt/frontier/app
+LoadCredential=frontier_database_url:/etc/frontier/frontier_database_url
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=CANONICAL_PUBLICATION_COMMIT=db206cda7eed92b62c706a10089c2571b4381d66
+Environment=CANONICAL_PUBLICATION_TREE=5134857849b03c0dcff4595c8c9fe1059ffe47a6
+Environment=CANONICAL_PARENT_1=b1a5f198420614da6ba7eb4d34838be0e0efd1a5
+Environment=CANONICAL_PARENT_2=0b383638853853c12ceded0c0691435870620556
+Environment=EXPECTED_FREEZE_RECEIPT_ID=freezereceipt_d8ea34d4f5ae84d7eb1de30272395876823c55287b8900af7ba8abadfc5c2346
+Environment=EXPECTED_PUBLICATION_COMMIT=db206cda7eed92b62c706a10089c2571b4381d66
+ExecStart=/opt/frontier/app/.venv/bin/python /opt/frontier/operator/confirmatory_service.py
+Restart=on-failure
+RestartPreventExitStatus=3 10
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=300
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
