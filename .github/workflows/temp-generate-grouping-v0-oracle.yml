@@ -1,0 +1,82 @@
+name: temp-generate-grouping-v0-oracle
+
+on:
+  push:
+    branches:
+      - feature/grouping-scalability-v1
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: db206cda7eed92b62c706a10089c2571b4381d66
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.14'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: '0.12.10'
+          enable-cache: true
+      - name: Verify pinned oracle blob
+        run: test "$(git rev-parse HEAD:src/frontier/domain/grouping.py)" = "943affde20b08f500f8dba2716ffedfc428f58e1"
+      - name: Sync pinned environment
+        run: uv sync --all-extras --frozen
+      - name: Generate exhaustive bounded partition digest
+        run: |
+          uv run python - <<'PY'
+          import hashlib
+          import json
+          from datetime import UTC, datetime, timedelta
+
+          from frontier.domain.grouping import GroupingInput, build_grouping_projection
+
+          now = datetime(2026, 9, 8, 20, tzinfo=UTC)
+
+          def obs(index, *, title, url, observed_at=None, source_id='fixture.source', source_item_key=None, kind='DOCUMENT', artifact_name=None, artifact_version=None, signal_roles=()):
+              return GroupingInput(
+                  observation_id=f'obs_{index:064x}',
+                  source_id=source_id,
+                  source_item_key=source_item_key or f'item-{index}',
+                  kind=kind,
+                  observed_at=observed_at or now,
+                  canonical_url=url,
+                  title=title,
+                  text=None,
+                  artifact_name=artifact_name,
+                  artifact_version=artifact_version,
+                  signal_roles=signal_roles,
+              )
+
+          basis = (
+              obs(1, title='Atlas runtime launches for local agents', url='https://alpha.example/atlas'),
+              obs(2, title='Atlas runtime launches for local agents', url='https://shared.example/atlas', source_id='hn.frontpage', signal_roles=('ATTENTION',)),
+              obs(3, title='Different discussion headline entirely', url='https://shared.example/atlas', source_id='hn.frontpage', signal_roles=('ATTENTION',)),
+              obs(4, title='alpha beta gamma delta', url='https://jaccard.example/a'),
+              obs(5, title='alpha beta gamma delta epsilon', url='https://jaccard.example/b'),
+              obs(6, title=None, url='https://artifact.example/v1', kind='ARTIFACT', artifact_name='Atlas Runtime Package', artifact_version='1.0'),
+              obs(7, title=None, url='https://artifact.example/v2', kind='ARTIFACT', artifact_name='Atlas Runtime Package', artifact_version='2.0'),
+              obs(8, title='Alpha: beta gamma', url='https://punct.example/shared'),
+              obs(9, title='Alpha beta gamma', url='https://punct.example/shared'),
+              obs(10, title='Far window stable release', url='https://far.example/shared', observed_at=now - timedelta(days=31)),
+              obs(11, title='Far window stable release', url='https://far.example/shared', observed_at=now),
+          )
+
+          records = []
+          for mask in range(1, 1 << len(basis)):
+              inputs = tuple(item for index, item in enumerate(basis) if mask & (1 << index))
+              projection = build_grouping_projection(inputs, as_of=now)
+              partition = [list(sorted(group.observation_ids)) for group in projection.groups]
+              partition.extend([[observation_id] for observation_id in projection.ungrouped_observation_ids])
+              partition.sort()
+              records.append({'mask': mask, 'partition': partition})
+
+          payload = json.dumps(records, sort_keys=True, separators=(',', ':')).encode('utf-8')
+          print('ORACLE_CASE_COUNT=' + str(len(records)))
+          print('ORACLE_PARTITION_SHA256=' + hashlib.sha256(payload).hexdigest())
+          PY
