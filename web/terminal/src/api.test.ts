@@ -4,6 +4,7 @@ import {
   experimentalAvailability,
   StaleSnapshotResponseError,
   StaleExperimentResponseError,
+  TERMINAL_PUBLIC_READ_LIMIT,
   createTerminalPublicReadApi,
   type EpisodeEvidenceResponse,
   type ExperimentalEpisodeComparisonResponse,
@@ -46,12 +47,43 @@ describe("BrowserPublicReadTransport", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
     const transport = new BrowserPublicReadTransport("https://frontier.example");
-    await transport.get("/v0/radar", { snapshot_id: "snapshot_abc", limit: 500, ignored: null });
+    await transport.get("/v0/radar", { snapshot_id: "snapshot_abc", limit: TERMINAL_PUBLIC_READ_LIMIT, ignored: null });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/v0/radar?snapshot_id=snapshot_abc&limit=500");
+    expect(String(url)).toContain(`/v0/radar?snapshot_id=snapshot_abc&limit=${TERMINAL_PUBLIC_READ_LIMIT}`);
     expect((init as RequestInit | undefined)?.method).toBe("GET");
     expect(String(url)).not.toContain("ignored");
+  });
+});
+
+describe("TerminalPublicReadApi view limits", () => {
+  it("uses a valid bounded limit for every public view and clamps oversized callers", async () => {
+    const calls: Array<{ path: string; query: Record<string, string | number | boolean | null | undefined> }> = [];
+    const transport: FrontierPublicReadTransport = {
+      async get<T>(path: string, query = {}): Promise<T> {
+        calls.push({ path, query });
+        return minimalView("snapshot_fixture") as T;
+      },
+    };
+    const api = createTerminalPublicReadApi(transport);
+
+    await api.view("RADAR", {});
+    await api.view("NOW", {});
+    await api.view("TRENDING", {});
+    await api.view("RADAR", { limit: 500 });
+
+    expect(calls.map((call) => call.path)).toEqual([
+      "/v0/radar",
+      "/v0/now",
+      "/v0/trending",
+      "/v0/radar",
+    ]);
+    expect(calls.map((call) => call.query.limit)).toEqual([
+      TERMINAL_PUBLIC_READ_LIMIT,
+      TERMINAL_PUBLIC_READ_LIMIT,
+      TERMINAL_PUBLIC_READ_LIMIT,
+      TERMINAL_PUBLIC_READ_LIMIT,
+    ]);
   });
 });
 
