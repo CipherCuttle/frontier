@@ -197,6 +197,8 @@ def test_canonical_tables_are_database_enforced_append_only() -> None:
                 "frontier_append_only_experimental_analysis_truncate",
                 "frontier_append_only_feature_vectors",
                 "frontier_append_only_feature_vectors_truncate",
+                "frontier_append_only_freeze_publications",
+                "frontier_append_only_freeze_publications_truncate",
                 "frontier_append_only_observations",
                 "frontier_append_only_observations_truncate",
                 "frontier_append_only_opportunity_anchors",
