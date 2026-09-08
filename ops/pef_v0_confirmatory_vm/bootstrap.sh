@@ -71,6 +71,12 @@ uv lock --check
 uv sync --all-extras --frozen
 chmod -R a+rX "$UV_PYTHON_INSTALL_DIR" "$APP_DIR/.venv"
 
+# Git ownership must match the unprivileged runtime user because both the startup
+# identity check and DriftSentry execute read-only git commands. Runtime mutation
+# is still blocked by ProtectSystem=strict in the systemd unit.
+chown -R "$RUN_USER:$RUN_USER" "$APP_DIR"
+sudo -u "$RUN_USER" git -C "$APP_DIR" status --porcelain >/dev/null
+
 curl -LsSf "$RAW_ROOT/confirmatory_service.py" -o "$OPERATOR_DIR/confirmatory_service.py"
 curl -LsSf "$RAW_ROOT/frontier-pef-v0-confirmatory.service" -o "$SERVICE_FILE"
 chmod 0755 "$OPERATOR_DIR/confirmatory_service.py"
