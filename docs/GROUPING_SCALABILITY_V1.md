@@ -12,6 +12,22 @@ Produce the same episode-membership decisions that `guarded-hybrid-v0` would pro
 
 V1 is a grouping/deduplication projection only. It does not grant entity, provenance-root, confirmation, causal-origin, truth, importance, or ranking authority.
 
+## Immutable V0 reference oracle
+
+V1 equivalence MUST be measured against the immutable frozen V0 implementation, not against whatever implementation happens to exist in the V1 worktree.
+
+The reference oracle is pinned to:
+
+- repository commit: `db206cda7eed92b62c706a10089c2571b4381d66`;
+- repository tree: `5134857849b03c0dcff4595c8c9fe1059ffe47a6`;
+- `src/frontier/domain/grouping.py` blob: `943affde20b08f500f8dba2716ffedfc428f58e1`;
+- algorithm identity: `guarded-hybrid-v0`;
+- projection identity: `grouping-baseline-v0`.
+
+Equivalence tests MUST execute/reference that pinned implementation in an isolated reference checkout/process or consume expected artifacts first produced by that pinned implementation and bound by digest. Importing the V1 worktree's `assess_pair` as both candidate and oracle is forbidden.
+
+Any change to the pinned oracle requires a new authority review; V1 implementation work cannot move the reference target.
+
 ## Frozen epistemic semantics
 
 The pair-level concepts remain exactly:
@@ -39,7 +55,7 @@ Any mismatch in `GROUP` relation or episode membership is a Critical failure unl
 
 ## Pair-decision compatibility
 
-V1 SHALL retain the existing `assess_pair` decision rules as the reference pair semantics unless a later authority explicitly changes them.
+V1 SHALL retain the pinned V0 `assess_pair` decision rules as the reference pair semantics unless a later authority explicitly changes them.
 
 The scalable projection does not have to persist or canonicalize every `AMBIGUOUS`/`NO_GROUP` pair. It MUST provide a deterministic diagnostic path capable of evaluating a requested eligible pair with the frozen pair rules.
 
@@ -53,7 +69,7 @@ This distinction is intentional:
 
 The implementation MUST NOT compare every unordered pair.
 
-It MUST use deterministic candidate generation that is *GROUP-complete*: every pair that the reference `assess_pair` would classify `GROUP` must be generated or handled by an equivalent direct grouping rule.
+It MUST use deterministic candidate generation that is *GROUP-complete*: every pair that the pinned reference oracle would classify `GROUP` must be generated or handled by an equivalent direct grouping rule.
 
 Permitted deterministic candidate families are limited to necessary conditions already present in the guarded-hybrid rules:
 
@@ -68,11 +84,27 @@ Candidate generation may emit false candidates for later exact assessment. It MU
 
 Approximate nearest-neighbor search, probabilistic blocking, embeddings, LLMs, learned blocking, nondeterministic hashing, or recall-tuned heuristics are forbidden.
 
+### Required completeness proof
+
+Before implementation closure, the branch MUST contain a reviewable completeness proof mapping **every GROUP-returning branch** in the pinned V0 `assess_pair` oracle to a V1 candidate family or mathematically equivalent direct rule.
+
+That proof MUST include:
+
+- the necessary condition used to make each candidate family complete;
+- exact time-window boundary treatment;
+- exact Jaccard `>= 0.80` completeness, including token-length/prefix bounds if used;
+- same-URL ATTENTION and same-URL semantic cases;
+- explicit-relation eligibility;
+- why dense direct-bucket rules preserve the clique-conservative partition rather than adding transitivity;
+- a statement of worst-case behavior for each candidate family.
+
+The proof must be backed by executable tests, including exhaustive comparison over bounded generated universes. A performance result without GROUP-completeness evidence is insufficient.
+
 ## Group construction
 
 The existing conservative clique rule remains the semantic reference: observations may share one episode component only when every cross-member pair required by the V0 merge rule is `GROUP`.
 
-V1 may implement this more efficiently, but it MUST prove partition equivalence against the reference implementation on bounded corpora.
+V1 may implement this more efficiently, but it MUST prove partition equivalence against the pinned reference implementation on bounded corpora.
 
 No transitive relaxation is authorized. A-B GROUP and B-C GROUP do not permit A-C to be assumed GROUP.
 
@@ -127,26 +159,30 @@ The implementation MUST pass all of these on the project’s supported Python ru
 1. **Incident-shape gate:** 2,425 same-day low-overlap observations; complete successfully with peak RSS <= 512 MiB and wall time <= 30 s.
 2. **Sparse 10k gate:** 10,000 same-day low-overlap observations; peak RSS <= 768 MiB and wall time <= 60 s.
 3. **Sparse 25k gate:** 25,000 same-day low-overlap observations; peak RSS <= 1,024 MiB and wall time <= 180 s.
-4. **Dense-equivalence gate:** at least one 5,000-observation high-collision corpus exercising same-URL and exact-title/semantic grouping without pairwise output explosion; peak RSS <= 1,024 MiB and wall time <= 180 s.
+4. **End-window 150k mixed gate:** 150,000 observations in one 30-day knowledge horizon, dominated by low-overlap evidence but including deterministic URL/title/semantic collision buckets; peak RSS <= 1,536 MiB and wall time <= 300 s.
+5. **Dense-equivalence gate:** at least one 5,000-observation high-collision corpus exercising same-URL and exact-title/semantic grouping without pairwise output explosion; peak RSS <= 1,024 MiB and wall time <= 180 s.
+
+The 150k gate is a scale-safety margin over the incident's simple linear 27-day stress estimate (~128k observations); it is not a prediction of future source volume.
 
 A benchmark that skips receipt generation is insufficient. The measured path MUST include projection construction and the exact receipt/input-output digest path intended for production.
 
-If the dense gate cannot preserve reference membership within these bounds, the implementation is not eligible for confirmatory freeze; the authority must be revisited instead of silently weakening semantics.
+If any gate cannot preserve reference membership within these bounds, the implementation is not eligible for confirmatory freeze; the authority must be revisited instead of silently weakening semantics or merely increasing production RAM.
 
 ## Required falsification/equivalence evidence
 
 Before candidate freeze or use as a control universe, V1 requires:
 
-- V0 frozen grouping corpus: exact pair decision compatibility;
-- V0 grouping selection corpus: exact membership compatibility;
-- all 11 retained successful PEF_V0 boundaries: exact episode-membership partition compatibility;
-- randomized/property comparison against exhaustive V0 for bounded universes;
+- V0 frozen grouping corpus: exact pair decision compatibility against the immutable oracle;
+- V0 grouping selection corpus: exact membership compatibility against the immutable oracle;
+- all 11 retained successful PEF_V0 boundaries: exact episode-membership partition compatibility against oracle-produced reference artifacts;
+- randomized/property comparison against the immutable exhaustive V0 implementation for bounded universes;
 - explicit relation before/after-`as_of` tests;
 - punctuation/confusable/version-split hostile cases;
+- the GROUP-clause completeness proof and executable coverage described above;
 - a candidate-generation omission attack proving a missing true GROUP pair fails the suite;
 - a false-merge attack proving precision remains fail-closed;
 - deterministic replay and receipt identity;
-- the four frozen scale gates above.
+- all five frozen scale gates above.
 
 ## Operational constraints for successor confirmatory use
 
