@@ -44,18 +44,21 @@ jobs:
           from frontier.domain.grouping import GroupingInput, build_grouping_projection
           from frontier.domain.grouping_v1 import build_compact_grouping_projection
 
+          # Reference partition tuples are derived directly from the persisted
+          # baseline_intelligence_snapshots for the 11 retained successful PEF_V0
+          # boundaries. Each digest binds the sorted observation-membership partition.
           expected = {
-              '2026-09-08T15:00:00+00:00': (756, 796, '7a70ce4c23d16c105263d37d8930625e2d1e9bd19ce146849ccb690356040f9e'),
-              '2026-09-08T15:05:00+00:00': (815, 858, '34a15107140739198d99048bd207eda690cac261dd518969d10492ac6165ce59'),
-              '2026-09-08T15:10:00+00:00': (887, 932, '763534bab07e3b877578471ce6172ce4b5d5d36a729af3aa99697e6a8e29679e'),
-              '2026-09-08T15:15:00+00:00': (955, 1001, '358c651131aec1bfa4756e888c62a59655e5017bed010933fd9e2b7aac161574'),
-              '2026-09-08T15:20:00+00:00': (1041, 1092, '5111268de51f279e179d7d5284b9e1db69688af16c8c637c4ea63dcb5a76ac27'),
-              '2026-09-08T15:25:00+00:00': (1138, 1192, '9eeaeeb7b5489696032bad298d53958d754a173cadd3a92c035e663240cff1e9'),
-              '2026-09-08T15:30:00+00:00': (1199, 1257, '6158b3802ebd01e0033237b0b92649e77c254fb1c6c26c10f794ac61e4ad1397'),
-              '2026-09-08T15:35:00+00:00': (1280, 1340, '8857cf526572799aec69bee43f8a8b89f9b9bd1f5f5a25932f36e99bed42b759'),
-              '2026-09-08T15:40:00+00:00': (1357, 1498, '33488d8b44ca108806f52a52f7620cb7e194085ca0f33e88a55ddb8a4754bf2c'),
-              '2026-09-08T15:45:00+00:00': (1436, 1582, '98fb83f670ccd289456ebb97adc44a82cef87ccae532841a3fc5c3edfcc5f245'),
-              '2026-09-08T15:50:00+00:00': (1520, 1679, '738122ac9bd0def3a24c7042e5c471c95ee199cf3839c74ab6f19b0264bfe2df'),
+              '2026-09-08T15:00:00+00:00': (756, 899, '2b5e2fede9323e7b5bcc4110e97c6c5b5b0602bbd38c8ff09c01e2deefec67b4'),
+              '2026-09-08T15:05:00+00:00': (986, 1129, '7aa46e3b075d6c57e57977833be51db6c3b8cea4c61373d0bfdf9486d0a18bca'),
+              '2026-09-08T15:10:00+00:00': (986, 1129, '7aa46e3b075d6c57e57977833be51db6c3b8cea4c61373d0bfdf9486d0a18bca'),
+              '2026-09-08T15:15:00+00:00': (1039, 1182, '81fbd1fb7e4f67753e9d95c957b3f871d9efcf3baf945615c4121dd64d351381'),
+              '2026-09-08T15:20:00+00:00': (1099, 1242, 'fad7558cc0f8f7922c584c8cd647dcabe1fbbdea64640739e2551e1e6134e44d'),
+              '2026-09-08T15:25:00+00:00': (1271, 1421, 'a0a7ad3fb6f3b31b35bbf394cccb7de8a9ce93d2e0db62f267067f8e1707807b'),
+              '2026-09-08T15:30:00+00:00': (1274, 1424, '2d47b2ebccb0fbbdfe30cc0938e30755ee0e16013d0edf3f60cdba88a8c66f35'),
+              '2026-09-08T15:35:00+00:00': (1375, 1525, 'd60d43a06258d3f113c0d58891ecf4ef7aec9f7d41f4c0656ac9706bfdb2a6a2'),
+              '2026-09-08T15:40:00+00:00': (1498, 1657, '211b2687ba0d3daadc2b070ebfc60aedd49da948e49da645e334224c9f6a8036'),
+              '2026-09-08T15:45:00+00:00': (1520, 1679, '9c1e985af044a7a68276b31a1d860107c016019679f3d815a3aebc935f88595f'),
+              '2026-09-08T15:50:00+00:00': (1520, 1679, '9c1e985af044a7a68276b31a1d860107c016019679f3d815a3aebc935f88595f'),
           }
 
           rows: list[dict[str, object]] = []
@@ -128,11 +131,19 @@ jobs:
           for boundary_text, (expected_episode_count, expected_observation_count, expected_digest) in expected.items():
               as_of = datetime.fromisoformat(boundary_text)
 
-              # First prove the exported corpus reproduces the retained V0 partition exactly.
               baseline = build_grouping_projection(inputs, relations=(), as_of=as_of)
               baseline_episode_count, baseline_digest = partition(baseline)
-              assert baseline_episode_count == expected_episode_count, (boundary_text, baseline_episode_count)
-              assert baseline_digest == expected_digest, (boundary_text, baseline_digest)
+              baseline_result = {
+                  'as_of': boundary_text,
+                  'episode_count': baseline_episode_count,
+                  'observation_count': len([item for item in inputs if item.observed_at <= as_of]),
+                  'partition_sha256': baseline_digest,
+                  'implementation': 'V0',
+              }
+              print(json.dumps(baseline_result, sort_keys=True))
+              assert baseline_episode_count == expected_episode_count, baseline_result
+              assert baseline_result['observation_count'] == expected_observation_count, baseline_result
+              assert baseline_digest == expected_digest, baseline_result
 
               candidate = build_compact_grouping_projection(inputs, relations=(), as_of=as_of)
               episode_count, digest = partition(candidate)
@@ -143,6 +154,7 @@ jobs:
                   'partition_sha256': digest,
                   'candidate_pair_count': candidate.candidate_pair_count,
                   'group_pair_count': candidate.group_pair_count,
+                  'implementation': 'V1',
               }
               print(json.dumps(result, sort_keys=True))
               assert episode_count == expected_episode_count, result
