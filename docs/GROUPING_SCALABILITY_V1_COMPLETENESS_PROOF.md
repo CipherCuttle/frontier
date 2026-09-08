@@ -32,7 +32,7 @@ No other V0 branch returns `GROUP`.
 
 ### Explicit relation
 
-Every eligible explicit relation is converted to the canonical ordered pair and inserted directly into the left observation's candidate list. Eligibility uses the frozen relation authority/type rules and `created_at <= as_of`.
+Every eligible explicit relation between two distinct eligible observations is converted to the canonical ordered pair and inserted directly into the left observation's candidate list. Eligibility uses the frozen relation authority/type rules and `created_at <= as_of`. Self-relations are excluded because V0 enumerates only pairs of distinct observations.
 
 Therefore clause 1 cannot be omitted by blocking.
 
@@ -85,12 +85,12 @@ Worst case: if many substantive titles share qualifying prefixes and compatible 
 
 ## 3. Immutable reference evidence
 
-The candidate suite does **not** import the V1 worktree's V0 implementation as its oracle.
+The candidate suite binds V0 comparisons to immutable reference identities. Where it executes `assess_pair(...)`, the suite first requires the worktree `grouping.py` blob to equal the pinned V0 blob.
 
-Reference evidence is bound in three independent ways:
+Reference evidence is bound in three complementary ways:
 
 1. `fixtures/grouping/oracle_guarded_hybrid_v0.txt` is the exact Git blob `943affde20b08f500f8dba2716ffedfc428f58e1` from the pinned V0 implementation.
-2. `fixtures/grouping/corpus_v0.json` is pinned to Git blob `909586dc99fe3c84ccf02f09aebe6f5ea2224b6a`; its frozen expected `GROUP` / `NO_GROUP` / `AMBIGUOUS` decisions are consumed directly by V1 tests.
+2. `fixtures/grouping/corpus_v0.json` is pinned to Git blob `909586dc99fe3c84ccf02f09aebe6f5ea2224b6a`; its pair inputs are replayed against the blob-pinned V0 `assess_pair(...)` reference. Historical fixture labels are not treated as the V0 oracle.
 3. An isolated GitHub Actions checkout of exact commit `db206cda7eed92b62c706a10089c2571b4381d66`, after verifying the exact grouping blob, evaluated every non-empty subset of an 11-observation hostile basis. The resulting 2,047 oracle partitions are bound by aggregate SHA-256 `2184f17bfcdd1a0c6ed8df824078a55eb585b47651d493cfca61b056cde4a3ea`. The V1 suite reconstructs the same 2,047 bounded universes and must reproduce that digest exactly.
 
 The hostile basis covers false transitivity, same-URL ATTENTION, exact Jaccard `0.80`, same-artifact version split, punctuation-sensitive conflict, and far-window separation. This is exhaustive over the bounded basis, not randomized sampling.
@@ -100,7 +100,7 @@ The suite also contains mutation attacks:
 - **S15 candidate omission:** removing a known true Jaccard GROUP candidate must make the immutable-equivalence assertion fail.
 - **S16 false GROUP injection:** forcing a known punctuation-conflict pair to GROUP must make the immutable-equivalence assertion fail.
 
-Thus candidate generation and exact assessment are checked against immutable expected artifacts rather than a moving worktree oracle.
+Thus candidate generation and exact assessment are checked against a blob-pinned V0 pair oracle plus an independently generated immutable bounded-partition artifact, rather than fixture labels or an unguarded moving worktree.
 
 ## 4. Retained PEF_V0 membership evidence
 
@@ -128,7 +128,7 @@ For each GROUP pair, V0 merges two current components only if every cross-compon
 
 V1 performs the same check. Instead of looking up every cross pair in a precomputed N-squared dictionary, it evaluates the V1 hot-path GROUP predicate on demand for every cross-member pair.
 
-Because the GROUP predicate is constrained by the immutable corpus and partition artifacts, the merge predicate is required to remain identical to V0. The exhaustive bounded digest includes a false-transitivity basis, and a direct hostile test requires the A-B / B-C / not-A-C shape to preserve the conservative partition.
+Because the GROUP predicate is constrained by the blob-pinned V0 pair oracle and immutable partition artifacts, the merge predicate is required to remain identical to V0. The exhaustive bounded digest includes a false-transitivity basis, and a direct hostile test requires the A-B / B-C / not-A-C shape to preserve the conservative partition.
 
 Therefore, given GROUP-complete candidate generation and the same pair order, V1 produces the same episode membership partition and singleton set as V0. No transitive relaxation is introduced.
 
@@ -142,7 +142,7 @@ Failure to appear in the compact candidate stream is not interpreted as `NO_GROU
 
 `OMITTED_PAIRS_HAVE_NO_NEGATIVE_OR_INDEPENDENCE_MEANING`
 
-The deterministic diagnostic `assess_pair_v1(...)` remains available for a requested pair. Its worktree dependency is guarded by the pinned source-blob identity and frozen expected-decision corpus; the test suite does not use that same dependency as its oracle.
+The deterministic diagnostic `assess_pair_v1(...)` remains available for a requested pair. Its worktree dependency is guarded by the pinned source-blob identity. Pair-equivalence tests deliberately use that same blob-pinned V0 `assess_pair(...)` implementation as the reference, while the 2,047-case partition digest supplies an independently generated immutable membership artifact.
 
 Thus compact representation changes storage/computation, not epistemic meaning.
 
@@ -168,7 +168,7 @@ This proof is invalidated if any of the following occurs:
 
 - the vendored immutable V0 oracle fixture no longer has blob `943affde20b08f500f8dba2716ffedfc428f58e1`;
 - the frozen pair corpus no longer has blob `909586dc99fe3c84ccf02f09aebe6f5ea2224b6a`;
-- any frozen pair-corpus decision changes under V1;
+- any blob-pinned V0 pair-corpus GROUP decision differs under V1;
 - the 2,047-case exhaustive bounded partition digest differs from `2184f17bfcdd1a0c6ed8df824078a55eb585b47651d493cfca61b056cde4a3ea`;
 - the S15 omission or S16 injection mutation no longer trips the equivalence guard;
 - any retained 15:00–15:50 boundary membership partition differs from its persisted frozen-V0 artifact;
