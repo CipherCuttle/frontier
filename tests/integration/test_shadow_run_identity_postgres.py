@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 
 psycopg = pytest.importorskip("psycopg")
+from psycopg import Connection
 from psycopg.types.json import Jsonb
 
 from frontier.adapters.postgres.advanced_intelligence import PostgresShadowRunRepository
@@ -17,6 +18,8 @@ from frontier.domain.advanced_intelligence import PEF_EXPERIMENT_ID
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
+
+ConnectionT = Connection[tuple[object, ...]]
 
 
 def _hex64(*, first: str | None = None) -> str:
@@ -30,48 +33,47 @@ def _boundary() -> datetime:
 
 
 def _insert_run(
-    conn: object,
+    conn: ConnectionT,
     *,
     run_id: str,
     experiment_id: str,
     as_of: datetime,
     run_class: str,
 ) -> None:
-    with conn.transaction(), conn.cursor():  # type: ignore[attr-defined]
-        with conn.cursor() as cur:  # type: ignore[attr-defined]
-            cur.execute(
-                """
-                INSERT INTO shadow_experiment_runs (
-                    run_id, experiment_id, candidate_id, schema_version,
-                    algorithm_version, configuration_digest, authority_state,
-                    status, as_of, control_snapshot_id, control_receipt_id,
-                    candidate_artifact_id, candidate_output_digest,
-                    coverage_state, episode_universe_digest, run_digest,
-                    failure_reason, run_class, run_json
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    run_id,
-                    experiment_id,
-                    "fixture-candidate",
-                    "fixture-shadow-v0",
-                    "fixture-algorithm-v0",
-                    "sha256:" + _hex64(),
-                    "EXPERIMENTAL_SHADOW",
-                    "RAN",
-                    as_of,
-                    "snapshot_" + _hex64(),
-                    "receipt_" + _hex64(),
-                    "artifact_" + _hex64(),
-                    "sha256:" + _hex64(),
-                    "OK",
-                    "sha256:" + _hex64(),
-                    "sha256:" + _hex64(),
-                    None,
-                    run_class,
-                    Jsonb({"fixture": run_id, "experiment_id": experiment_id}),
-                ),
-            )
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO shadow_experiment_runs (
+                run_id, experiment_id, candidate_id, schema_version,
+                algorithm_version, configuration_digest, authority_state,
+                status, as_of, control_snapshot_id, control_receipt_id,
+                candidate_artifact_id, candidate_output_digest,
+                coverage_state, episode_universe_digest, run_digest,
+                failure_reason, run_class, run_json
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                run_id,
+                experiment_id,
+                "fixture-candidate",
+                "fixture-shadow-v0",
+                "fixture-algorithm-v0",
+                "sha256:" + _hex64(),
+                "EXPERIMENTAL_SHADOW",
+                "RAN",
+                as_of,
+                "snapshot_" + _hex64(),
+                "receipt_" + _hex64(),
+                "artifact_" + _hex64(),
+                "sha256:" + _hex64(),
+                "OK",
+                "sha256:" + _hex64(),
+                "sha256:" + _hex64(),
+                None,
+                run_class,
+                Jsonb({"fixture": run_id, "experiment_id": experiment_id}),
+            ),
+        )
 
 
 def test_lookup_is_scoped_to_pef_experiment_not_run_id_ordering() -> None:
