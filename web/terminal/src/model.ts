@@ -181,31 +181,6 @@ export interface ExperimentalRankDelta {
 }
 
 /**
- * Baseline-vs-candidate rank deltas from candidate ranks only (EXPERIMENTAL
- * lens). ``candidateRanks`` must come from an EXPERIMENTAL_SHADOW surface.
- * Missing candidate ranks render delta UNAVAILABLE — never 0, never invented
- * (R4, R7). Baseline rows are never reordered or reranked by this data.
- */
-export function computeRankDeltas(
-  baselineItems: readonly EpisodeResponse[],
-  candidateRanks: ReadonlyMap<string, number> | null,
-): ExperimentalRankDelta[] {
-  return baselineItems.map((item) => {
-    const experimentalRank = candidateRanks?.get(item.episode_id) ?? null;
-    const delta =
-      experimentalRank === null ? null : experimentalRank - item.rank;
-    return {
-      episodeId: item.episode_id,
-      baselineRank: item.rank,
-      experimentalRank,
-      experimentalRankState: experimentalRank === null ? "UNKNOWN" : "AVAILABLE",
-      delta,
-      deltaState: delta === null ? "UNAVAILABLE" : "AVAILABLE",
-    };
-  });
-}
-
-/**
  * Rank deltas from the WP7 per-episode comparison endpoint. The server's own
  * ``rank_delta`` / ``rank_delta_state`` are rendered verbatim; a missing
  * comparison (fetch failed or outside the bounded fetch window) renders the

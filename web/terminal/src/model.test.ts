@@ -14,7 +14,6 @@ import {
   buildFeatureExplanations,
   buildRankDeltasFromComparisons,
   buildWarRoomHistory,
-  computeRankDeltas,
   displayRankDelta,
   EXPERIMENTAL_LENS_LABEL,
   EXPERIMENTAL_LENS_NOTE,
@@ -128,32 +127,11 @@ describe("terminal semantic helpers", () => {
 });
 
 describe("EXPERIMENTAL lens model (slice H)", () => {
-  it("computes hand-checked baseline-vs-candidate rank deltas and UNKNOWN gaps", () => {
-    const baseline = [episode(1), episode(2), episode(3)];
-    const candidateRanks = new Map<string, number>([
-      ["episode-001", 3],
-      ["episode-002", 1],
-    ]);
-    const deltas = computeRankDeltas(baseline, candidateRanks);
-    expect(deltas).toHaveLength(3);
-    expect(deltas[0]).toMatchObject({ episodeId: "episode-001", baselineRank: 1, experimentalRank: 3, delta: 2 });
-    expect(deltas[1]).toMatchObject({ episodeId: "episode-002", baselineRank: 2, experimentalRank: 1, delta: -1 });
-    expect(deltas[2]).toMatchObject({ episodeId: "episode-003", baselineRank: 3, experimentalRank: null });
-    expect(deltas.at(2)?.delta).toBeNull();
-    expect(deltas.at(2)?.deltaState).toBe("UNAVAILABLE");
+  it("formats server-provided rank deltas without recomputing them", () => {
     expect(displayRankDelta(2)).toBe("+2");
     expect(displayRankDelta(-1)).toBe("-1");
     expect(displayRankDelta(0)).toBe("±0");
-  });
-
-  it("never invents candidate ranks when the summary plane exposes none", () => {
-    const baseline = [episode(1), episode(2)];
-    const deltas = computeRankDeltas(baseline, null);
-    expect(deltas.every((delta) => delta.experimentalRank === null && delta.delta === null)).toBe(true);
-    expect(deltas.every((delta) => delta.deltaState === "UNAVAILABLE")).toBe(true);
-    expect(deltas.map((delta) => delta.baselineRank)).toEqual([1, 2]);
     expect(displayRankDelta(null)).toBe("UNKNOWN");
-    // UNKNOWN candidate ranks render the delta UNAVAILABLE — never a coerced 0.
     expect(displayRankDelta(null, "UNAVAILABLE")).toBe("UNAVAILABLE");
     expect(displayRankDelta(null, "INSUFFICIENT_SAMPLE")).toBe("INSUFFICIENT_SAMPLE");
     expect(displayRankDelta(null, "AVAILABLE")).toBe("UNKNOWN");
