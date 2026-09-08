@@ -293,9 +293,7 @@ def _random_universe(seed: int) -> tuple[GroupingInput, ...]:
         role = ("ATTENTION",) if rng.random() < 0.2 else ()
         kind = "ARTIFACT" if rng.random() < 0.2 else "DOCUMENT"
         artifact_name = "Atlas Runtime Package" if kind == "ARTIFACT" else None
-        artifact_version = (
-            rng.choice(("1.0", "2.0", "3.0")) if kind == "ARTIFACT" else None
-        )
+        artifact_version = rng.choice(("1.0", "2.0", "3.0")) if kind == "ARTIFACT" else None
         values.append(
             _obs(
                 seed * 100 + index + 6000,

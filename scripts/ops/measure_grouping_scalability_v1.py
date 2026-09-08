@@ -163,9 +163,7 @@ def main() -> int:
 
     failures: list[str] = []
     if peak_rss_mib > case.peak_rss_mib_max:
-        failures.append(
-            f"peak RSS {peak_rss_mib:.3f} MiB exceeds {case.peak_rss_mib_max:.3f} MiB"
-        )
+        failures.append(f"peak RSS {peak_rss_mib:.3f} MiB exceeds {case.peak_rss_mib_max:.3f} MiB")
     if wall_seconds > case.wall_seconds_max:
         failures.append(f"wall {wall_seconds:.3f}s exceeds {case.wall_seconds_max:.3f}s")
     if projection.eligible_observation_count != case.count:

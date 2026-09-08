@@ -38,9 +38,7 @@ GROUPING_V1_PAIR_SEMANTICS_VERSION: Final = (
     "guarded-hybrid-v0@db206cda7eed92b62c706a10089c2571b4381d66"
 )
 GROUPING_V1_ORACLE_BLOB: Final = "943affde20b08f500f8dba2716ffedfc428f58e1"
-GROUPING_V1_OMITTED_PAIR_SEMANTICS: Final = (
-    "OMITTED_PAIRS_HAVE_NO_NEGATIVE_OR_INDEPENDENCE_MEANING"
-)
+GROUPING_V1_OMITTED_PAIR_SEMANTICS: Final = "OMITTED_PAIRS_HAVE_NO_NEGATIVE_OR_INDEPENDENCE_MEANING"
 
 _JACCARD_NUMERATOR: Final = 4
 _JACCARD_DENOMINATOR: Final = 5
@@ -55,9 +53,7 @@ GROUPING_V1_CONFIGURATION: dict[str, CanonicalValue] = {
     "title_group_jaccard": "0.80",
     "title_no_group_jaccard": "0.20",
 }
-GROUPING_V1_CONFIGURATION_DIGEST = sha256_digest(
-    canonical_json_bytes(GROUPING_V1_CONFIGURATION)
-)
+GROUPING_V1_CONFIGURATION_DIGEST = sha256_digest(canonical_json_bytes(GROUPING_V1_CONFIGURATION))
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,14 +148,10 @@ def _is_group_fast(
     if _same_artifact_different_version(left, right) or distance > FAR_WINDOW:
         return False
 
-    same_url = bool(
-        left.item.canonical_url and left.item.canonical_url == right.item.canonical_url
-    )
+    same_url = bool(left.item.canonical_url and left.item.canonical_url == right.item.canonical_url)
     title_jaccard = grouping_jaccard(left.title_token_set, right.title_token_set)
     title_substantive = left.title_substantive and right.title_substantive
-    title_equal = bool(
-        left.title_normalized and left.title_normalized == right.title_normalized
-    )
+    title_equal = bool(left.title_normalized and left.title_normalized == right.title_normalized)
     punctuation_conflict = _punctuation_sensitive_conflict(left, right)
     exact_text = bool(left.semantic and left.semantic == right.semantic)
 
@@ -298,9 +290,7 @@ class _CandidateIndex:
             if value.title_substantive and value.semantic:
                 semantic[value.semantic].append((item.observed_at, item.observation_id))
             if value.title_substantive and value.title_normalized:
-                title_equal[value.title_normalized].append(
-                    (item.observed_at, item.observation_id)
-                )
+                title_equal[value.title_normalized].append((item.observed_at, item.observation_id))
                 token_frequency.update(value.title_token_set)
 
         for buckets in (same_url, semantic, title_equal):
@@ -308,9 +298,7 @@ class _CandidateIndex:
                 values.sort()
 
         jaccard_prefix_by_id: dict[str, tuple[str, ...]] = {}
-        mutable_postings: dict[str, dict[int, list[str]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
+        mutable_postings: dict[str, dict[int, list[str]]] = defaultdict(lambda: defaultdict(list))
         for value in prepared:
             if not value.title_substantive:
                 continue
@@ -329,8 +317,7 @@ class _CandidateIndex:
         return cls(
             by_id=by_id,
             explicit_by_left={
-                left_id: tuple(sorted(right_ids))
-                for left_id, right_ids in explicit_lists.items()
+                left_id: tuple(sorted(right_ids)) for left_id, right_ids in explicit_lists.items()
             },
             same_url=dict(same_url),
             semantic=dict(semantic),
@@ -375,9 +362,7 @@ class _CandidateIndex:
 
         prefix = self.jaccard_prefix_by_id.get(left_id, ())
         if prefix:
-            lower_length, upper_length = _jaccard_length_bounds(
-                len(left.title_token_set)
-            )
+            lower_length, upper_length = _jaccard_length_bounds(len(left.title_token_set))
             for token in prefix:
                 by_length = self.jaccard_postings.get(token, {})
                 for token_count in range(lower_length, upper_length + 1):
@@ -385,9 +370,7 @@ class _CandidateIndex:
                         if candidate_id <= left_id:
                             continue
                         candidate = self.by_id[candidate_id]
-                        if abs(
-                            left.item.observed_at - candidate.item.observed_at
-                        ) <= NEAR_WINDOW:
+                        if abs(left.item.observed_at - candidate.item.observed_at) <= NEAR_WINDOW:
                             candidates.add(candidate_id)
 
         return tuple(sorted(candidates))
