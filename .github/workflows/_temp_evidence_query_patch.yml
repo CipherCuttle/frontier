@@ -1,0 +1,459 @@
+name: temp-evidence-query-v0-patch
+
+on:
+  push:
+    branches:
+      - feature/post-pef-v0-evidence-query-v0
+    paths:
+      - .github/workflows/_temp_evidence_query_patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/post-pef-v0-evidence-query-v0
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.14'
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: '0.12.10'
+          enable-cache: true
+      - name: Verify authority predates runtime
+        run: |
+          test "$(git rev-list --count 7430c9a5f5ff84900212412d8c9fbd8a7d5a25ae..HEAD -- docs/EVIDENCE_QUERY_V0.md)" -ge 1
+          test "$(git rev-list --count 7430c9a5f5ff84900212412d8c9fbd8a7d5a25ae..HEAD -- fixtures/evidence_query/corpus_v0.json)" -ge 1
+          git log -1 --format='%H %s' -- docs/EVIDENCE_QUERY_V0.md
+          git log -1 --format='%H %s' -- fixtures/evidence_query/corpus_v0.json
+      - name: Sync frozen environment
+        run: uv sync --all-extras --frozen
+      - name: Apply bounded runtime changes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # DOMAIN
+          path = Path('src/frontier/domain/public_read.py')
+          text = path.read_text()
+          old = '''PUBLIC_READ_DEFAULT_LIMIT = 50\nPUBLIC_READ_MAX_LIMIT = 100\n'''
+          new = '''PUBLIC_READ_DEFAULT_LIMIT = 50\nPUBLIC_READ_MAX_LIMIT = 100\nEVIDENCE_QUERY_POLICY_VERSION = "evidence-query-lexical-filter-v0"\nEVIDENCE_QUERY_SEMANTIC_SCOPE = "BASELINE_SUBSTRATE_QUERY"\nEVIDENCE_QUERY_MAX_CODEPOINTS = 256\nEVIDENCE_QUERY_MAX_TOKENS = 12\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''class ObservationNotFoundError(PublicReadFailure):\n    code = "OBSERVATION_NOT_FOUND"\n\n\nclass PublicViewKind(StrEnum):\n'''
+          new = '''class ObservationNotFoundError(PublicReadFailure):\n    code = "OBSERVATION_NOT_FOUND"\n\n\nclass EvidenceQueryInvalidError(PublicReadFailure):\n    code = "INVALID_QUERY"\n\n\nclass PublicViewKind(StrEnum):\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          old = '''@dataclass(frozen=True, slots=True)\nclass PublicHealthRead:\n    snapshot: SnapshotBinding\n    generated_at: str\n    transport_state: str\n    freshness_state: str\n    coverage_state: str\n    schema_state: str\n    sources: tuple[SourceHealthRead, ...]\n\n\ndef _episode_int'''
+          new = '''@dataclass(frozen=True, slots=True)\nclass PublicHealthRead:\n    snapshot: SnapshotBinding\n    generated_at: str\n    transport_state: str\n    freshness_state: str\n    coverage_state: str\n    schema_state: str\n    sources: tuple[SourceHealthRead, ...]\n\n\n@dataclass(frozen=True, slots=True)\nclass EvidenceQueryItem:\n    episode: dict[str, CanonicalValue]\n    matched_observation_ids: tuple[str, ...]\n\n\n@dataclass(frozen=True, slots=True)\nclass EvidenceQueryPage:\n    snapshot: SnapshotBinding\n    generated_at: str\n    transport_state: str\n    freshness_state: str\n    coverage_state: str\n    schema_state: str\n    query_policy_version: str\n    semantic_scope: str\n    query: str\n    normalized_tokens: tuple[str, ...]\n    total: int\n    limit: int\n    offset: int\n    items: tuple[EvidenceQueryItem, ...]\n\n\ndef _episode_int'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          append = r'''
+
+
+def normalize_evidence_query(query: str) -> tuple[str, ...]:
+    trimmed = query.strip()
+    if not trimmed or len(trimmed) > EVIDENCE_QUERY_MAX_CODEPOINTS:
+        raise EvidenceQueryInvalidError("query length is outside the frozen bounds")
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for raw_token in trimmed.split():
+        token = raw_token.casefold()
+        if token not in seen:
+            seen.add(token)
+            tokens.append(token)
+    if not tokens or len(tokens) > EVIDENCE_QUERY_MAX_TOKENS:
+        raise EvidenceQueryInvalidError("query token count is outside the frozen bounds")
+    return tuple(tokens)
+
+
+def _append_payload_string_leaves(value: CanonicalValue, result: list[str]) -> None:
+    if isinstance(value, str):
+        result.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            _append_payload_string_leaves(item, result)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _append_payload_string_leaves(item, result)
+
+
+def _observation_token_hits(
+    observation: ObservationEvidenceRead,
+    normalized_tokens: tuple[str, ...],
+) -> frozenset[str]:
+    searchable = [observation.source_item_key, observation.kind]
+    _append_payload_string_leaves(observation.payload, searchable)
+    folded = tuple(value.casefold() for value in searchable)
+    return frozenset(
+        token for token in normalized_tokens if any(token in value for value in folded)
+    )
+
+
+def evidence_query_snapshot_observation_ids(
+    snapshot: ResolvedPublicSnapshot,
+) -> tuple[str, ...]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for episode in _ordered_episodes(snapshot.episodes):
+        for observation_id in episode_observation_ids(episode):
+            if observation_id not in seen:
+                seen.add(observation_id)
+                result.append(observation_id)
+    return tuple(result)
+
+
+def select_evidence_query(
+    snapshot: ResolvedPublicSnapshot,
+    observations_by_id: dict[str, ObservationEvidenceRead],
+    *,
+    query: str,
+    normalized_tokens: tuple[str, ...],
+    limit: int = PUBLIC_READ_DEFAULT_LIMIT,
+    offset: int = 0,
+) -> EvidenceQueryPage:
+    expected_tokens = normalize_evidence_query(query)
+    if normalized_tokens != expected_tokens:
+        raise EvidenceQueryInvalidError("normalized query tokens do not match query")
+    if limit < 1 or limit > PUBLIC_READ_MAX_LIMIT:
+        raise ValueError(f"limit must be between 1 and {PUBLIC_READ_MAX_LIMIT}")
+    if offset < 0:
+        raise ValueError("offset must be non-negative")
+
+    expected_observation_ids = evidence_query_snapshot_observation_ids(snapshot)
+    if set(observations_by_id) != set(expected_observation_ids):
+        raise SnapshotIntegrityError(
+            "query evidence does not exactly match snapshot observation membership"
+        )
+
+    matches: list[EvidenceQueryItem] = []
+    for episode in _ordered_episodes(snapshot.episodes):
+        episode_observation_ids_value = episode_observation_ids(episode)
+        covered_tokens: set[str] = set()
+        matched_ids: list[str] = []
+        for observation_id in episode_observation_ids_value:
+            observation = observations_by_id[observation_id]
+            hits = _observation_token_hits(observation, normalized_tokens)
+            if hits:
+                matched_ids.append(observation_id)
+                covered_tokens.update(hits)
+        if all(token in covered_tokens for token in normalized_tokens):
+            matches.append(
+                EvidenceQueryItem(
+                    episode=episode,
+                    matched_observation_ids=tuple(matched_ids),
+                )
+            )
+
+    return EvidenceQueryPage(
+        snapshot=snapshot.binding,
+        generated_at=snapshot.generated_at,
+        transport_state=snapshot.transport_state,
+        freshness_state=snapshot.freshness_state,
+        coverage_state=snapshot.coverage_state,
+        schema_state=snapshot.schema_state,
+        query_policy_version=EVIDENCE_QUERY_POLICY_VERSION,
+        semantic_scope=EVIDENCE_QUERY_SEMANTIC_SCOPE,
+        query=query,
+        normalized_tokens=normalized_tokens,
+        total=len(matches),
+        limit=limit,
+        offset=offset,
+        items=tuple(matches[offset : offset + limit]),
+    )
+'''
+          assert 'def normalize_evidence_query(' not in text
+          text = text.rstrip() + append + '\n'
+          path.write_text(text)
+
+          # APPLICATION
+          path = Path('src/frontier/application/public_read.py')
+          text = path.read_text()
+          old = '''from frontier.domain.public_read import (\n    EpisodeEvidenceRead,\n'''
+          new = '''from frontier.domain.public_read import (\n    EvidenceQueryPage,\n    EpisodeEvidenceRead,\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          old = '''    SourceHealthRead,\n    episode_observation_ids,\n    find_episode,\n    select_public_view,\n)\n'''
+          new = '''    SourceHealthRead,\n    episode_observation_ids,\n    evidence_query_snapshot_observation_ids,\n    find_episode,\n    normalize_evidence_query,\n    select_evidence_query,\n    select_public_view,\n)\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          anchor = '''    def get_episode(\n        self, episode_id: str, *, snapshot_id: str | None = None\n    ) -> EpisodeEvidenceRead:\n'''
+          method = '''    def search_evidence(\n        self,\n        query: str,\n        *,\n        snapshot_id: str | None = None,\n        limit: int = 50,\n        offset: int = 0,\n    ) -> EvidenceQueryPage:\n        normalized_tokens = normalize_evidence_query(query)\n        snapshot = self._repository.resolve_snapshot(snapshot_id)\n        expected_ids = evidence_query_snapshot_observation_ids(snapshot)\n        as_of = _parse_canonical_timestamp(snapshot.binding.as_of)\n        observations = self._repository.list_observations(expected_ids, as_of=as_of)\n        by_id = {item.observation_id: item for item in observations}\n        if len(by_id) != len(observations):\n            raise SnapshotIntegrityError(\n                "public evidence repository returned duplicate query observations"\n            )\n        if set(by_id) != set(expected_ids):\n            raise SnapshotIntegrityError(\n                "query evidence does not exactly match snapshot observation membership"\n            )\n        return select_evidence_query(\n            snapshot,\n            by_id,\n            query=query,\n            normalized_tokens=normalized_tokens,\n            limit=limit,\n            offset=offset,\n        )\n\n'''
+          assert text.count(anchor) == 1
+          text = text.replace(anchor, method + anchor, 1)
+          path.write_text(text)
+
+          # API
+          path = Path('src/frontier/adapters/api/public_read.py')
+          text = path.read_text()
+          old = '''from frontier.domain.public_read import (\n    PUBLIC_READ_API_VERSION,\n'''
+          new = '''from frontier.domain.public_read import (\n    EVIDENCE_QUERY_MAX_CODEPOINTS,\n    PUBLIC_READ_API_VERSION,\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          old = '''    EpisodeNotFoundError,\n    NoCompleteSnapshotError,\n'''
+          new = '''    EpisodeNotFoundError,\n    EvidenceQueryInvalidError,\n    EvidenceQueryPage,\n    NoCompleteSnapshotError,\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          old = '''OffsetQuery = Annotated[int, Query(ge=0)]\n'''
+          new = '''OffsetQuery = Annotated[int, Query(ge=0)]\nEvidenceSearchQuery = Annotated[str, Query(min_length=1, max_length=EVIDENCE_QUERY_MAX_CODEPOINTS)]\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          anchor = '''class CollectionOccurrenceResponse(BaseModel):\n'''
+          models = '''class EvidenceQueryItemResponse(BaseModel):\n    model_config = ConfigDict(extra="forbid")\n\n    episode: EpisodeResponse\n    matched_observation_ids: list[str]\n\n\nclass EvidenceQueryResponse(BaseModel):\n    model_config = ConfigDict(extra="forbid")\n\n    schema_version: str = PUBLIC_READ_RESPONSE_SCHEMA\n    snapshot: SnapshotBindingResponse\n    generated_at: str\n    transport_state: str\n    freshness_state: str\n    coverage_state: str\n    schema_state: str\n    query_policy_version: str\n    semantic_scope: str\n    query: str\n    normalized_tokens: list[str]\n    total: int\n    limit: int\n    offset: int\n    items: list[EvidenceQueryItemResponse]\n\n\n'''
+          assert text.count(anchor) == 1
+          text = text.replace(anchor, models + anchor, 1)
+
+          old = '''def _failure_status(exc: PublicReadFailure) -> int:\n    if isinstance(exc, (SnapshotNotFoundError, EpisodeNotFoundError, ObservationNotFoundError)):\n        return 404\n'''
+          new = '''def _failure_status(exc: PublicReadFailure) -> int:\n    if isinstance(exc, EvidenceQueryInvalidError):\n        return 400\n    if isinstance(exc, (SnapshotNotFoundError, EpisodeNotFoundError, ObservationNotFoundError)):\n        return 404\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          old = '''def _failure_detail(exc: PublicReadFailure) -> str:\n    if isinstance(exc, NoCompleteSnapshotError):\n'''
+          new = '''def _failure_detail(exc: PublicReadFailure) -> str:\n    if isinstance(exc, EvidenceQueryInvalidError):\n        return "The evidence query is invalid."\n    if isinstance(exc, NoCompleteSnapshotError):\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+
+          anchor = '''def create_public_read_app(\n'''
+          helper = '''def _evidence_query_response(page: EvidenceQueryPage) -> EvidenceQueryResponse:\n    return EvidenceQueryResponse.model_validate(asdict(page))\n\n\n'''
+          assert text.count(anchor) == 1
+          text = text.replace(anchor, helper + anchor, 1)
+
+          anchor = '''    def episode(episode_id: str, snapshot_id: SnapshotQuery = None) -> EpisodeEvidenceResponse:\n'''
+          endpoint = '''    def search_evidence(\n        q: EvidenceSearchQuery,\n        snapshot_id: SnapshotQuery = None,\n        limit: LimitQuery = PUBLIC_READ_DEFAULT_LIMIT,\n        offset: OffsetQuery = 0,\n    ) -> EvidenceQueryResponse:\n        page = service.search_evidence(\n            q, snapshot_id=snapshot_id, limit=limit, offset=offset\n        )\n        return _evidence_query_response(page)\n\n'''
+          assert text.count(anchor) == 1
+          text = text.replace(anchor, endpoint + anchor, 1)
+
+          anchor = '''    app.add_api_route(\n        "/v0/episodes/{episode_id}",\n'''
+          route = '''    app.add_api_route(\n        "/v0/search",\n        search_evidence,\n        methods=["GET"],\n        response_model=EvidenceQueryResponse,\n        operation_id="searchEvidence",\n    )\n'''
+          assert text.count(anchor) == 1
+          text = text.replace(anchor, route + anchor, 1)
+          path.write_text(text)
+
+          # UNIT DOMAIN/APPLICATION TESTS
+          path = Path('tests/unit/test_public_read.py')
+          text = path.read_text()
+          old = '''    ObservationEvidenceRead,\n    PublicViewKind,\n'''
+          new = '''    EvidenceQueryInvalidError,\n    ObservationEvidenceRead,\n    PublicViewKind,\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          old = '''    SourceHealthRead,\n    select_public_view,\n)\n'''
+          new = '''    SourceHealthRead,\n    normalize_evidence_query,\n    select_public_view,\n)\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          tests = r'''
+
+
+class _QueryRepository:
+    def __init__(self, *, returned_ids: tuple[str, ...] | None = None) -> None:
+        self.ids = tuple("obs_" + char * 64 for char in "abcd")
+        self.snapshot = _snapshot(
+            _episode("episode-a", 1, observation_ids=[self.ids[0]]),
+            _episode("episode-b", 2, observation_ids=[self.ids[1], self.ids[2]]),
+            _episode("episode-c", 3, observation_ids=[self.ids[3]]),
+        )
+        self.returned_ids = returned_ids or self.ids
+
+    def resolve_snapshot(self, snapshot_id: str | None = None) -> ResolvedPublicSnapshot:
+        return self.snapshot
+
+    def list_observations(
+        self, observation_ids: tuple[str, ...], *, as_of: datetime
+    ) -> list[ObservationEvidenceRead]:
+        assert observation_ids == self.ids
+        assert as_of == datetime(2026, 9, 5, 12, tzinfo=UTC)
+        return [self._observation(observation_id) for observation_id in self.returned_ids]
+
+    def get_observation(
+        self, observation_id: str, *, as_of: datetime
+    ) -> ObservationEvidenceRead | None:
+        return self._observation(observation_id)
+
+    def list_source_health(self, *, as_of: datetime) -> list[SourceHealthRead]:
+        return []
+
+    def _observation(self, observation_id: str) -> ObservationEvidenceRead:
+        index = self.ids.index(observation_id) if observation_id in self.ids else -1
+        payloads: list[dict[str, CanonicalValue]] = [
+            {"title": "Frontier Agent needle", "secretword": "benign", "count": 12345},
+            {"left": "alpha needle"},
+            {"right": "beta"},
+            {"title": "needle needle needle"},
+        ]
+        source_item_keys = ["item-a", "item-b", "item-c", "special-item-key"]
+        kinds = ["DOCUMENT", "DOCUMENT", "DOCUMENT", "SPECIAL_KIND"]
+        return ObservationEvidenceRead(
+            observation_id=observation_id,
+            schema_version="observation-v1",
+            canonicalization_version="frontier-canonical-json-v1",
+            source_id="fixture.source",
+            source_item_key=source_item_keys[index] if index >= 0 else "outside-item",
+            kind=kinds[index] if index >= 0 else "DOCUMENT",
+            payload=payloads[index] if index >= 0 else {"title": "outside needle"},
+            source_published_at=None,
+            effective_at=None,
+            observed_at="2026-09-05T11:00:00.000000Z",
+            retrieved_at="2026-09-05T11:00:00.000000Z",
+            content_digest="sha256:" + "7" * 64,
+            fetch_digest="sha256:" + "8" * 64,
+            collection_occurrences=(),
+            relations=(),
+        )
+
+
+def test_evidence_query_normalizes_casefold_and_deduplicates_tokens() -> None:
+    assert normalize_evidence_query("  Alpha alpha BETA beta  ") == ("alpha", "beta")
+    with pytest.raises(EvidenceQueryInvalidError):
+        normalize_evidence_query("   ")
+    with pytest.raises(EvidenceQueryInvalidError):
+        normalize_evidence_query(" ".join(f"t{index}" for index in range(13)))
+    with pytest.raises(EvidenceQueryInvalidError):
+        normalize_evidence_query("x" * 257)
+
+
+def test_evidence_query_matches_only_authorized_string_values_and_and_spans_observations() -> None:
+    service = PublicReadService(_QueryRepository())
+    page = service.search_evidence("frontier AGENT")
+    assert page.normalized_tokens == ("frontier", "agent")
+    assert [item.episode["rank"] for item in page.items] == [1]
+
+    cross_observation = service.search_evidence("alpha beta")
+    assert [item.episode["rank"] for item in cross_observation.items] == [2]
+    assert cross_observation.items[0].matched_observation_ids == tuple(
+        "obs_" + char * 64 for char in "bc"
+    )
+
+    assert service.search_evidence("secretword").total == 0
+    assert service.search_evidence("12345").total == 0
+    assert service.search_evidence("fixture.source").total == 0
+    assert service.search_evidence("special-item-key").total == 1
+    assert service.search_evidence("special_kind").total == 1
+
+
+def test_evidence_query_preserves_baseline_order_and_filters_before_pagination() -> None:
+    service = PublicReadService(_QueryRepository())
+    page = service.search_evidence("needle", limit=1, offset=1)
+    assert page.total == 3
+    assert [item.episode["rank"] for item in page.items] == [2]
+    assert page.query_policy_version == "evidence-query-lexical-filter-v0"
+    assert page.semantic_scope == "BASELINE_SUBSTRATE_QUERY"
+
+
+def test_evidence_query_requires_exact_snapshot_observation_membership() -> None:
+    expected = tuple("obs_" + char * 64 for char in "abcd")
+    with pytest.raises(SnapshotIntegrityError, match="exactly match"):
+        PublicReadService(_QueryRepository(returned_ids=expected[:-1])).search_evidence("needle")
+    with pytest.raises(SnapshotIntegrityError, match="duplicate"):
+        PublicReadService(_QueryRepository(returned_ids=(*expected, expected[0]))).search_evidence(
+            "needle"
+        )
+'''
+          assert 'class _QueryRepository:' not in text
+          path.write_text(text.rstrip() + tests + '\n')
+
+          # API TESTS
+          path = Path('tests/unit/test_public_read_api.py')
+          text = path.read_text()
+          old = '''    def list_observations(\n        self, observation_ids: tuple[str, ...], *, as_of: datetime\n    ) -> list[ObservationEvidenceRead]:\n        return []\n'''
+          new = '''    def list_observations(\n        self, observation_ids: tuple[str, ...], *, as_of: datetime\n    ) -> list[ObservationEvidenceRead]:\n        return [\n            ObservationEvidenceRead(\n                observation_id=observation_id,\n                schema_version="observation-v1",\n                canonicalization_version="frontier-canonical-json-v1",\n                source_id="hn.frontpage",\n                source_item_key="item-frontier",\n                kind="DOCUMENT",\n                payload={"title": "Frontier Agent"},\n                source_published_at=None,\n                effective_at=None,\n                observed_at="2026-09-05T11:59:00.000000Z",\n                retrieved_at="2026-09-05T11:59:00.000000Z",\n                content_digest="sha256:" + "7" * 64,\n                fetch_digest="sha256:" + "8" * 64,\n                collection_occurrences=(),\n                relations=(),\n            )\n            for observation_id in observation_ids\n        ]\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          old = '''        "/v0/trending",\n        "/v0/episodes/{episode_id}",\n'''
+          new = '''        "/v0/trending",\n        "/v0/search",\n        "/v0/episodes/{episode_id}",\n'''
+          assert text.count(old) == 1
+          text = text.replace(old, new, 1)
+          tests = r'''
+
+
+def test_evidence_search_is_snapshot_bound_nonranking_and_auditable() -> None:
+    client = cast(
+        _GetClient,
+        TestClient(create_public_read_app(PublicReadService(_FakeRepository()))),
+    )
+    response = client.get("/v0/search", params={"q": "frontier AGENT"})
+    assert response.status_code == 200
+    body = cast(dict[str, Any], response.json())
+    assert body["query_policy_version"] == "evidence-query-lexical-filter-v0"
+    assert body["semantic_scope"] == "BASELINE_SUBSTRATE_QUERY"
+    assert body["normalized_tokens"] == ["frontier", "agent"]
+    assert body["total"] == 1
+    item = cast(dict[str, Any], cast(list[dict[str, Any]], body["items"])[0])
+    episode = cast(dict[str, Any], item["episode"])
+    assert episode["rank"] == 1
+    assert "score" not in item
+    assert item["matched_observation_ids"] == ["obs_" + "b" * 64]
+
+
+def test_evidence_search_rejects_whitespace_only_query_explicitly() -> None:
+    client = cast(
+        _GetClient,
+        TestClient(create_public_read_app(PublicReadService(_FakeRepository()))),
+    )
+    response = client.get("/v0/search", params={"q": "   "})
+    assert response.status_code == 400
+    assert cast(dict[str, Any], response.json()) == {
+        "error": "INVALID_QUERY",
+        "detail": "The evidence query is invalid.",
+    }
+'''
+          assert 'test_evidence_search_is_snapshot_bound_nonranking_and_auditable' not in text
+          path.write_text(text.rstrip() + tests + '\n')
+
+          # Contract generator authority comment now names the new explicit extension authority.
+          path = Path('scripts/generate_public_contracts.py')
+          text = path.read_text()
+          old = '        "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0.",\n'
+          new = '        "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0 / EVIDENCE_QUERY_V0.",\n'
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Format bounded Python changes
+        run: |
+          uv run ruff format \
+            src/frontier/domain/public_read.py \
+            src/frontier/application/public_read.py \
+            src/frontier/adapters/api/public_read.py \
+            tests/unit/test_public_read.py \
+            tests/unit/test_public_read_api.py \
+            scripts/generate_public_contracts.py
+      - name: Generate deterministic public contracts
+        run: uv run python scripts/generate_public_contracts.py
+      - name: Focused EVIDENCE_QUERY_V0 tests
+        run: uv run pytest -q tests/unit/test_public_read.py tests/unit/test_public_read_api.py
+      - name: Full repository verification
+        run: uv run python scripts/verify.py
+      - name: Guard frozen/live surfaces
+        run: |
+          git diff --exit-code 7430c9a5f5ff84900212412d8c9fbd8a7d5a25ae -- \
+            experiments/advanced_intelligence/pef_v0/preregistration.json \
+            sources/registry/registry_v0.json \
+            ops/pef_v0_confirmatory_vm || {
+              echo 'frozen PEF/source/deployment surface changed' >&2
+              exit 1
+            }
+          test ! -d migrations/versions || true
+          git diff --name-only 7430c9a5f5ff84900212412d8c9fbd8a7d5a25ae...HEAD
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/frontier/domain/public_read.py \
+            src/frontier/application/public_read.py \
+            src/frontier/adapters/api/public_read.py \
+            tests/unit/test_public_read.py \
+            tests/unit/test_public_read_api.py \
+            scripts/generate_public_contracts.py \
+            contracts/public/openapi_v0.json \
+            clients/typescript/src/generated/public_read_v0.ts
+          git diff --cached --check
+          git commit -m "feat(read): add deterministic evidence query v0"
+          git push origin HEAD:feature/post-pef-v0-evidence-query-v0
