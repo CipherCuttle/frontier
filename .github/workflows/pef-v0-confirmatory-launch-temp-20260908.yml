@@ -16,7 +16,7 @@ env:
   EXPECTED_FREEZE_RECEIPT_ID: freezereceipt_d8ea34d4f5ae84d7eb1de30272395876823c55287b8900af7ba8abadfc5c2346
   EXPECTED_PUBLICATION_COMMIT: db206cda7eed92b62c706a10089c2571b4381d66
   TRANSPORT_BRANCH: agent/pef-v0-confirmatory-launch-temp-20260908
-  TRANSPORT_PATH: .github/tmp/frontier-confirmatory-db-url-v3.enc.b64
+  TRANSPORT_PATH: .github/tmp/frontier-confirmatory-db-url-v4.enc.b64
 
 jobs:
   confirmatory-first-boundary:
@@ -66,32 +66,22 @@ jobs:
       - name: Upload transport public key
         uses: actions/upload-artifact@v4
         with:
-          name: frontier-confirmatory-transport-public-key-20260908-v3
+          name: frontier-confirmatory-transport-public-key-20260908-v4
           path: ${{ runner.temp }}/frontier-confirmatory-transport/public.pem
           retention-days: 1
           if-no-files-found: error
 
       - name: Wait for encrypted canonical database URL
-        env:
-          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${TRANSPORT_PATH}?ref=${TRANSPORT_BRANCH}"
-          json="$RUNNER_TEMP/frontier-confirmatory-transport/db.content.json"
           out="$RUNNER_TEMP/frontier-confirmatory-transport/db.enc.b64"
           for _ in $(seq 1 120); do
-            code="$(curl -sS -L -o "$json.tmp" -w '%{http_code}' \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H 'Accept: application/vnd.github+json' \
-              -H 'X-GitHub-Api-Version: 2022-11-28' \
-              "$api" || true)"
-            if [ "$code" = "200" ]; then
-              mv "$json.tmp" "$json"
-              jq -r '.content' "$json" | tr -d '\n' | base64 -d > "$out"
+            git fetch --quiet origin "$TRANSPORT_BRANCH"
+            if git cat-file -e "FETCH_HEAD:${TRANSPORT_PATH}" 2>/dev/null; then
+              git show "FETCH_HEAD:${TRANSPORT_PATH}" > "$out"
               break
             fi
-            rm -f "$json.tmp"
             sleep 2
           done
           test -s "$out"
@@ -145,7 +135,7 @@ jobs:
           database_url = os.environ['FRONTIER_DATABASE_URL']
           expected_receipt = os.environ['EXPECTED_FREEZE_RECEIPT_ID']
           expected_publication = os.environ['EXPECTED_PUBLICATION_COMMIT']
-          worker_id = 'frontier-confirmatory-launch-20260908-v3'
+          worker_id = 'frontier-confirmatory-launch-20260908-v4'
 
           policy = load_fetch_policy(root)
           registry = load_source_registry(root)
@@ -250,7 +240,7 @@ jobs:
       - name: Upload canonical first-boundary receipt
         uses: actions/upload-artifact@v4
         with:
-          name: pef-v0-confirmatory-first-boundary-20260908-v3
+          name: pef-v0-confirmatory-first-boundary-20260908-v4
           path: ${{ runner.temp }}/pef-v0-confirmatory-first-boundary.json
           retention-days: 7
           if-no-files-found: error
