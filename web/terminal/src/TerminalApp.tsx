@@ -9,6 +9,7 @@ import {
 import {
   createTerminalPublicReadApi,
   experimentalAvailability,
+  TERMINAL_PUBLIC_READ_LIMIT,
   type EpisodeEvidenceResponse,
   type EpisodeResponse,
   type ExperimentalEpisodeComparisonResponse,
@@ -804,7 +805,7 @@ export function TerminalApp({ transport }: TerminalAppProps) {
     try {
       const response = await api.view(nextLens, {
         ...(requestedSnapshot ? { snapshotId: requestedSnapshot } : {}),
-        limit: 500,
+        limit: TERMINAL_PUBLIC_READ_LIMIT,
       });
       if (requestedSnapshot) {
         assertSnapshotBinding(requestedSnapshot, response.snapshot.snapshot_id, "view");

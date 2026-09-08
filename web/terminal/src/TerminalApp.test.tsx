@@ -11,6 +11,7 @@ import type {
   HealthResponse,
   ViewResponse,
 } from "./api";
+import { TERMINAL_PUBLIC_READ_LIMIT } from "./api";
 import { TerminalApp } from "./TerminalApp";
 
 afterEach(cleanup);
@@ -63,7 +64,7 @@ function viewResponse(view: "RADAR" | "NOW" | "TRENDING" = "RADAR"): ViewRespons
     freshness_state: "DEGRADED",
     generated_at: "2026-09-05T12:00:01.000000Z",
     items: [{ ...episode, observation_ids: [...episode.observation_ids], signal_roles: [...episode.signal_roles], source_ids: [...episode.source_ids] }],
-    limit: 500,
+    limit: TERMINAL_PUBLIC_READ_LIMIT,
     offset: 0,
     schema_state: "OK",
     semantic_scope: "BASELINE_SUBSTRATE",
@@ -379,6 +380,9 @@ describe("TERMINAL_V0", () => {
     const transport = new FakeTransport();
     render(<TerminalApp transport={transport} />);
     await screen.findByText("#7");
+    expect(transport.calls.find((call) => call.path === "/v0/radar")?.query.limit).toBe(
+      TERMINAL_PUBLIC_READ_LIMIT,
+    );
     expect(screen.getAllByText("UNAVAILABLE").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("BASELINE SUBSTRATE")).toBeTruthy();
     expect(screen.queryByText(/independently confirmed/i)).toBeNull();
@@ -409,6 +413,25 @@ describe("TERMINAL_V0", () => {
     expect(nowCall?.query.snapshot_id).toBe(snapshot.snapshot_id);
   });
 
+  it("uses the bounded public-read limit for RADAR, NOW, and TRENDING", async () => {
+    const transport = new FakeTransport();
+    render(<TerminalApp transport={transport} />);
+    await screen.findByText("#7");
+    fireEvent.keyDown(window, { key: "2" });
+    await screen.findByText("NOW / episode activity");
+    fireEvent.keyDown(window, { key: "3" });
+    await screen.findByText("TRENDING / episode activity");
+
+    const viewCalls = transport.calls.filter((call) =>
+      ["/v0/radar", "/v0/now", "/v0/trending"].includes(call.path),
+    );
+    expect(viewCalls.map((call) => call.query.limit)).toEqual([
+      TERMINAL_PUBLIC_READ_LIMIT,
+      TERMINAL_PUBLIC_READ_LIMIT,
+      TERMINAL_PUBLIC_READ_LIMIT,
+    ]);
+  });
+
   it("renders the EXPERIMENTAL lens labelled shadow with rank deltas and UNKNOWN candidate ranks", async () => {
     const transport = new FakeTransport();
     render(<TerminalApp transport={transport} />);
@@ -427,6 +450,7 @@ describe("TERMINAL_V0", () => {
       (call) => call.path === "/v0/radar" && call.query.snapshot_id !== undefined,
     );
     expect(radarCall?.query.snapshot_id).toBe(snapshot.snapshot_id);
+    expect(radarCall?.query.limit).toBe(TERMINAL_PUBLIC_READ_LIMIT);
 
     expect(screen.getByText("#7")).toBeTruthy();
     expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThanOrEqual(2);

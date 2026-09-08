@@ -54,6 +54,9 @@ export type {
   ViewResponse,
 } from "../../../clients/typescript/src/generated/public_read_v0";
 
+/** Maximum bounded page size accepted by the public read API. */
+export const TERMINAL_PUBLIC_READ_LIMIT = 100;
+
 /** Explicit EXPERIMENTAL_SHADOW availability states (R4): never fabricated. */
 export type ExperimentalAvailabilityState = "AVAILABLE" | "NO_DATA" | "UNKNOWN";
 
@@ -293,7 +296,7 @@ export function createTerminalPublicReadApi(
   return {
     async view(lens, options) {
       const query = {
-        limit: options.limit ?? 500,
+        limit: Math.min(options.limit ?? TERMINAL_PUBLIC_READ_LIMIT, TERMINAL_PUBLIC_READ_LIMIT),
         offset: options.offset ?? 0,
         ...(options.snapshotId ? { snapshot_id: options.snapshotId } : {}),
       };
