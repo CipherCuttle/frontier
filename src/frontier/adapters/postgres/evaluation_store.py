@@ -16,6 +16,7 @@ from frontier.application.evaluation_loaders import (
     PersistedArtifactRow,
     PersistedBaselineSnapshotRow,
     PersistedFeatureVectorRow,
+    PersistedFreezePublicationRow,
     PersistedFreezeReceiptRow,
     PersistedProjectionReceiptRow,
     PersistedRunRow,
@@ -137,6 +138,32 @@ class PostgresEvaluationArtifactStore:
             status=cast(str, row[2]),
             durable_freeze_at=None if row[3] is None else cast(datetime, row[3]),
             receipt_json=cast(dict[str, object], row[4]),
+        )
+
+    def fetch_freeze_publication_row(self, receipt_id: str) -> PersistedFreezePublicationRow | None:
+        with self._connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT receipt_id, schema_version, freeze_receipt_digest,
+                       implementation_commit, implementation_tree_digest,
+                       publication_commit, publication_committer_at, publication_digest
+                FROM candidate_freeze_publications
+                WHERE receipt_id = %s
+                """,
+                (receipt_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return PersistedFreezePublicationRow(
+            receipt_id=cast(str, row[0]),
+            schema_version=cast(str, row[1]),
+            freeze_receipt_digest=cast(str, row[2]),
+            implementation_commit=cast(str, row[3]),
+            implementation_tree_digest=cast(str, row[4]),
+            publication_commit=cast(str, row[5]),
+            publication_committer_at=cast(datetime, row[6]),
+            publication_digest=cast(str, row[7]),
         )
 
     def fetch_feature_batch_rows(self, batch_id: str) -> tuple[PersistedFeatureVectorRow, ...]:
