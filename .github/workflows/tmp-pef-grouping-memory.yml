@@ -1,0 +1,46 @@
+name: tmp-pef-grouping-memory
+on:
+  push:
+    branches:
+      - ops/pef-v0-confirmatory-incident-repair-20260908
+    paths:
+      - .github/workflows/tmp-pef-grouping-memory.yml
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install
+        run: uv sync --frozen
+      - name: Benchmark exact frozen grouping shape
+        shell: bash
+        run: |
+          /usr/bin/time -v uv run python - <<'PY'
+          from datetime import UTC, datetime
+          from frontier.domain.grouping import GroupingInput, build_grouping_projection
+
+          n = 2425
+          now = datetime(2026, 9, 8, 19, 40, tzinfo=UTC)
+          items = tuple(
+              GroupingInput(
+                  observation_id=f"obs_{i:064x}",
+                  source_id="hn.frontpage",
+                  source_item_key=f"item-{i}",
+                  kind="EVENT",
+                  observed_at=now,
+                  canonical_url=None,
+                  title=f"uniquealpha{i} uniquebeta{i} uniquegamma{i}",
+                  text=f"uniquetext{i}",
+                  signal_roles=("PRIMARY",),
+              )
+              for i in range(n)
+          )
+          projection = build_grouping_projection(items, as_of=now)
+          print("n=", n)
+          print("pairs=", n * (n - 1) // 2)
+          print("groups=", len(projection.groups))
+          print("ambiguous=", len(projection.ambiguous_pairs))
+          print("ungrouped=", len(projection.ungrouped_observation_ids))
+          PY
