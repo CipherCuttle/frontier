@@ -23,7 +23,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: 34168874086
-      - name: Verify and materialize exact test blobs
+      - name: Verify and materialize all exact artifact blobs
         shell: bash
         run: |
           set -euo pipefail
@@ -33,10 +33,15 @@ jobs:
           test "$(git hash-object /tmp/g203/tests/unit/test_evaluation_loaders.py)" = "4f4758517c07a3fb3c66dc01cc1e2e0a9818797b"
           test "$(git hash-object /tmp/g203/tests/integration/test_evaluation_persisted_postgres.py)" = "d5bfeb60cb8d88e8cafa1e7fbcc0adffed810576"
           test "$(git hash-object /tmp/g203/tests/replay/test_experiment_gauntlet.py)" = "1f4addf07b383a68e9fc56df02eeb3e253312547"
+          cp /tmp/g203/src/frontier/application/evaluation.py src/frontier/application/evaluation.py
+          cp /tmp/g203/src/frontier/application/evaluation_loaders.py src/frontier/application/evaluation_loaders.py
+          cp /tmp/g203/src/frontier/adapters/postgres/evaluation_store.py src/frontier/adapters/postgres/evaluation_store.py
           cp /tmp/g203/tests/unit/test_evaluation_loaders.py tests/unit/test_evaluation_loaders.py
+          cp /tmp/g203/tests/integration/test_evaluation_persisted_postgres.py tests/integration/test_evaluation_persisted_postgres.py
           cp /tmp/g203/tests/replay/test_experiment_gauntlet.py tests/replay/test_experiment_gauntlet.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add tests/unit/test_evaluation_loaders.py tests/replay/test_experiment_gauntlet.py
-          git commit -m "chore: materialize exact G2-03 artifact blobs [skip ci]"
+          git add src/frontier/application/evaluation.py src/frontier/application/evaluation_loaders.py src/frontier/adapters/postgres/evaluation_store.py tests/unit/test_evaluation_loaders.py tests/integration/test_evaluation_persisted_postgres.py tests/replay/test_experiment_gauntlet.py
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: materialize all exact G2-03 artifact blobs [skip ci]"
           git push origin HEAD:agent/g203-artifact-materialize-temp
