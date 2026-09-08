@@ -41,7 +41,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          FRONTIER_DATABASE_URL='postgresql+psycopg://offline:offline@localhost/offline' uv run alembic upgrade head --sql > /tmp/frontier-schema.sql
-          echo 'FRONTIER_SCHEMA_SQL_BEGIN'
-          cat /tmp/frontier-schema.sql
-          echo 'FRONTIER_SCHEMA_SQL_END'
+          FRONTIER_DATABASE_URL='postgresql+psycopg://offline:offline@localhost/offline' uv run alembic upgrade head --sql > frontier-schema.sql
+          sha256sum frontier-schema.sql
+      - name: Upload canonical schema SQL
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontier-canonical-schema-sql
+          path: frontier-schema.sql
+          if-no-files-found: error
+          retention-days: 1
