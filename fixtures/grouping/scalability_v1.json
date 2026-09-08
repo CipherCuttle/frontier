@@ -1,7 +1,13 @@
 {
   "schema_version": "grouping-scalability-corpus-v1",
   "authority": "GROUPING_SCALABILITY_V1",
-  "reference_algorithm": "guarded-hybrid-v0",
+  "immutable_reference": {
+    "commit": "db206cda7eed92b62c706a10089c2571b4381d66",
+    "tree": "5134857849b03c0dcff4595c8c9fe1059ffe47a6",
+    "grouping_blob": "943affde20b08f500f8dba2716ffedfc428f58e1",
+    "algorithm": "guarded-hybrid-v0",
+    "projection": "grouping-baseline-v0"
+  },
   "candidate_algorithm_family": "deterministic-group-complete-blocking-v1",
   "semantic_invariants": {
     "pair_decisions": ["GROUP", "NO_GROUP", "AMBIGUOUS"],
@@ -15,7 +21,7 @@
     {
       "id": "S01_EXPLICIT_RELATION_GROUP",
       "attack": "candidate generator ignores an eligible explicit CORRECTS/RETRACTS relation",
-      "required": "exact reference GROUP relation and identical episode membership"
+      "required": "exact immutable-reference GROUP relation and identical episode membership"
     },
     {
       "id": "S02_FUTURE_RELATION_LEAK",
@@ -55,7 +61,7 @@
     {
       "id": "S09_JACCARD_BELOW_BOUNDARY",
       "attack": "blocking approximation promotes a 0.799... pair",
-      "required": "exact reference assessment determines final decision"
+      "required": "exact immutable-reference assessment determines final decision"
     },
     {
       "id": "S10_PUNCTUATION_CONFLICT",
@@ -85,12 +91,12 @@
     {
       "id": "S15_GROUP_CANDIDATE_OMISSION",
       "attack": "remove one true GROUP pair from candidate generation",
-      "required": "equivalence suite fails closed"
+      "required": "oracle equivalence suite fails closed"
     },
     {
       "id": "S16_FALSE_GROUP_INJECTION",
       "attack": "inject one non-GROUP pair as GROUP",
-      "required": "precision/equivalence suite fails closed"
+      "required": "precision/oracle equivalence suite fails closed"
     },
     {
       "id": "S17_GROUP_ID_VERSIONING",
@@ -136,6 +142,21 @@
       "id": "S25_EVIDENCE_POOLING",
       "attack": "11 retained PEF_V0 boundaries are counted as confirmatory evidence for a V1 freeze",
       "required": "forbidden; successor starts a fresh window"
+    },
+    {
+      "id": "S26_MOVING_ORACLE",
+      "attack": "V1 candidate and equivalence oracle both import the mutable V1 assess_pair implementation",
+      "required": "reference execution/artifacts are pinned to immutable commit/blob"
+    },
+    {
+      "id": "S27_END_WINDOW_UNDERSIZING",
+      "attack": "implementation passes 25k sparse benchmark but cannot process a 150k mixed 30-day universe",
+      "required": "end-window 150k production-path scale gate passes"
+    },
+    {
+      "id": "S28_UNPROVEN_GROUP_COMPLETENESS",
+      "attack": "blocking is fast and fixture-green but no proof covers every GROUP-returning V0 branch",
+      "required": "reviewable clause-to-candidate completeness proof plus executable exhaustive bounded comparison"
     }
   ],
   "scale_cases": [
@@ -161,7 +182,14 @@
       "must_include_receipt_path": true
     },
     {
-      "id": "K04_DENSE_5000",
+      "id": "K04_END_WINDOW_150000_MIXED",
+      "shape": "150000 observations in one 30-day horizon, mostly low-overlap with deterministic URL/title/semantic collision buckets",
+      "required_peak_rss_mib_max": 1536,
+      "required_wall_seconds_max": 300,
+      "must_include_receipt_path": true
+    },
+    {
+      "id": "K05_DENSE_5000",
       "shape": "5000 observations with deterministic high-collision same-URL and exact-title/semantic buckets",
       "required_peak_rss_mib_max": 1024,
       "required_wall_seconds_max": 180,
