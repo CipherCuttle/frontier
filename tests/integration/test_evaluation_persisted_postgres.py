@@ -35,9 +35,6 @@ from frontier.adapters.postgres.evaluation_store import (
 from frontier.adapters.postgres.experiment_attempts import (
     PostgresShadowRunPersister,
 )
-from frontier.adapters.postgres.freeze_publication import (
-    PostgresCandidateFreezePublicationRepository,
-)
 from frontier.adapters.postgres.intelligence import (
     PostgresBaselineIntelligenceRepository,
 )
@@ -78,6 +75,7 @@ from frontier.domain.intelligence import (
     build_baseline_receipt,
     build_baseline_snapshot,
 )
+from tests.integration.freeze_publication_fixture import record_fixture_publication
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
@@ -240,9 +238,7 @@ def _publish_freeze(
         publication_commit="c" * 64,
         publication_committer_at=durable + publication_offset,
     )
-    PostgresCandidateFreezePublicationRepository(
-        conn, persistence_authorized=True
-    ).record_fixture_publication(publication)
+    record_fixture_publication(conn, publication)
     return publication
 
 

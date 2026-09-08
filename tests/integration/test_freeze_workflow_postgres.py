@@ -50,6 +50,7 @@ from frontier.cli.main import (
 from frontier.domain.candidate_freeze import CandidateFreezeReceipt
 from frontier.domain.canonical_json import canonical_timestamp
 from frontier.domain.digests import Digest
+from tests.integration.freeze_publication_fixture import record_fixture_publication
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -172,7 +173,7 @@ def test_full_freeze_operator_workflow(
         publication_repo = PostgresCandidateFreezePublicationRepository(
             conn, persistence_authorized=True
         )
-        publication_repo.record_fixture_publication(publication)
+        record_fixture_publication(conn, publication)
         assert publication_repo.get_publication(receipt_id) == publication
 
     published_binding = FreezeBinding(

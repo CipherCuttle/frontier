@@ -29,7 +29,7 @@ class PostgresCandidateFreezePublicationRepository:
         del publication
         raise PermissionError(
             "raw candidate freeze publication persistence is forbidden; "
-            "use record_verified_publication or the explicit fixture seam"
+            "use record_verified_publication"
         )
 
     def record_verified_publication(
@@ -44,16 +44,6 @@ class PostgresCandidateFreezePublicationRepository:
         publication = derive_github_main_freeze_publication(
             root, receipt, receipt_path=receipt_path
         )
-        self._record(publication)
-        return publication
-
-    def record_fixture_publication(self, publication: CandidateFreezePublication) -> None:
-        """Explicit test/fixture seam; never use for operator publication."""
-        if not self._persistence_authorized:
-            raise PermissionError("candidate freeze publication persistence is not authorized")
-        self._record(publication)
-
-    def _record(self, publication: CandidateFreezePublication) -> None:
         with self._connection.transaction(), self._connection.cursor() as cur:
             cur.execute(
                 """INSERT INTO candidate_freeze_publications (
@@ -84,6 +74,7 @@ class PostgresCandidateFreezePublicationRepository:
                 row = cur.fetchone()
                 if row is None or cast(str, row[0]) != str(publication.publication_digest):
                     raise RuntimeError("freeze publication identity conflict")
+        return publication
 
     def get_publication(self, receipt_id: str) -> CandidateFreezePublication | None:
         with self._connection.cursor() as cur:

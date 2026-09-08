@@ -17,9 +17,6 @@ from psycopg import Connection
 
 from frontier.adapters.postgres.advanced_intelligence import PostgresCandidateFreezeRepository
 from frontier.adapters.postgres.experiment_attempts import PostgresExperimentAttemptRepository
-from frontier.adapters.postgres.freeze_publication import (
-    PostgresCandidateFreezePublicationRepository,
-)
 from frontier.application.experiment_orchestration import ConfirmatoryClaimResult
 from frontier.application.freeze_publication import (
     RANKING_WINDOW_SECONDS,
@@ -37,6 +34,7 @@ from frontier.domain.candidate_freeze import (
 )
 from frontier.domain.digests import Digest
 from frontier.domain.opportunity import ExperimentAttemptStatus, ExperimentRunAttempt
+from tests.integration.freeze_publication_fixture import record_fixture_publication
 
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
@@ -83,9 +81,7 @@ def _persist_authority(conn: ConnectionT, seed: str) -> tuple[CandidateFreezeRec
         publication_commit="f" * 40,
         publication_committer_at=publication_at,
     )
-    PostgresCandidateFreezePublicationRepository(
-        conn, persistence_authorized=True
-    ).record_fixture_publication(publication)
+    record_fixture_publication(conn, publication)
     return receipt, publication_at
 
 

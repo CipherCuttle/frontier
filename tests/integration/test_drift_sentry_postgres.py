@@ -27,9 +27,6 @@ from frontier.adapters.postgres.experiment_attempts import (
     PostgresFreezeBindingResolver,
     PostgresShadowRunPersister,
 )
-from frontier.adapters.postgres.freeze_publication import (
-    PostgresCandidateFreezePublicationRepository,
-)
 from frontier.application.drift_sentry import DriftSentry
 from frontier.application.evaluation import PairedSnapshot, evaluate_shadow_experiment
 from frontier.application.experiment_orchestration import (
@@ -53,6 +50,7 @@ from frontier.domain.digests import Digest
 from frontier.domain.evaluation import EvaluationStatus
 from frontier.domain.health import HealthValue
 from frontier.domain.opportunity import ExperimentAttemptStatus
+from tests.integration.freeze_publication_fixture import record_fixture_publication
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -109,9 +107,8 @@ def test_stored_drifted_receipt_skips_the_confirmatory_attempt_in_postgres() -> 
         assert binding is not None
         assert binding.durable_freeze_at is not None
         publication_at = binding.durable_freeze_at + timedelta(days=30, seconds=1)
-        PostgresCandidateFreezePublicationRepository(
-            conn, persistence_authorized=True
-        ).record_fixture_publication(
+        record_fixture_publication(
+            conn,
             CandidateFreezePublication(
                 freeze_receipt_id=receipt.receipt_id,
                 freeze_receipt_digest=receipt.receipt_digest,
@@ -119,7 +116,7 @@ def test_stored_drifted_receipt_skips_the_confirmatory_attempt_in_postgres() -> 
                 implementation_tree_digest=receipt.implementation_tree_digest,
                 publication_commit="c" * 64,
                 publication_committer_at=publication_at,
-            )
+            ),
         )
         binding = resolver.latest_binding()
         assert binding is not None

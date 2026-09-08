@@ -14,6 +14,7 @@ from frontier.adapters.postgres.freeze_publication import (
 from frontier.application.freeze_publication import CandidateFreezePublication
 from frontier.domain.candidate_freeze import FreezeInputs, build_candidate_freeze_receipt
 from frontier.domain.digests import Digest
+from tests.integration.freeze_publication_fixture import record_fixture_publication
 
 DB = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB, reason="FRONTIER_TEST_DATABASE_URL not set")
@@ -52,12 +53,12 @@ def test_publication_requires_authority_and_binds_durable_receipt():
         )
         repo = PostgresCandidateFreezePublicationRepository(conn)
         with pytest.raises(PermissionError):
-            repo.record_fixture_publication(publication)
+            repo.record_publication(publication)
         authorized_repo = PostgresCandidateFreezePublicationRepository(
             conn, persistence_authorized=True
         )
         with pytest.raises(PermissionError):
             authorized_repo.record_publication(publication)
-        authorized_repo.record_fixture_publication(publication)
+        record_fixture_publication(conn, publication)
         loaded = repo.get_publication(receipt.receipt_id)
         assert loaded == publication
