@@ -611,6 +611,35 @@ def test_existing_ran_run_short_circuits_retry_without_new_run_row() -> None:
     assert recovered.status is ExperimentAttemptStatus.DONE
 
 
+def test_dev_adopts_confirmatory_ran_run_with_persisted_class_in_detail() -> None:
+    attempts = FakeAttemptRepository()
+    persistence = FakeShadowRunPersistence()
+    run_id = "shadowrun_existing_confirmatory"
+    persistence.retained[BOUNDARY.isoformat()] = (
+        run_id,
+        RUN_CLASS_CONFIRMATORY,
+        "RAN",
+    )
+    orchestrator, _ = _orchestrator(
+        attempts=attempts,
+        persistence=persistence,
+        run_class=RUN_CLASS_DEV,
+    )
+
+    result = orchestrator.run_cycle(now=BOUNDARY)
+
+    assert result.action is ExperimentCycleAction.ALREADY_COMPLETE
+    assert result.run_id == run_id
+    latest = attempts.latest_attempt(PEF_EXPERIMENT_ID, BOUNDARY)
+    assert latest is not None
+    assert latest.status is ExperimentAttemptStatus.DONE
+    assert (
+        latest.detail
+        == f"completed run {run_id} run_class=CONFIRMATORY already persisted for this boundary"
+    )
+    assert persistence.persisted == []
+
+
 @pytest.mark.parametrize(
     ("binding", "canonical_context", "expected_reason"),
     [
