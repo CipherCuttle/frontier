@@ -508,7 +508,9 @@ class ExperimentOrchestrator:
                 detail=detail,
             )
         if run_status == "RAN":
-            detail = f"completed run {run_id} already persisted for this boundary"
+            detail = (
+                f"completed run {run_id} run_class={run_class} already persisted for this boundary"
+            )
             self._attempts.finish(
                 attempt.attempt_id,
                 owner=self._worker_id,
