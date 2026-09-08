@@ -27,11 +27,16 @@ from frontier.application.evaluation_loaders import (
     PersistedBaselineSnapshotRow,
     PersistedEvaluationError,
     PersistedFeatureVectorRow,
+    PersistedFreezePublicationRow,
     PersistedFreezeReceiptRow,
     PersistedProjectionReceiptRow,
     PersistedRunRef,
     PersistedRunRow,
     load_paired_snapshot,
+)
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    first_confirmatory_boundary,
 )
 from frontier.application.opportunity_outcome import RANKING_WINDOW_SECONDS
 from frontier.domain.advanced_intelligence import (
@@ -214,6 +219,7 @@ class FakeStore:
         self.snapshots: dict[str, PersistedBaselineSnapshotRow] = {}
         self.receipts: dict[str, PersistedProjectionReceiptRow] = {}
         self.freeze_receipts: dict[str, PersistedFreezeReceiptRow] = {}
+        self.freeze_publications: dict[str, PersistedFreezePublicationRow] = {}
         self.feature_rows: dict[str, tuple[PersistedFeatureVectorRow, ...]] = {}
 
     def fetch_run_row(self, run_id: str) -> PersistedRunRow | None:
@@ -230,6 +236,9 @@ class FakeStore:
 
     def fetch_freeze_receipt_row(self, receipt_id: str) -> PersistedFreezeReceiptRow | None:
         return self.freeze_receipts.get(receipt_id)
+
+    def fetch_freeze_publication_row(self, receipt_id: str) -> PersistedFreezePublicationRow | None:
+        return self.freeze_publications.get(receipt_id)
 
     def fetch_feature_batch_rows(self, batch_id: str) -> tuple[PersistedFeatureVectorRow, ...]:
         return self.feature_rows.get(batch_id, ())
@@ -289,11 +298,40 @@ def _seed_freeze(
     )
 
 
+def _seed_publication(
+    store: FakeStore,
+    freeze: CandidateFreezeReceipt,
+    *,
+    publication_at: datetime,
+) -> CandidateFreezePublication:
+    assert freeze.implementation_commit is not None
+    assert freeze.implementation_tree_digest is not None
+    publication = CandidateFreezePublication(
+        freeze_receipt_id=freeze.receipt_id,
+        freeze_receipt_digest=freeze.receipt_digest,
+        implementation_commit=freeze.implementation_commit,
+        implementation_tree_digest=freeze.implementation_tree_digest,
+        publication_commit="c" * 64,
+        publication_committer_at=publication_at,
+    )
+    store.freeze_publications[freeze.receipt_id] = PersistedFreezePublicationRow(
+        receipt_id=publication.freeze_receipt_id,
+        schema_version=publication.schema_version,
+        freeze_receipt_digest=str(publication.freeze_receipt_digest),
+        implementation_commit=publication.implementation_commit,
+        implementation_tree_digest=publication.implementation_tree_digest,
+        publication_commit=publication.publication_commit,
+        publication_committer_at=publication.publication_committer_at,
+        publication_digest=str(publication.publication_digest),
+    )
+    return publication
+
+
 def _default_store() -> tuple[FakeStore, _Paired, CandidateFreezeReceipt]:
     freeze = _freeze()
     paired = _paired(AS_OF, freeze_id=freeze.receipt_id)
     store = FakeStore()
-    _seed(store, paired)
+    _seed(store, paired, run_class=DEV_RUN_CLASS)
     _seed_freeze(store, freeze)
     return store, paired, freeze
 
@@ -398,7 +436,7 @@ class TestHappyPath:
         )
         assert loaded.snapshot == expected
         assert loaded.run == paired.run
-        assert loaded.run_class == CONFIRMATORY_RUN_CLASS
+        assert loaded.run_class == DEV_RUN_CLASS
 
     def test_loader_resolves_the_digest_verified_freeze_receipt(self) -> None:
         store, paired, freeze = _default_store()
@@ -688,7 +726,7 @@ def _evaluate(
         evaluation_horizon=horizon,
         generated_at=horizon,
         confirmatory=confirmatory,
-        canonical_context=confirmatory,
+        canonical_context=True if confirmatory else None,
         durable_freeze_at=durable_freeze_at,
         receipt_repository=repo,
     )
@@ -699,8 +737,10 @@ class TestBoundaryAuthority:
         freeze = _freeze()
         paired = _paired(as_of, freeze_id=freeze.receipt_id)
         store = FakeStore()
-        _seed(store, paired)
+        _seed(store, paired, run_class=CONFIRMATORY_RUN_CLASS)
         _seed_freeze(store, freeze)
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        _seed_publication(store, freeze, publication_at=publication_at)
         return store, paired
 
     def test_a_dev_run_cannot_produce_complete_confirmatory_evaluation(self) -> None:
@@ -718,18 +758,39 @@ class TestBoundaryAuthority:
         assert receipt.status is not EvaluationStatus.COMPLETE
         assert receipt.confirmatory_evidence is False
 
-    def test_a_confirmatory_evaluation_requires_canonical_context(self) -> None:
-        store, paired = self._confirmatory_store(as_of=AS_OF)
-        with pytest.raises(ValueError, match="canonical DB context"):
+    def test_a_caller_true_cannot_escalate_dev_to_confirmatory(self) -> None:
+        store, paired, _ = _default_store()
+        with pytest.raises(PersistedEvaluationError, match="cannot escalate"):
+            _evaluate(store, paired, confirmatory=True)
+
+    def test_a_persisted_confirmatory_cannot_be_downgraded_by_caller_false(self) -> None:
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        as_of = first_confirmatory_boundary(publication_at)
+        store, paired = self._confirmatory_store(as_of=as_of)
+        receipt = _evaluate(store, paired, confirmatory=False)
+        assert receipt.status is not EvaluationStatus.INVALID_DRIFT
+
+    def test_a_missing_publication_fails_closed_even_when_caller_false(self) -> None:
+        freeze = _freeze()
+        paired = _paired(AS_OF, freeze_id=freeze.receipt_id)
+        store = FakeStore()
+        _seed(store, paired, run_class=CONFIRMATORY_RUN_CLASS)
+        _seed_freeze(store, freeze)
+        with pytest.raises(PersistedEvaluationError, match="no persisted Git publication"):
+            _evaluate(store, paired, confirmatory=False)
+
+    def test_a_explicit_canonical_context_denial_is_restrictive_only(self) -> None:
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        as_of = first_confirmatory_boundary(publication_at)
+        store, paired = self._confirmatory_store(as_of=as_of)
+        with pytest.raises(ValueError, match="explicitly denied"):
             evaluate_shadow_experiment_from_persisted(
                 store=store,
                 runs=(PersistedRunRef(paired.run.run_id, paired.run.as_of),),
                 opportunity_groups=(),
                 evaluation_horizon=paired.run.as_of + timedelta(hours=1),
                 generated_at=paired.run.as_of + timedelta(hours=1),
-                confirmatory=True,
                 canonical_context=False,
-                durable_freeze_at=DURABLE_AT,
             )
 
     def test_b_run_bound_to_another_freeze_invalidates_to_drift(self) -> None:
@@ -756,78 +817,58 @@ class TestBoundaryAuthority:
         )
         assert failure is not None
         assert "does not bind the evaluated candidate freeze receipt" in failure
-        # Through the persisted evaluator this surfaces as an INVALID_DRIFT
-        # receipt when the sample is adequate; with an empty opportunity set
-        # the epistemic gate stays explicit and confirmatory_evidence is False.
-        receipt = _evaluate(
-            store,
-            run_one,
-            extra=(run_two,),
-            confirmatory=True,
-            durable_freeze_at=DURABLE_AT,
-        )
-        assert receipt.confirmatory_evidence is False
-
-    def test_c_as_of_before_durable_freeze_is_ineligible(self) -> None:
-        store, paired = self._confirmatory_store(as_of=DURABLE_AT - timedelta(seconds=300))
-        loaded = load_paired_snapshot(
-            store, paired.run.run_id, as_of=paired.run.as_of, confirmatory=True
-        )
-        failure = _confirmatory_run_binding_failure(
-            (loaded.run,), loaded.freeze_receipt, durable_freeze_at=DURABLE_AT
-        )
-        assert failure is not None
-        assert "not strictly after durable candidate freeze" in failure
-        receipt = _evaluate(store, paired, confirmatory=True, durable_freeze_at=DURABLE_AT)
-        assert receipt.confirmatory_evidence is False
-        assert receipt.status is not EvaluationStatus.COMPLETE
-
-    def test_d_as_of_equal_to_durable_freeze_is_ineligible_strict_greater_than(self) -> None:
-        store, paired = self._confirmatory_store(as_of=DURABLE_AT)
-        loaded = load_paired_snapshot(store, paired.run.run_id, as_of=DURABLE_AT, confirmatory=True)
-        failure = _confirmatory_run_binding_failure(
-            (loaded.run,), loaded.freeze_receipt, durable_freeze_at=DURABLE_AT
-        )
-        assert failure is not None
-        assert "not strictly after durable candidate freeze" in failure
-        receipt = _evaluate(store, paired, confirmatory=True, durable_freeze_at=DURABLE_AT)
-        assert receipt.confirmatory_evidence is False
-        assert receipt.status is not EvaluationStatus.COMPLETE
-
-    def test_e_post_durable_binding_with_exact_freeze_is_eligible(self) -> None:
-        store, paired = self._confirmatory_store(as_of=AS_OF)
-        loaded = load_paired_snapshot(store, paired.run.run_id, as_of=AS_OF, confirmatory=True)
-        assert (
-            _confirmatory_run_binding_failure(
-                (loaded.run,), loaded.freeze_receipt, durable_freeze_at=DURABLE_AT
+        # Persisted authority fails closed before statistical evaluation:
+        # a mixed-freeze window cannot manufacture any evaluation receipt.
+        with pytest.raises(PersistedEvaluationError, match="different candidate freeze receipts"):
+            _evaluate(
+                store,
+                run_one,
+                extra=(run_two,),
+                confirmatory=True,
+                durable_freeze_at=DURABLE_AT,
             )
-            is None
-        )
-        receipt = _evaluate(store, paired, confirmatory=True, durable_freeze_at=DURABLE_AT)
+
+    def test_c_publication_window_is_authoritative(self) -> None:
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        as_of = first_confirmatory_boundary(publication_at)
+        store, paired = self._confirmatory_store(as_of=as_of)
+        receipt = _evaluate(store, paired, confirmatory=False)
         assert receipt.status is not EvaluationStatus.INVALID_DRIFT
 
-    def test_f_canonical_durability_is_not_retroactive(self) -> None:
+    def test_d_caller_timestamp_assertions_must_equal_persisted_authority(self) -> None:
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        as_of = first_confirmatory_boundary(publication_at)
+        store, paired = self._confirmatory_store(as_of=as_of)
+        with pytest.raises(PersistedEvaluationError, match="durable_freeze_at assertion"):
+            _evaluate(
+                store,
+                paired,
+                confirmatory=False,
+                durable_freeze_at=DURABLE_AT + timedelta(seconds=1),
+            )
+
+    def test_e_outside_publication_window_fails_closed(self) -> None:
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        start = first_confirmatory_boundary(publication_at)
+        store, paired = self._confirmatory_store(
+            as_of=start + timedelta(seconds=RANKING_WINDOW_SECONDS)
+        )
+        with pytest.raises(PersistedEvaluationError, match="outside Git-publication authority"):
+            _evaluate(store, paired, confirmatory=False)
+
+    def test_f_mixed_dev_and_confirmatory_runs_fail_closed(self) -> None:
         freeze = _freeze()
-        paired = _paired(AS_OF, freeze_id=freeze.receipt_id)
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        start = first_confirmatory_boundary(publication_at)
+        confirmatory_run = _paired(start, freeze_id=freeze.receipt_id)
+        dev_run = _paired(start + timedelta(seconds=300), freeze_id=freeze.receipt_id)
         store = FakeStore()
-        _seed(store, paired)
-        # Before durability: no main-merge evidence at all.
-        _seed_freeze(store, freeze, durable=None)
-        loaded = load_paired_snapshot(store, paired.run.run_id, as_of=AS_OF, confirmatory=True)
-        missing = _confirmatory_run_binding_failure(
-            (loaded.run,), loaded.freeze_receipt, durable_freeze_at=None
-        )
-        assert missing is not None
-        assert "main-merge timestamp is required" in missing
-        # Stamping durability LATER never retroactively makes the earlier
-        # boundary confirmatory (strict > durability).
-        late_durable_at = paired.run.as_of + timedelta(seconds=300)
-        _seed_freeze(store, freeze, durable=late_durable_at)
-        stamped = _confirmatory_run_binding_failure(
-            (loaded.run,), loaded.freeze_receipt, durable_freeze_at=late_durable_at
-        )
-        assert stamped is not None
-        assert "not strictly after durable candidate freeze" in stamped
+        _seed(store, confirmatory_run, run_class=CONFIRMATORY_RUN_CLASS)
+        _seed(store, dev_run, run_class=DEV_RUN_CLASS)
+        _seed_freeze(store, freeze)
+        _seed_publication(store, freeze, publication_at=publication_at)
+        with pytest.raises(PersistedEvaluationError, match="mix DEV and CONFIRMATORY"):
+            _evaluate(store, confirmatory_run, extra=(dev_run,))
 
 
 # ---------------------------------------------------------------------------

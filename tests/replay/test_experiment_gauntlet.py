@@ -68,10 +68,12 @@ from frontier.application.evaluation import (
 )
 from frontier.application.evaluation_loaders import (
     CONFIRMATORY_RUN_CLASS,
+    DEV_RUN_CLASS,
     PersistedArtifactRow,
     PersistedBaselineSnapshotRow,
     PersistedEvaluationError,
     PersistedFeatureVectorRow,
+    PersistedFreezePublicationRow,
     PersistedFreezeReceiptRow,
     PersistedProjectionReceiptRow,
     PersistedRunRef,
@@ -85,6 +87,10 @@ from frontier.application.experiment_orchestration import (
 from frontier.application.experimental_read import (
     ExperimentalReadRepository,
     ExperimentalReadService,
+)
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    first_confirmatory_boundary,
 )
 from frontier.domain.advanced_intelligence import (
     PEF_CONFIGURATION_DIGEST,
@@ -310,6 +316,7 @@ class FakeStore:
         self.snapshots: dict[str, PersistedBaselineSnapshotRow] = {}
         self.receipts: dict[str, PersistedProjectionReceiptRow] = {}
         self.freeze_receipts: dict[str, PersistedFreezeReceiptRow] = {}
+        self.freeze_publications: dict[str, PersistedFreezePublicationRow] = {}
         self.feature_rows: dict[str, tuple[PersistedFeatureVectorRow, ...]] = {}
 
     def fetch_run_row(self, run_id: str) -> PersistedRunRow | None:
@@ -326,6 +333,9 @@ class FakeStore:
 
     def fetch_freeze_receipt_row(self, receipt_id: str) -> PersistedFreezeReceiptRow | None:
         return self.freeze_receipts.get(receipt_id)
+
+    def fetch_freeze_publication_row(self, receipt_id: str) -> PersistedFreezePublicationRow | None:
+        return self.freeze_publications.get(receipt_id)
 
     def fetch_feature_batch_rows(self, batch_id: str) -> tuple[PersistedFeatureVectorRow, ...]:
         return self.feature_rows.get(batch_id, ())
@@ -385,11 +395,40 @@ def _seed_freeze(
     )
 
 
+def _seed_publication(
+    store: FakeStore,
+    freeze: CandidateFreezeReceipt,
+    *,
+    publication_at: datetime,
+) -> CandidateFreezePublication:
+    assert freeze.implementation_commit is not None
+    assert freeze.implementation_tree_digest is not None
+    publication = CandidateFreezePublication(
+        freeze_receipt_id=freeze.receipt_id,
+        freeze_receipt_digest=freeze.receipt_digest,
+        implementation_commit=freeze.implementation_commit,
+        implementation_tree_digest=freeze.implementation_tree_digest,
+        publication_commit="c" * 64,
+        publication_committer_at=publication_at,
+    )
+    store.freeze_publications[freeze.receipt_id] = PersistedFreezePublicationRow(
+        receipt_id=publication.freeze_receipt_id,
+        schema_version=publication.schema_version,
+        freeze_receipt_digest=str(publication.freeze_receipt_digest),
+        implementation_commit=publication.implementation_commit,
+        implementation_tree_digest=publication.implementation_tree_digest,
+        publication_commit=publication.publication_commit,
+        publication_committer_at=publication.publication_committer_at,
+        publication_digest=str(publication.publication_digest),
+    )
+    return publication
+
+
 def _default_store() -> tuple[FakeStore, _Paired, CandidateFreezeReceipt]:
     freeze = _freeze()
     paired = _paired(AS_OF, freeze_id=freeze.receipt_id)
     store = FakeStore()
-    _seed(store, paired)
+    _seed(store, paired, run_class=DEV_RUN_CLASS)
     _seed_freeze(store, freeze)
     return store, paired, freeze
 
@@ -731,8 +770,15 @@ class _RegistryMismatchSentry:
 
 class TestRegistryMutationSurfaces:
     def test_g10_c08_registry_mismatch_invalidates_confirmatory_evaluation(self) -> None:
-        """Case 8 INVALID_DRIFT path: a registry mismatch is drift, never silence."""
-        store, paired, _ = _default_store()
+        """Case 8 INVALID_DRIFT path: registry drift invalidates real persisted authority."""
+        freeze = _freeze()
+        publication_at = FROZEN_AT + timedelta(seconds=121)
+        as_of = first_confirmatory_boundary(publication_at)
+        paired = _paired(as_of, freeze_id=freeze.receipt_id)
+        store = FakeStore()
+        _seed(store, paired, run_class=CONFIRMATORY_RUN_CLASS)
+        _seed_freeze(store, freeze)
+        _seed_publication(store, freeze, publication_at=publication_at)
         sentry = _RegistryMismatchSentry(expected=Digest("sha256:" + "e" * 64))
         horizon = paired.run.as_of + timedelta(hours=1)
         receipt = evaluate_shadow_experiment_from_persisted(
@@ -741,8 +787,7 @@ class TestRegistryMutationSurfaces:
             opportunity_groups=(),
             evaluation_horizon=horizon,
             generated_at=horizon,
-            confirmatory=True,
-            canonical_context=True,
+            confirmatory=False,
             durable_freeze_at=DURABLE_AT,
             drift_sentry=cast("DriftChecker", sentry),
         )
@@ -758,7 +803,7 @@ class TestMidWindowDeletion:
     def test_g10_c09_deleted_mid_window_run_refuses_evaluation(self) -> None:
         store, paired, freeze = _default_store()
         mid = _paired(paired.run.as_of + timedelta(seconds=300), freeze_id=freeze.receipt_id)
-        _seed(store, mid)
+        _seed(store, mid, run_class=DEV_RUN_CLASS)
         # Positive control first: both boundaries evaluate together.
         loaded = _evaluate_persisted(store, paired, extra=(mid,))
         assert loaded.status is not EvaluationStatus.COMPLETE
@@ -916,23 +961,35 @@ def _replay_pair_id(
 class TestConfirmatoryEligibilityGates:
     def test_g10_c13_as_of_before_durable_freeze_is_ineligible(self) -> None:
         freeze = _freeze()
+        publication_at = DURABLE_AT + timedelta(seconds=1)
         decision = evaluate_confirmatory_gates(
-            FreezeBinding(freeze, durable_freeze_at=DURABLE_AT),
-            as_of=DURABLE_AT - timedelta(seconds=300),
+            FreezeBinding(
+                freeze,
+                durable_freeze_at=DURABLE_AT,
+                publication_commit="c" * 64,
+                publication_committer_at=publication_at,
+            ),
+            as_of=FROZEN_AT,
             canonical_context=True,
         )
         assert decision.allowed is False
-        assert "not strictly after durable_freeze_at" in decision.reason
+        assert "outside the fixed preregistered ranking window" in decision.reason
 
     def test_g10_c14_as_of_equal_to_durable_freeze_is_ineligible(self) -> None:
         freeze = _freeze()
+        aligned_durable = FROZEN_AT + timedelta(seconds=300)
         decision = evaluate_confirmatory_gates(
-            FreezeBinding(freeze, durable_freeze_at=DURABLE_AT),
-            as_of=DURABLE_AT,
+            FreezeBinding(
+                freeze,
+                durable_freeze_at=aligned_durable,
+                publication_commit="c" * 64,
+                publication_committer_at=aligned_durable,
+            ),
+            as_of=aligned_durable,
             canonical_context=True,
         )
         assert decision.allowed is False
-        assert "not strictly after durable_freeze_at" in decision.reason
+        assert "outside the fixed preregistered ranking window" in decision.reason
 
     def test_g10_c15_post_durable_as_of_without_durability_is_ineligible(self) -> None:
         freeze = _freeze()
@@ -970,7 +1027,7 @@ class TestConfirmatoryEligibilityGates:
 
     def test_g10_c17_pre_durability_confirmatory_run_gate_rejects(self) -> None:
         freeze = _freeze()
-        # Before durability: no main-merge evidence at all.
+        # Before durability: no canonical persistence evidence at all.
         early = evaluate_confirmatory_gates(
             FreezeBinding(freeze, durable_freeze_at=None),
             as_of=AS_OF,
@@ -978,15 +1035,22 @@ class TestConfirmatoryEligibilityGates:
         )
         assert early.allowed is False
         assert "durable_freeze_at NULL" in early.reason
-        # Durability stamped AFTER the run boundary never retroactively makes
-        # the earlier confirmatory run eligible (strict > durability).
+        # Later durability/publication can never retroactively authorize an
+        # earlier boundary: the Git-publication window starts strictly later.
+        earlier_boundary = FROZEN_AT + timedelta(seconds=300)
+        late_authority = earlier_boundary + timedelta(seconds=300)
         late_stamped = evaluate_confirmatory_gates(
-            FreezeBinding(freeze, durable_freeze_at=AS_OF + timedelta(seconds=300)),
-            as_of=AS_OF,
+            FreezeBinding(
+                freeze,
+                durable_freeze_at=late_authority,
+                publication_commit="c" * 64,
+                publication_committer_at=late_authority,
+            ),
+            as_of=earlier_boundary,
             canonical_context=True,
         )
         assert late_stamped.allowed is False
-        assert "not strictly after durable_freeze_at" in late_stamped.reason
+        assert "outside the fixed preregistered ranking window" in late_stamped.reason
 
     def test_g10_c18_wrong_freeze_candidate_id_mismatches(self) -> None:
         snapshot, receipt = _control(AS_OF)
@@ -1032,16 +1096,15 @@ class TestConfirmatoryEligibilityGates:
         )
         assert failure is not None
         assert "does not bind the evaluated candidate freeze receipt" in failure
-        receipt = _evaluate_persisted(
-            store,
-            run_one,
-            extra=(run_two,),
-            confirmatory=True,
-            durable_freeze_at=DURABLE_AT,
-            repo=RecordingRepo(),
-        )
-        assert receipt.confirmatory_evidence is False
-        assert receipt.status is not EvaluationStatus.COMPLETE
+        with pytest.raises(PersistedEvaluationError, match="different candidate freeze receipts"):
+            _evaluate_persisted(
+                store,
+                run_one,
+                extra=(run_two,),
+                confirmatory=True,
+                durable_freeze_at=DURABLE_AT,
+                repo=RecordingRepo(),
+            )
 
 
 class _WrongFreezeStub:
