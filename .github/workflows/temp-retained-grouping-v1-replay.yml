@@ -29,7 +29,7 @@ jobs:
         run: uv sync --all-extras --frozen
       - name: Replay all retained PEF V0 boundaries through V1
         env:
-          GROUPING_REPLAY_URL: https://ep-crimson-king-b1bnulzq.apirest.c-5.eu-central-1.aws.neon.tech/frontier/rest/v1/grouping_inputs
+          GROUPING_REPLAY_URL: https://br-calm-queen-b1ppga6i-groupingreplay.compute.c-5.eu-central-1.aws.neon.tech/grouping-inputs
         run: |
           uv run python - <<'PY'
           from __future__ import annotations
@@ -38,11 +38,10 @@ jobs:
           import json
           import os
           import time
-          import urllib.parse
           import urllib.request
           from datetime import datetime
 
-          from frontier.domain.grouping import GroupingInput
+          from frontier.domain.grouping import GroupingInput, build_grouping_projection
           from frontier.domain.grouping_v1 import build_compact_grouping_projection
 
           expected = {
@@ -59,30 +58,15 @@ jobs:
               '2026-09-08T15:50:00+00:00': (1520, 1679, '738122ac9bd0def3a24c7042e5c471c95ee199cf3839c74ab6f19b0264bfe2df'),
           }
 
-          columns = ','.join((
-              'observation_id', 'source_id', 'source_item_key', 'kind', 'observed_at',
-              'canonical_url', 'title', 'text', 'artifact_type', 'artifact_name',
-              'artifact_version', 'signal_roles',
-          ))
           rows: list[dict[str, object]] = []
-          for offset in range(0, 2000, 500):
-              query = urllib.parse.urlencode({
-                  'select': columns,
-                  'order': 'observation_id.asc',
-                  'limit': '500',
-                  'offset': str(offset),
-              })
-              url = f"{os.environ['GROUPING_REPLAY_URL']}?{query}"
+          for page in range(4):
+              url = f"{os.environ['GROUPING_REPLAY_URL']}?page={page}"
               payload = None
               for attempt in range(1, 4):
                   try:
                       request = urllib.request.Request(
                           url,
-                          headers={
-                              'Accept': 'application/json',
-                              'Accept-Profile': 'replay',
-                              'User-Agent': 'frontier-grouping-v1-replay/1',
-                          },
+                          headers={'Accept': 'application/json', 'User-Agent': 'frontier-grouping-v1-replay/1'},
                       )
                       with urllib.request.urlopen(request, timeout=60) as response:
                           payload = json.load(response)
@@ -91,13 +75,31 @@ jobs:
                       if attempt == 3:
                           raise
                       time.sleep(2 * attempt)
-              assert isinstance(payload, list), type(payload)
-              rows.extend(payload)
-              if len(payload) < 500:
-                  break
+              assert isinstance(payload, dict), type(payload)
+              assert payload.get('page') == page, payload
+              page_rows = payload.get('rows')
+              assert isinstance(page_rows, list), type(page_rows)
+              rows.extend(page_rows)
 
           assert len(rows) == 1679, len(rows)
           assert len({str(row['observation_id']) for row in rows}) == 1679
+
+          def roles(value: object) -> tuple[str, ...]:
+              if value is None:
+                  return ()
+              if isinstance(value, list):
+                  return tuple(str(role) for role in value)
+              if isinstance(value, str):
+                  raw = value.strip()
+                  if raw.startswith('{') and raw.endswith('}'):
+                      raw = raw[1:-1]
+                  if not raw:
+                      return ()
+                  return tuple(part.strip().strip('"') for part in raw.split(',') if part.strip())
+              raise TypeError(type(value))
+
+          def opt_str(value: object) -> str | None:
+              return value if isinstance(value, str) else None
 
           inputs = tuple(
               GroupingInput(
@@ -106,38 +108,46 @@ jobs:
                   source_item_key=str(row['source_item_key']),
                   kind=str(row['kind']),
                   observed_at=datetime.fromisoformat(str(row['observed_at']).replace('Z', '+00:00')),
-                  canonical_url=row.get('canonical_url') if isinstance(row.get('canonical_url'), str) else None,
-                  title=row.get('title') if isinstance(row.get('title'), str) else None,
-                  text=row.get('text') if isinstance(row.get('text'), str) else None,
-                  artifact_type=row.get('artifact_type') if isinstance(row.get('artifact_type'), str) else None,
-                  artifact_name=row.get('artifact_name') if isinstance(row.get('artifact_name'), str) else None,
-                  artifact_version=row.get('artifact_version') if isinstance(row.get('artifact_version'), str) else None,
-                  signal_roles=tuple(row.get('signal_roles') or ()),
+                  canonical_url=opt_str(row.get('canonical_url')),
+                  title=opt_str(row.get('title')),
+                  text=opt_str(row.get('text')),
+                  artifact_type=opt_str(row.get('artifact_type')),
+                  artifact_name=opt_str(row.get('artifact_name')),
+                  artifact_version=opt_str(row.get('artifact_version')),
+                  signal_roles=roles(row.get('signal_roles')),
               )
               for row in rows
           )
 
-          for boundary_text, (expected_episode_count, expected_observation_count, expected_digest) in expected.items():
-              as_of = datetime.fromisoformat(boundary_text)
-              projection = build_compact_grouping_projection(inputs, relations=(), as_of=as_of)
+          def partition(projection: object) -> tuple[int, str]:
               memberships = [','.join(sorted(group.observation_ids)) for group in projection.groups]
               memberships.extend(projection.ungrouped_observation_ids)
               partition_text = '|'.join(sorted(memberships))
-              digest = hashlib.sha256(partition_text.encode('utf-8')).hexdigest()
-              episode_count = len(memberships)
-              observation_count = projection.eligible_observation_count
+              return len(memberships), hashlib.sha256(partition_text.encode('utf-8')).hexdigest()
+
+          for boundary_text, (expected_episode_count, expected_observation_count, expected_digest) in expected.items():
+              as_of = datetime.fromisoformat(boundary_text)
+
+              # First prove the exported corpus reproduces the retained V0 partition exactly.
+              baseline = build_grouping_projection(inputs, relations=(), as_of=as_of)
+              baseline_episode_count, baseline_digest = partition(baseline)
+              assert baseline_episode_count == expected_episode_count, (boundary_text, baseline_episode_count)
+              assert baseline_digest == expected_digest, (boundary_text, baseline_digest)
+
+              candidate = build_compact_grouping_projection(inputs, relations=(), as_of=as_of)
+              episode_count, digest = partition(candidate)
               result = {
                   'as_of': boundary_text,
                   'episode_count': episode_count,
-                  'observation_count': observation_count,
+                  'observation_count': candidate.eligible_observation_count,
                   'partition_sha256': digest,
-                  'candidate_pair_count': projection.candidate_pair_count,
-                  'group_pair_count': projection.group_pair_count,
+                  'candidate_pair_count': candidate.candidate_pair_count,
+                  'group_pair_count': candidate.group_pair_count,
               }
               print(json.dumps(result, sort_keys=True))
               assert episode_count == expected_episode_count, result
-              assert observation_count == expected_observation_count, result
+              assert candidate.eligible_observation_count == expected_observation_count, result
               assert digest == expected_digest, result
 
-          print('retained-grouping-v1-replay: PASS 11/11 exact membership partitions')
+          print('retained-grouping-v1-replay: PASS 11/11 exact V0 and V1 membership partitions')
           PY
