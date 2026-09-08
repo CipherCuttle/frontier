@@ -9,11 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  freeze:
+  offline-sql:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      FRONTIER_DATABASE_URL: ${{ secrets.FRONTIER_DATABASE_URL }}
     steps:
       - name: Checkout exact canonical implementation
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -29,45 +27,21 @@ jobs:
         with:
           version: "0.12.10"
           enable-cache: true
-      - name: Verify frozen lock
-        run: uv lock --check
-      - name: Sync frozen environment
-        run: uv sync --all-extras --frozen
-      - name: Require existing canonical database secret
-        shell: bash
+      - name: Verify frozen lock and sync
         run: |
-          set -euo pipefail
-          if [ -z "${FRONTIER_DATABASE_URL:-}" ]; then
-            echo "FRONTIER_DATABASE_URL secret is not configured; refusing freeze persistence."
-            exit 44
-          fi
-      - name: Assert exact implementation identity
+          uv lock --check
+          uv sync --all-extras --frozen
+      - name: Assert exact canonical identity
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "d106f66580b4b843e086f9c833daff10aec8fdda"
           test "$(git rev-parse 'HEAD^{tree}')" = "807c0157219c8075874053357def5a0ad658b0c0"
-      - name: Verify canonical database readiness
-        run: uv run frontier doctor >/tmp/frontier-doctor.json
-      - name: Persist replacement PEF_V0 freeze
-        env:
-          FRONTIER_FREEZE_PERSIST_AUTHORIZED: "1"
+      - name: Generate canonical Alembic offline SQL
         shell: bash
         run: |
           set -euo pipefail
-          uv run frontier freeze derive --persist --root . > /tmp/freeze.json
-          python - <<'PY'
-          import json
-          p = json.load(open('/tmp/freeze.json', encoding='utf-8'))
-          assert p['status'] == 'FROZEN', p
-          assert p['verify_status'] == 'FROZEN', p
-          assert p['persisted'] is True, p
-          assert p['durable_freeze_at'], p
-          r = p['receipt']
-          assert r['implementation_commit'] == 'd106f66580b4b843e086f9c833daff10aec8fdda', r
-          assert r['implementation_tree_digest'] == '807c0157219c8075874053357def5a0ad658b0c0', r
-          print(json.dumps({'receipt_id': p['receipt_id'], 'durable_freeze_at': p['durable_freeze_at']}, sort_keys=True))
-          PY
-          echo 'FREEZE_RECEIPT_JSON_BEGIN'
-          cat /tmp/freeze.json
-          echo 'FREEZE_RECEIPT_JSON_END'
+          FRONTIER_DATABASE_URL='postgresql+psycopg://offline:offline@localhost/offline' uv run alembic upgrade head --sql > /tmp/frontier-schema.sql
+          echo 'FRONTIER_SCHEMA_SQL_BEGIN'
+          cat /tmp/frontier-schema.sql
+          echo 'FRONTIER_SCHEMA_SQL_END'
