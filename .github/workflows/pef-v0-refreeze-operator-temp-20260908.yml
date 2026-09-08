@@ -1,0 +1,110 @@
+name: pef-v0-refreeze-operator-temp-20260908
+
+on:
+  push:
+    branches:
+      - "agent/pef-v0-refreeze-operator-temp-20260908"
+    paths:
+      - ".github/workflows/pef-v0-refreeze-operator-temp-20260908.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact corrected canonical implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: b1a5f198420614da6ba7eb4d34838be0e0efd1a5
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+      - name: Verify frozen lock and sync
+        run: |
+          uv lock --check
+          uv sync --all-extras --frozen
+      - name: Assert exact corrected canonical identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "b1a5f198420614da6ba7eb4d34838be0e0efd1a5"
+          test "$(git rev-parse 'HEAD^{tree}')" = "45229193ee12bed2fa2f1ac37904db8b90452d3c"
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "b1a5f198420614da6ba7eb4d34838be0e0efd1a5"
+      - name: Generate fresh ephemeral transport key
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out /tmp/frontier-refreeze-private.pem 2>/dev/null
+          openssl pkey -in /tmp/frontier-refreeze-private.pem -pubout -out frontier-refreeze-public.pem 2>/dev/null
+          chmod 600 /tmp/frontier-refreeze-private.pem
+      - name: Upload transport public key
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontier-refreeze-transport-public-key-20260908
+          path: frontier-refreeze-public.pem
+          if-no-files-found: error
+          retention-days: 1
+      - name: Wait for encrypted canonical database URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://raw.githubusercontent.com/CipherCuttle/frontier/agent/pef-v0-refreeze-operator-temp-20260908/.github/tmp/frontier-refreeze-db-url.enc.b64"
+          for _ in $(seq 1 120); do
+            if curl -fsSL "$url" -o /tmp/frontier-refreeze-db-url.enc.b64; then
+              break
+            fi
+            sleep 5
+          done
+          test -s /tmp/frontier-refreeze-db-url.enc.b64
+          base64 -d /tmp/frontier-refreeze-db-url.enc.b64 > /tmp/frontier-refreeze-db-url.enc
+          openssl pkeyutl -decrypt \
+            -inkey /tmp/frontier-refreeze-private.pem \
+            -in /tmp/frontier-refreeze-db-url.enc \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -out /tmp/frontier-refreeze-db-url
+          test -s /tmp/frontier-refreeze-db-url
+      - name: Verify canonical readiness and persist replacement freeze
+        shell: bash
+        run: |
+          set -euo pipefail
+          FRONTIER_DATABASE_URL="$(cat /tmp/frontier-refreeze-db-url)"
+          echo "::add-mask::$FRONTIER_DATABASE_URL"
+          export FRONTIER_DATABASE_URL
+          uv run frontier doctor > /tmp/frontier-doctor.json
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "b1a5f198420614da6ba7eb4d34838be0e0efd1a5"
+          FRONTIER_FREEZE_PERSIST_AUTHORIZED=1 uv run frontier freeze derive --persist --root . > /tmp/frontier-refreeze.json
+          python - <<'PY'
+          import json
+          p = json.load(open('/tmp/frontier-refreeze.json', encoding='utf-8'))
+          assert p['status'] == 'FROZEN', p
+          assert p['verify_status'] == 'FROZEN', p
+          assert p['persisted'] is True, p
+          assert p['durable_freeze_at'], p
+          receipt = p['receipt']
+          assert receipt['implementation_commit'] == 'b1a5f198420614da6ba7eb4d34838be0e0efd1a5', receipt
+          assert receipt['implementation_tree_digest'] == '45229193ee12bed2fa2f1ac37904db8b90452d3c', receipt
+          assert receipt['status'] == 'FROZEN', receipt
+          assert receipt['drift_reasons'] == [], receipt
+          print(json.dumps({'receipt_id': p['receipt_id'], 'durable_freeze_at': p['durable_freeze_at'], 'status': p['status'], 'verify_status': p['verify_status']}, sort_keys=True))
+          PY
+          rm -f /tmp/frontier-refreeze-db-url /tmp/frontier-refreeze-db-url.enc /tmp/frontier-refreeze-db-url.enc.b64 /tmp/frontier-refreeze-private.pem
+      - name: Upload replacement freeze receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pef-v0-replacement-freeze-v2
+          path: /tmp/frontier-refreeze.json
+          if-no-files-found: error
+          retention-days: 1
