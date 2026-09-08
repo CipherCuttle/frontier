@@ -26,6 +26,12 @@ WORKER_LEASE_NAME = "frontier-worker-lease"
 _DIGEST_KEY = int.from_bytes(hashlib.sha256(WORKER_LEASE_NAME.encode()).digest()[:8], "big")
 WORKER_LEASE_KEY = _DIGEST_KEY & ((1 << 63) - 1)
 
+# Heartbeats are emitted after a complete acquisition + experiment cycle. A
+# healthy cycle may therefore take materially longer than the worker's normal
+# idle interval. Five minutes avoids flapping on bounded slow-source cycles
+# while making retained rows from dead workers explicitly stale.
+WORKER_HEARTBEAT_STALE_AFTER_SECONDS = 300.0
+
 ConnectionT = psycopg.Connection[tuple[object, ...]]
 
 
@@ -142,26 +148,30 @@ def build_ops_status(
 ) -> dict[str, object]:
     """Read-only operational status snapshot for ``frontier ops status``.
 
-    Surfaces: heartbeat age, per-source retry backlog and freshness versus the
-    registry ``poll_interval_seconds`` (FRESH/DEGRADED/STALE), attempt queue
-    depth, latest snapshot/run ``as_of``, drift state, and DB artifact growth
-    indicators. No mutation, no evaluation recomputation.
+    Surfaces: heartbeat age/liveness, per-source retry backlog and freshness
+    versus the registry ``poll_interval_seconds`` (FRESH/DEGRADED/STALE),
+    attempt queue depth, latest snapshot/run ``as_of``, drift state, and DB
+    artifact growth indicators. No mutation, no evaluation recomputation.
     """
     with connection.cursor() as cur:
         cur.execute(
             "SELECT worker_id, role, beat_at, metrics FROM worker_heartbeats "
             "ORDER BY beat_at DESC, worker_id"
         )
-        heartbeats = [
-            {
-                "worker_id": cast(str, row[0]),
-                "role": cast(str, row[1]),
-                "beat_at": _iso(cast(datetime, row[2])),
-                "age_seconds": round(max(0.0, (now - cast(datetime, row[2])).total_seconds()), 3),
-                "metrics": row[3],
-            }
-            for row in cur.fetchall()
-        ]
+        heartbeats: list[dict[str, object]] = []
+        for row in cur.fetchall():
+            beat_at = cast(datetime, row[2])
+            age_seconds = max(0.0, (now - beat_at).total_seconds())
+            heartbeats.append(
+                {
+                    "worker_id": cast(str, row[0]),
+                    "role": cast(str, row[1]),
+                    "beat_at": _iso(beat_at),
+                    "age_seconds": round(age_seconds, 3),
+                    "freshness": _heartbeat_freshness(age_seconds),
+                    "metrics": row[3],
+                }
+            )
         cur.execute(
             """
             SELECT source_id, last_success_at, next_retry_at, consecutive_failures
@@ -264,10 +274,16 @@ def build_ops_status(
     else:
         drift_state = "NOT_DURABLE"
 
+    fresh_worker_count = sum(heartbeat["freshness"] == "FRESH" for heartbeat in heartbeats)
+    stale_worker_count = len(heartbeats) - fresh_worker_count
+
     return {
         "now": _iso(now),
         "heartbeat": heartbeats[0] if heartbeats else None,
-        "worker_count": len(heartbeats),
+        "worker_count": fresh_worker_count,
+        "stale_worker_count": stale_worker_count,
+        "worker_row_count": len(heartbeats),
+        "worker_heartbeat_stale_after_seconds": WORKER_HEARTBEAT_STALE_AFTER_SECONDS,
         "sources": sources,
         "retry_backlog": backlog,
         "attempt_state_counts": attempt_counts,
@@ -285,6 +301,10 @@ def build_ops_status(
             "worker_heartbeats": int(cast(int, counts_row[7])),
         },
     }
+
+
+def _heartbeat_freshness(age_seconds: float) -> str:
+    return "FRESH" if age_seconds <= WORKER_HEARTBEAT_STALE_AFTER_SECONDS else "STALE"
 
 
 def _iso(value: datetime | None) -> str | None:
