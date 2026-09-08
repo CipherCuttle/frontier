@@ -112,7 +112,7 @@ export async function getRadar(transport: FrontierPublicReadTransport, query: { 
   return transport.get<ViewResponse>("/v0/radar", query);
 }
 
-export async function searchEvidence(transport: FrontierPublicReadTransport, query: { limit?: number; offset?: number; q: string; snapshot_id?: string | null; } = {}): Promise<EvidenceQueryResponse> {
+export async function searchEvidence(transport: FrontierPublicReadTransport, query: { limit?: number; offset?: number; q: string; snapshot_id?: string | null; }): Promise<EvidenceQueryResponse> {
   return transport.get<EvidenceQueryResponse>("/v0/search", query);
 }
 
