@@ -2,7 +2,7 @@
 
 ## Status
 
-`IMPLEMENTING / NO_REAL_FREEZE / NO_CONFIRMATORY_EVIDENCE`
+`MERGE_READY_ON_GREEN_EXACT_HEAD_CI / NO_REAL_FREEZE / NO_CONFIRMATORY_EVIDENCE`
 
 Base: `main@86ea43e6926213c4ff1252365cc3998b3dd8ac05` (PR #34 merge).
 
@@ -31,6 +31,8 @@ For CONFIRMATORY execution:
 
 DEV behavior may remain broader where already intended, but CONFIRMATORY must fail closed on any inability to reconstruct the frozen universe exactly.
 
+Closure: `CLOSED_VERIFIED` on final code head `93e7a05156a37d8b68e1fa7b4a6cfc6ad8f04609`.
+
 ### G2-02 — Freeze clock authority reconciliation
 
 The preregistration freezes the ranking-window start as:
@@ -52,6 +54,8 @@ Required end state:
 
 Do not edit preregistered scientific semantics merely to fit the implementation. If a contract cannot be satisfied without changing the preregistration, stop and report `RESTART_AUTHORITY_REQUIRED` instead.
 
+Closure: `CLOSED_VERIFIED` on final code head `93e7a05156a37d8b68e1fa7b4a6cfc6ad8f04609`. Production publication persistence now derives and verifies the exact canonical GitHub `refs/heads/main` publication before insertion; raw production publication writes are forbidden, persisted publication payload/digest identity is revalidated on load, and synthetic publication insertion exists only under `tests/`.
+
 ### G2-03 — D011 confirmatory-evaluation bypass
 
 Close the path where a confirmatory-looking evaluation can be produced outside the full confirmatory authority path.
@@ -63,9 +67,11 @@ Required end state:
 - caller-supplied timestamps/flags alone cannot manufacture confirmatory evidence;
 - DEV results remain permanently DEV and cannot be relabeled retroactively.
 
+Closure: `CLOSED_VERIFIED` on final code head `93e7a05156a37d8b68e1fa7b4a6cfc6ad8f04609`.
+
 ### G2-04 — D012 persistence authorization below CLI
 
-`FRONTIER_FREEZE_PERSIST_AUTHORIZED` is currently enforced at the CLI boundary only.
+`FRONTIER_FREEZE_PERSIST_AUTHORIZED` was previously enforced at the CLI boundary only.
 
 Required end state:
 
@@ -74,6 +80,8 @@ Required end state:
 - fixture/test persistence stays possible only through an explicit test authorization path;
 - unauthorized persistence fails before a database write;
 - the CLI remains an operator UX layer, not the security boundary.
+
+Closure: `CLOSED_VERIFIED`; implementation commit `320a54a618bab2581a84dd3d293c7e1d5cab59cf`, carried and reverified on final code head `93e7a05156a37d8b68e1fa7b4a6cfc6ad8f04609`.
 
 ### G2-05 — D014 DB-side confirmatory time gate
 
@@ -84,6 +92,8 @@ Required end state:
 - the authoritative `as_of` eligibility check against DB durability/publication bindings is evaluated using canonical persisted facts inside the same DB transaction/authority boundary used to claim the confirmatory attempt;
 - application wall-clock skew cannot admit an otherwise ineligible confirmatory boundary;
 - exact-boundary and skew regressions fail closed.
+
+Closure: `CLOSED_VERIFIED` on final code head `93e7a05156a37d8b68e1fa7b4a6cfc6ad8f04609`.
 
 ## Fixed scientific invariants
 
@@ -124,6 +134,23 @@ Before this sprint can be called merge-ready:
 7. GitHub publication timestamp -> first legal 300-second boundary derivation is deterministic and prereg-compatible;
 8. DEV output cannot become CONFIRMATORY by caller flags or supplied timestamps;
 9. one bounded hostile review reports zero unresolved Critical/High findings.
+
+## Closure evidence
+
+Final runtime/code head before this docs-only closure commit:
+
+`93e7a05156a37d8b68e1fa7b4a6cfc6ad8f04609`
+
+Standard exact-head CI on that code head:
+
+- `verify #401` / run `34208795484` — PASS;
+- `e2e-postgres #60` / run `34208795369` — PASS;
+- `ops-capacity #237` / run `34208795219` — PASS;
+- `ops-recovery #241` / run `34208795236` — PASS.
+
+The bounded hostile review found one real High in the publication-authority chain. The first repair bound publication to canonical GitHub `main`. The permitted targeted re-review then found an unchecked production fixture writer; that seam was removed in `93e7a05156a37d8b68e1fa7b4a6cfc6ad8f04609`. Final unresolved review disposition: `CRITICAL=0 / HIGH=0`.
+
+This closure commit is documentation-only. It must itself receive the normal exact-head workflows. If `verify`, `e2e-postgres`, `ops-capacity`, and `ops-recovery` are all green on that docs-only head, the sprint verdict becomes `GIGASPRINT_02_READY_FOR_MERGE` without another receipt-only commit.
 
 ## Explicit non-scope
 
