@@ -6,9 +6,16 @@ from typing import cast
 
 from frontier.domain.canonical_json import CanonicalValue
 
+_FRACTIONAL_JSON_NUMBER_MARKER = "$frontier_fractional_json_number_v0"
+
 
 class JsonValueError(ValueError):
     """Raised when parsed JSON cannot enter a typed acquisition boundary."""
+
+
+def _fractional_json_number(value: str) -> dict[str, str]:
+    """Preserve an upstream fractional-number lexeme without creating a binary float."""
+    return {_FRACTIONAL_JSON_NUMBER_MARKER: value}
 
 
 def _typed_json_value(value: object) -> CanonicalValue:
@@ -32,7 +39,7 @@ def _typed_json_value(value: object) -> CanonicalValue:
 
 def parse_typed_json(data: str | bytes) -> CanonicalValue:
     try:
-        raw = cast(object, json.loads(data))
+        raw = cast(object, json.loads(data, parse_float=_fractional_json_number))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise JsonValueError("malformed JSON") from exc
     return _typed_json_value(raw)
