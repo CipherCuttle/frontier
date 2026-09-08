@@ -8,6 +8,7 @@ from itertools import combinations
 from pathlib import Path
 
 import pytest
+from test_grouping_baseline import corpus_cases
 
 from frontier.domain.digests import Digest
 from frontier.domain.grouping import (
@@ -26,7 +27,6 @@ from frontier.domain.grouping_v1 import (
     build_compact_grouping_receipt,
     is_group_pair_v1,
 )
-from test_grouping_baseline import corpus_cases
 
 NOW = datetime(2026, 9, 8, 20, tzinfo=UTC)
 SOURCE_REGISTRY_DIGEST = Digest(
@@ -94,6 +94,7 @@ def _obs(
         canonical_url=canonical_url,
         title=title,
         text=text,
+        artifact_type=artifact_type,
         artifact_name=artifact_name,
         artifact_version=artifact_version,
         signal_roles=signal_roles,
