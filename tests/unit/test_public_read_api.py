@@ -95,7 +95,26 @@ class _FakeRepository:
     def list_observations(
         self, observation_ids: tuple[str, ...], *, as_of: datetime
     ) -> list[ObservationEvidenceRead]:
-        return []
+        return [
+            ObservationEvidenceRead(
+                observation_id=observation_id,
+                schema_version="observation-v1",
+                canonicalization_version="frontier-canonical-json-v1",
+                source_id="hn.frontpage",
+                source_item_key="item-frontier",
+                kind="DOCUMENT",
+                payload={"title": "Frontier Agent"},
+                source_published_at=None,
+                effective_at=None,
+                observed_at="2026-09-05T11:59:00.000000Z",
+                retrieved_at="2026-09-05T11:59:00.000000Z",
+                content_digest="sha256:" + "7" * 64,
+                fetch_digest="sha256:" + "8" * 64,
+                collection_occurrences=(),
+                relations=(),
+            )
+            for observation_id in observation_ids
+        ]
 
     def get_observation(
         self, observation_id: str, *, as_of: datetime
@@ -117,6 +136,7 @@ def test_openapi_exposes_only_get_operations() -> None:
         "/v0/radar",
         "/v0/now",
         "/v0/trending",
+        "/v0/search",
         "/v0/episodes/{episode_id}",
         "/v0/observations/{observation_id}",
         "/v0/health",
@@ -149,7 +169,39 @@ def test_no_complete_snapshot_is_explicit_503_without_internal_detail() -> None:
     )
     response = client.get("/v0/radar")
     assert response.status_code == 503
-    assert cast(dict[str, Any], response.json()) == {
+    assert response.json() == {
         "error": "NO_COMPLETE_SNAPSHOT",
         "detail": "No publishable COMPLETE baseline snapshot is available.",
+    }
+
+
+def test_evidence_search_is_snapshot_bound_nonranking_and_auditable() -> None:
+    client = cast(
+        _GetClient,
+        TestClient(create_public_read_app(PublicReadService(_FakeRepository()))),
+    )
+    response = client.get("/v0/search", params={"q": "frontier AGENT"})
+    assert response.status_code == 200
+    body = cast(dict[str, Any], response.json())
+    assert body["query_policy_version"] == "evidence-query-lexical-filter-v0"
+    assert body["semantic_scope"] == "BASELINE_SUBSTRATE_QUERY"
+    assert body["normalized_tokens"] == ["frontier", "agent"]
+    assert body["total"] == 1
+    item = cast(list[dict[str, Any]], body["items"])[0]
+    episode = cast(dict[str, Any], item["episode"])
+    assert episode["rank"] == 1
+    assert "score" not in item
+    assert item["matched_observation_ids"] == ["obs_" + "b" * 64]
+
+
+def test_evidence_search_rejects_whitespace_only_query_explicitly() -> None:
+    client = cast(
+        _GetClient,
+        TestClient(create_public_read_app(PublicReadService(_FakeRepository()))),
+    )
+    response = client.get("/v0/search", params={"q": "   "})
+    assert response.status_code == 400
+    assert cast(dict[str, Any], response.json()) == {
+        "error": "INVALID_QUERY",
+        "detail": "The evidence query is invalid.",
     }

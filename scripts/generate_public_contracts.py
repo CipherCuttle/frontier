@@ -139,7 +139,7 @@ def _parameter_type(parameter: JsonObject) -> str:
 def typescript_text(document: JsonObject) -> str:
     lines = [
         "// GENERATED from contracts/public/openapi_v0.json. DO NOT EDIT.",
-        "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0.",
+        "// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0 / EVIDENCE_QUERY_V0.",
         "",
         "export interface FrontierPublicReadTransport {",
         (

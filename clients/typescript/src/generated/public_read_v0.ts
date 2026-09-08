@@ -1,5 +1,5 @@
 // GENERATED from contracts/public/openapi_v0.json. DO NOT EDIT.
-// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0.
+// Authority: ADR-0008 / PUBLIC_READ_PLANE_V0 / EVIDENCE_QUERY_V0.
 
 export interface FrontierPublicReadTransport {
   get<T>(path: string, query?: Record<string, string | number | boolean | null | undefined>): Promise<T>;
@@ -8,6 +8,8 @@ export interface FrontierPublicReadTransport {
 export type CollectionOccurrenceResponse = { "completed_at": string | null; "occurrence_status": string; "reason": string; "recovered_after_gap": boolean; "run_id": string; "started_at": string; "trigger_id": string | null; };
 export type EpisodeEvidenceResponse = { "episode": EpisodeResponse; "generated_at": string; "observations": Array<ObservationEvidenceResponse>; "schema_version"?: string; "snapshot": SnapshotBindingResponse; };
 export type EpisodeResponse = { "acceleration_6h": number; "age_seconds": number; "backfill_evidence_count": number; "confirmation": string; "episode_id": string; "evidence_count_total": number; "evidence_root_diversity"?: null; "first_observed_at": string; "last_observed_at": string; "mentions_1h": number; "mentions_24h": number; "mentions_6h": number; "observation_ids": Array<string>; "preprevious_6h": number; "previous_6h": number; "prospective_evidence_count": number; "rank": number; "recovered_backlog_evidence_count": number; "signal_roles": Array<string>; "source_count": number; "source_ids": Array<string>; "source_role_diversity": number; "velocity_6h_delta": number; };
+export type EvidenceQueryItemResponse = { "episode": EpisodeResponse; "matched_observation_ids": Array<string>; };
+export type EvidenceQueryResponse = { "coverage_state": string; "freshness_state": string; "generated_at": string; "items": Array<EvidenceQueryItemResponse>; "limit": number; "normalized_tokens": Array<string>; "offset": number; "query": string; "query_policy_version": string; "schema_state": string; "schema_version"?: string; "semantic_scope": string; "snapshot": SnapshotBindingResponse; "total": number; "transport_state": string; };
 export type ExperimentalAnalysisArtifactResponse = { "algorithm_version": string; "analysis_id": string; "as_of": string; "authority_state": string; "configuration_digest": string; "control_receipt_id": string | null; "control_snapshot_id": string | null; "episode_universe_digest": string | null; "generated_at": string; "input_digest": string | null; "kind": string; "output_digest": string; "schema_version": string; "source_registry_version": string | null; "status": string; };
 export type ExperimentalAnalysisArtifactSectionResponse = { "authority_state"?: string; "availability": string; "interpretation"?: string; "kind": string; "latest": ExperimentalAnalysisArtifactResponse | null; "schema_version"?: string; };
 export type ExperimentalControlRankEntryResponse = { "episode_id": string; "rank": number; };
@@ -108,6 +110,10 @@ export async function getObservation(transport: FrontierPublicReadTransport, obs
 
 export async function getRadar(transport: FrontierPublicReadTransport, query: { limit?: number; offset?: number; snapshot_id?: string | null; } = {}): Promise<ViewResponse> {
   return transport.get<ViewResponse>("/v0/radar", query);
+}
+
+export async function searchEvidence(transport: FrontierPublicReadTransport, query: { limit?: number; offset?: number; q: string; snapshot_id?: string | null; } = {}): Promise<EvidenceQueryResponse> {
+  return transport.get<EvidenceQueryResponse>("/v0/search", query);
 }
 
 export async function getTrending(transport: FrontierPublicReadTransport, query: { limit?: number; offset?: number; snapshot_id?: string | null; } = {}): Promise<ViewResponse> {
