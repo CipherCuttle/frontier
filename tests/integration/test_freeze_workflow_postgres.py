@@ -6,9 +6,10 @@ database. The real confirmatory candidate freeze is NOT authorized during this
 sprint and is never persisted outside tests.
 
 Sequence proven: derive (dry) -> guard refusal without override -> persist WITH
-override (fixture receipt) -> durability stamped -> verify OK -> orchestrator
-confirmatory gate passes for as_of > durable_freeze_at; WRONG-freeze verify
-prints drift; receipt_created_at != durable_freeze_at (different clocks).
+override (fixture receipt) -> durability stamped -> verify OK -> Git publication
+authority persisted -> orchestrator confirmatory gate passes at the first legal
+publication-derived boundary; WRONG-freeze verify prints drift;
+receipt_created_at != durable_freeze_at (different clocks).
 """
 
 from __future__ import annotations
@@ -26,12 +27,19 @@ psycopg = pytest.importorskip("psycopg")
 from frontier.adapters.postgres.advanced_intelligence import (
     PostgresCandidateFreezeRepository,
 )
+from frontier.adapters.postgres.freeze_publication import (
+    PostgresCandidateFreezePublicationRepository,
+)
 from frontier.application.evaluation_loaders import (
     candidate_freeze_receipt_from_canonical,
 )
 from frontier.application.experiment_orchestration import (
     FreezeBinding,
     evaluate_confirmatory_gates,
+)
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    first_confirmatory_boundary,
 )
 from frontier.cli.main import (
     FREEZE_PERSIST_AUTHORIZED_ENV,
@@ -136,30 +144,70 @@ def test_full_freeze_operator_workflow(
     assert "source registry digest drifted" in wrong_report["drift_reasons"]
     wrong_path.unlink(missing_ok=True)
 
-    # 7. Orchestrator confirmatory gates: only as_of > durable_freeze_at passes.
+    # 7. Confirmatory authority requires BOTH canonical DB durability and
+    # verified Git publication. The scientific clock is the Git committer time.
     durable = datetime.fromisoformat(durable_freeze_at)
-    allowed = evaluate_confirmatory_gates(
+    publication_at = durable + timedelta(seconds=1)
+    first_boundary = first_confirmatory_boundary(publication_at)
+
+    unpublished = evaluate_confirmatory_gates(
         FreezeBinding(receipt=receipt, durable_freeze_at=durable),
-        as_of=durable + timedelta(hours=1),
+        as_of=first_boundary,
+        canonical_context=True,
+    )
+    assert unpublished.allowed is False
+    assert "no verified Git publication" in unpublished.reason
+
+    assert receipt.implementation_commit is not None
+    assert receipt.implementation_tree_digest is not None
+    publication = CandidateFreezePublication(
+        freeze_receipt_id=receipt.receipt_id,
+        freeze_receipt_digest=receipt.receipt_digest,
+        implementation_commit=receipt.implementation_commit,
+        implementation_tree_digest=receipt.implementation_tree_digest,
+        publication_commit="c" * 40,
+        publication_committer_at=publication_at,
+    )
+    with psycopg.connect(DB_URL) as conn:
+        publication_repo = PostgresCandidateFreezePublicationRepository(
+            conn, persistence_authorized=True
+        )
+        publication_repo.record_publication(publication)
+        assert publication_repo.get_publication(receipt_id) == publication
+
+    published_binding = FreezeBinding(
+        receipt=receipt,
+        durable_freeze_at=durable,
+        publication_commit=publication.publication_commit,
+        publication_committer_at=publication.publication_committer_at,
+    )
+    allowed = evaluate_confirmatory_gates(
+        published_binding,
+        as_of=first_boundary,
         canonical_context=True,
     )
     assert allowed.allowed is True
 
     not_durable = evaluate_confirmatory_gates(
-        FreezeBinding(receipt=receipt, durable_freeze_at=None),
-        as_of=durable + timedelta(hours=1),
+        FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=None,
+            publication_commit=publication.publication_commit,
+            publication_committer_at=publication.publication_committer_at,
+        ),
+        as_of=first_boundary,
         canonical_context=True,
     )
     assert not_durable.allowed is False
     assert "durable_freeze_at NULL" in not_durable.reason
 
     early = evaluate_confirmatory_gates(
-        FreezeBinding(receipt=receipt, durable_freeze_at=durable),
-        as_of=durable,
+        published_binding,
+        as_of=first_boundary - timedelta(seconds=300),
         canonical_context=True,
     )
     assert early.allowed is False
-    assert "not strictly after durable_freeze_at" in early.reason
+    assert "outside the fixed preregistered ranking window" in early.reason
 
 
 def _load_receipt_from_db(receipt_id: str) -> CandidateFreezeReceipt:

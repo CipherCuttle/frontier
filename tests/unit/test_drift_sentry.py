@@ -20,6 +20,7 @@ from test_evaluation_loaders import (
     _paired,  # pyright: ignore[reportPrivateUsage]
     _seed,  # pyright: ignore[reportPrivateUsage]
     _seed_freeze,  # pyright: ignore[reportPrivateUsage]
+    _seed_publication,  # pyright: ignore[reportPrivateUsage]
 )
 from test_experiment_orchestration import (
     FakeAttemptRepository,
@@ -40,6 +41,7 @@ from frontier.application.experiment_orchestration import (
     FreezeBinding,
 )
 from frontier.application.experiment_status import build_experiment_status
+from frontier.application.freeze_publication import first_confirmatory_boundary
 from frontier.domain.candidate_freeze import (
     CandidateFreezeReceipt,
     FreezeInputs,
@@ -546,6 +548,7 @@ def _store_for_live(paired: object, receipt: CandidateFreezeReceipt, durable: da
     store = _store_double()
     _seed(store, paired, run_class="CONFIRMATORY")  # pyright: ignore[reportPrivateUsage, reportArgumentType]
     _seed_freeze(store, receipt, durable=durable)  # pyright: ignore[reportPrivateUsage]
+    _seed_publication(store, receipt, publication_at=durable)  # pyright: ignore[reportPrivateUsage]
     return store
 
 
@@ -557,11 +560,17 @@ def _store_double():
 
 class TestEvaluatorHook:
     def test_confirmatory_drift_yields_invalid_drift(self) -> None:
-        store, paired, _ = _seeded()
+        _, _, freeze = _seeded()
+        as_of = first_confirmatory_boundary(DURABLE_AT)
+        paired = _paired(as_of, freeze_id=freeze.receipt_id)
+        store = _store_double()
+        _seed(store, paired, run_class="CONFIRMATORY")  # pyright: ignore[reportPrivateUsage]
+        _seed_freeze(store, freeze, durable=DURABLE_AT)  # pyright: ignore[reportPrivateUsage]
+        _seed_publication(store, freeze, publication_at=DURABLE_AT)  # pyright: ignore[reportPrivateUsage]
         receipt = _evaluate(
             store=store,
             run_id=paired.run.run_id,
-            as_of=paired.run.as_of,
+            as_of=as_of,
             confirmatory=True,
             durable_freeze_at=DURABLE_AT,
             checker=DriftSentry(REPO_ROOT),
@@ -586,7 +595,7 @@ class TestEvaluatorHook:
     def test_confirmatory_ok_sentry_keeps_evaluation_non_drift(self) -> None:
         receipt = freeze_candidate(REPO_ROOT, frozen_at=FROZEN_AT)
         durable = FROZEN_AT + timedelta(seconds=120)
-        as_of = durable + timedelta(seconds=300)
+        as_of = first_confirmatory_boundary(durable)
         paired = _paired(as_of, freeze_id=receipt.receipt_id)
         store = _store_for_live(paired, receipt, durable)
         evaluated = _evaluate(
