@@ -78,7 +78,9 @@ def test_postgres_evaluation_receipt_persists_and_is_append_only() -> None:
     receipt = _evaluation_receipt(freeze_receipt)
 
     with psycopg.connect(DB_URL) as conn:
-        PostgresCandidateFreezeRepository(conn).record_receipt(freeze_receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(
+            freeze_receipt
+        )
         repository = PostgresEvaluationRepository(conn)
         repository.record_receipt(receipt)
         assert repository.latest_evaluation_id() == receipt.evaluation_id
@@ -136,7 +138,9 @@ def test_postgres_drifted_freeze_evaluation_is_recorded_with_drift_status() -> N
     assert receipt.freeze_status is FreezeStatus.DRIFTED
 
     with psycopg.connect(DB_URL) as conn:
-        PostgresCandidateFreezeRepository(conn).record_receipt(freeze_receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(
+            freeze_receipt
+        )
         repository = PostgresEvaluationRepository(conn)
         repository.record_receipt(receipt)
         with conn.cursor() as cur:
@@ -153,7 +157,9 @@ def test_postgres_evaluation_receipt_json_round_trip_shape() -> None:
     freeze_receipt = _freeze_receipt(FreezeStatus.FROZEN)
     receipt = _evaluation_receipt(freeze_receipt)
     with psycopg.connect(DB_URL) as conn:
-        PostgresCandidateFreezeRepository(conn).record_receipt(freeze_receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(
+            freeze_receipt
+        )
         repository = PostgresEvaluationRepository(conn)
         repository.record_receipt(receipt)
         canonical = repository.get_receipt_json(receipt.evaluation_id)

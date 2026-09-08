@@ -83,6 +83,9 @@ from frontier.adapters.postgres.experiment_attempts import (
     PostgresShadowRunPersister,
 )
 from frontier.adapters.postgres.experimental_read import PostgresExperimentalReadRepository
+from frontier.adapters.postgres.frozen_registry_intelligence import (
+    PostgresFrozenRegistryBaselineIntelligenceRepository,
+)
 from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligenceRepository
 from frontier.adapters.postgres.public_read import PostgresPublicReadRepository
 from frontier.adapters.postgres.readiness import (
@@ -454,9 +457,14 @@ def _bound_runner(freeze: CandidateFreezeReceipt) -> ShadowExperimentRunner:
 def _orchestrator(
     connection: ConnectionT, *, run_class: str, worker_id: str
 ) -> ExperimentOrchestrator:
+    baseline_repository = (
+        PostgresFrozenRegistryBaselineIntelligenceRepository(connection, load_source_registry(ROOT))
+        if run_class == "CONFIRMATORY"
+        else PostgresBaselineIntelligenceRepository(connection)
+    )
     return ExperimentOrchestrator(
         attempts=PostgresExperimentAttemptRepository(connection),
-        baseline_repository=PostgresBaselineIntelligenceRepository(connection),
+        baseline_repository=baseline_repository,
         persistence=PostgresShadowRunPersister(connection),
         source_registry_version=REGISTRY_VERSION,
         run_class=run_class,
@@ -518,7 +526,9 @@ def _run_dev_chain(connection: ConnectionT) -> tuple[str, _Identity]:
     # The candidate freeze receipt is recorded through the canonical freeze
     # workflow first; the DEV cycle then binds it (durable stamp is authority
     # data, never confirmatory promotion).
-    PostgresCandidateFreezeRepository(connection).record_receipt(FREEZE)
+    PostgresCandidateFreezeRepository(connection, persistence_authorized=True).record_receipt(
+        FREEZE
+    )
     orchestrator = _bound_orchestrator(connection, worker_id="worker.e2e.dev")
     first = orchestrator.run_cycle(now=BOUNDARY)
     assert first.action is ExperimentCycleAction.RAN, first.detail
@@ -688,7 +698,7 @@ def test_g11_full_experiment_lifecycle_on_live_postgres(tmp_path: Path) -> None:
         with psycopg.connect(database_url, autocommit=True) as connection:
             readiness = verify_database_readiness(connection)
             assert readiness.migration_revision == EXPECTED_DATABASE_REVISION
-            assert readiness.migration_revision == "0012_opportunity_memberships"
+            assert readiness.migration_revision == "0013_freeze_publication"
 
         # --- canonical acquisition through the hostile boundary -------------
         acquired = _acquire_sources(database_url)

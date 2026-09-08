@@ -34,6 +34,23 @@ def _entry_jsonb(receipt: CandidateFreezeReceipt) -> Jsonb:
     )
 
 
+def test_postgres_candidate_freeze_repository_refuses_unauthorized_write() -> None:
+    assert DB_URL is not None
+    receipt = freeze_candidate(REPO_ROOT, frozen_at=datetime.now(UTC))
+    assert receipt.status is FreezeStatus.FROZEN
+
+    with psycopg.connect(DB_URL) as conn:
+        repository = PostgresCandidateFreezeRepository(conn)
+        with pytest.raises(PermissionError, match="candidate freeze persistence is not authorized"):
+            repository.record_receipt(receipt)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM candidate_freeze_receipts WHERE receipt_id = %s",
+                (receipt.receipt_id,),
+            )
+            assert cur.fetchone() == (0,)
+
+
 def test_postgres_candidate_freeze_receipt_persists_and_is_append_only() -> None:
     assert DB_URL is not None
     frozen_at = datetime.now(UTC)
@@ -41,7 +58,7 @@ def test_postgres_candidate_freeze_receipt_persists_and_is_append_only() -> None
     assert receipt.status is FreezeStatus.FROZEN
 
     with psycopg.connect(DB_URL) as conn:
-        repository = PostgresCandidateFreezeRepository(conn)
+        repository = PostgresCandidateFreezeRepository(conn, persistence_authorized=True)
         repository.record_receipt(receipt)
         assert repository.latest_receipt_id() == receipt.receipt_id
         retained = repository.get_receipt_json(receipt.receipt_id)
@@ -146,7 +163,7 @@ def test_postgres_candidate_freeze_receipt_stores_drifted_explicitly() -> None:
     assert receipt.drift_reasons
 
     with psycopg.connect(DB_URL) as conn:
-        repository = PostgresCandidateFreezeRepository(conn)
+        repository = PostgresCandidateFreezeRepository(conn, persistence_authorized=True)
         repository.record_receipt(receipt)
         assert repository.latest_receipt_id() == receipt.receipt_id
         assert receipt.receipt_id.startswith(FREEZE_RECEIPT_ID_PREFIX)

@@ -21,6 +21,11 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Protocol
 
 from frontier.application.drift_sentry import DriftChecker
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    first_confirmatory_boundary,
+    require_confirmatory_boundary,
+)
 from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
     PEF_CANDIDATE_ID,
@@ -30,6 +35,7 @@ from frontier.domain.advanced_intelligence import (
     ShadowRunStatus,
 )
 from frontier.domain.candidate_freeze import CandidateFreezeReceipt, FreezeStatus
+from frontier.domain.digests import Digest
 from frontier.domain.drift_sentry import DriftStatus
 from frontier.domain.evaluation import (
     GLOBAL_RANK_CUTOFF_K,
@@ -299,6 +305,129 @@ class EvaluationReceiptPersistence(Protocol):
     def record_receipt(self, receipt: EvaluationReceipt) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class _PersistedEvaluationAuthority:
+    confirmatory: bool
+    durable_freeze_at: datetime | None
+    window_start: datetime | None
+
+
+def _resolve_persisted_evaluation_authority(
+    store: EvaluationArtifactStore,
+    loaded: Sequence[object],
+    *,
+    requested_confirmatory: bool,
+    canonical_context: bool | None,
+    durable_freeze_at_assertion: datetime | None,
+    window_start_assertion: datetime | None,
+) -> _PersistedEvaluationAuthority:
+    from frontier.application.evaluation_loaders import (
+        CONFIRMATORY_RUN_CLASS,
+        DEV_RUN_CLASS,
+        LoadedPairedSnapshot,
+        PersistedEvaluationError,
+    )
+
+    snapshots = tuple(item for item in loaded if isinstance(item, LoadedPairedSnapshot))
+    if len(snapshots) != len(loaded):
+        raise TypeError("persisted evaluation authority requires loaded paired snapshots")
+    run_classes = {item.run_class for item in snapshots}
+    if len(run_classes) != 1:
+        raise PersistedEvaluationError(
+            "persisted evaluation cannot mix DEV and CONFIRMATORY run classes"
+        )
+    run_class = next(iter(run_classes))
+    if run_class not in (DEV_RUN_CLASS, CONFIRMATORY_RUN_CLASS):
+        raise PersistedEvaluationError(f"unknown persisted run class {run_class!r}")
+    actual_confirmatory = run_class == CONFIRMATORY_RUN_CLASS
+    if requested_confirmatory and not actual_confirmatory:
+        raise PersistedEvaluationError(
+            "caller cannot escalate a persisted DEV run to CONFIRMATORY evaluation"
+        )
+    if not actual_confirmatory:
+        if durable_freeze_at_assertion is not None or window_start_assertion is not None:
+            raise PersistedEvaluationError(
+                "DEV persisted evaluation cannot accept confirmatory authority timestamps"
+            )
+        return _PersistedEvaluationAuthority(False, None, None)
+
+    if canonical_context is False:
+        raise ValueError(
+            "confirmatory persisted evaluation was explicitly denied canonical DB context"
+        )
+    receipt_ids = {item.freeze_receipt.receipt_id for item in snapshots}
+    if len(receipt_ids) != 1:
+        raise PersistedEvaluationError(
+            "confirmatory persisted evaluation runs bind different candidate freeze receipts"
+        )
+    receipt_id = next(iter(receipt_ids))
+    freeze_receipt = snapshots[0].freeze_receipt
+    freeze_row = store.fetch_freeze_receipt_row(receipt_id)
+    if freeze_row is None or freeze_row.receipt_id != receipt_id:
+        raise PersistedEvaluationError("confirmatory freeze durability row is unresolvable")
+    if freeze_row.durable_freeze_at is None:
+        raise PersistedEvaluationError("confirmatory freeze has no canonical DB durability")
+    publication_row = store.fetch_freeze_publication_row(receipt_id)
+    if publication_row is None:
+        raise PersistedEvaluationError(
+            "confirmatory freeze has no persisted Git publication authority"
+        )
+    try:
+        publication = CandidateFreezePublication(
+            freeze_receipt_id=publication_row.receipt_id,
+            freeze_receipt_digest=Digest(publication_row.freeze_receipt_digest),
+            implementation_commit=publication_row.implementation_commit,
+            implementation_tree_digest=publication_row.implementation_tree_digest,
+            publication_commit=publication_row.publication_commit,
+            publication_committer_at=publication_row.publication_committer_at,
+            schema_version=publication_row.schema_version,
+        )
+    except ValueError as error:
+        raise PersistedEvaluationError(
+            f"persisted Git publication authority is invalid: {error}"
+        ) from error
+    if str(publication.publication_digest) != publication_row.publication_digest:
+        raise PersistedEvaluationError("persisted Git publication digest does not bind its payload")
+    if publication.freeze_receipt_id != freeze_receipt.receipt_id:
+        raise PersistedEvaluationError("Git publication binds a different freeze receipt id")
+    if publication.freeze_receipt_digest != freeze_receipt.receipt_digest:
+        raise PersistedEvaluationError("Git publication binds a different freeze receipt digest")
+    if (
+        freeze_receipt.implementation_commit is None
+        or freeze_receipt.implementation_tree_digest is None
+    ):
+        raise PersistedEvaluationError("confirmatory freeze is missing implementation identity")
+    if publication.implementation_commit != freeze_receipt.implementation_commit:
+        raise PersistedEvaluationError("Git publication binds a different implementation commit")
+    if publication.implementation_tree_digest != freeze_receipt.implementation_tree_digest:
+        raise PersistedEvaluationError("Git publication binds a different implementation tree")
+    if publication.publication_committer_at < freeze_row.durable_freeze_at:
+        raise PersistedEvaluationError("Git publication timestamp precedes canonical DB durability")
+    window_start = first_confirmatory_boundary(publication.publication_committer_at)
+    for item in snapshots:
+        try:
+            require_confirmatory_boundary(
+                as_of=item.run.as_of,
+                publication_committer_at=publication.publication_committer_at,
+            )
+        except ValueError as error:
+            raise PersistedEvaluationError(
+                f"persisted CONFIRMATORY run is outside Git-publication authority: {error}"
+            ) from error
+    if (
+        durable_freeze_at_assertion is not None
+        and durable_freeze_at_assertion != freeze_row.durable_freeze_at
+    ):
+        raise PersistedEvaluationError(
+            "caller durable_freeze_at assertion disagrees with persisted authority"
+        )
+    if window_start_assertion is not None and window_start_assertion != window_start:
+        raise PersistedEvaluationError(
+            "caller window_start assertion disagrees with persisted Git publication authority"
+        )
+    return _PersistedEvaluationAuthority(True, freeze_row.durable_freeze_at, window_start)
+
+
 def evaluate_shadow_experiment_from_persisted(
     *,
     store: EvaluationArtifactStore,
@@ -307,7 +436,7 @@ def evaluate_shadow_experiment_from_persisted(
     evaluation_horizon: datetime,
     generated_at: datetime,
     confirmatory: bool = False,
-    canonical_context: bool = False,
+    canonical_context: bool | None = None,
     durable_freeze_at: datetime | None = None,
     drift_sentry: DriftChecker | None = None,
     window_start: datetime | None = None,
@@ -342,28 +471,45 @@ def evaluate_shadow_experiment_from_persisted(
 
     if not runs:
         raise ValueError("persisted evaluation requires at least one persisted run")
-    if confirmatory and not canonical_context:
-        raise ValueError("confirmatory persisted evaluation requires the canonical DB context")
     if len({ref.run_id for ref in runs}) != len(runs):
         raise ValueError("duplicate persisted run ids in evaluation request")
 
+    from frontier.application.evaluation_loaders import PersistedEvaluationError
+
+    run_rows = tuple(store.fetch_run_row(ref.run_id) for ref in runs)
+    if any(row is None for row in run_rows):
+        missing = next(ref.run_id for ref, row in zip(runs, run_rows, strict=True) if row is None)
+        raise PersistedEvaluationError(f"missing shadow experiment run row for {missing}")
+    persisted_classes = {row.run_class for row in run_rows if row is not None}
+    if len(persisted_classes) != 1:
+        raise PersistedEvaluationError(
+            "persisted evaluation cannot mix DEV and CONFIRMATORY run classes"
+        )
+    persisted_confirmatory = next(iter(persisted_classes)) == "CONFIRMATORY"
     loaded = tuple(
         load_paired_snapshot(
             store,
             ref.run_id,
             as_of=ref.as_of,
-            confirmatory=confirmatory,
-            window_start=window_start,
+            confirmatory=persisted_confirmatory,
             feature_batch_id=feature_batch_id,
         )
         for ref in runs
     )
     ordered = tuple(sorted(loaded, key=lambda item: item.snapshot.run.as_of))
+    authority = _resolve_persisted_evaluation_authority(
+        store,
+        ordered,
+        requested_confirmatory=confirmatory,
+        canonical_context=canonical_context,
+        durable_freeze_at_assertion=durable_freeze_at,
+        window_start_assertion=window_start,
+    )
     # The confirmatory binding semantics in ``evaluate_shadow_experiment``
     # compare every run's bound receipt against the evaluated receipt: runs
     # bound to a different freeze therefore surface as INVALID_DRIFT.
     freeze_receipt = ordered[0].freeze_receipt
-    if confirmatory and drift_sentry is not None:
+    if authority.confirmatory and drift_sentry is not None:
         # WP5 drift sentry (fail-closed): ANY drift in the recomputed identity
         # invalidates the receipt BEFORE evaluation, reusing the existing
         # INVALID_DRIFT semantics. The verification receipt is transient —
@@ -377,7 +523,7 @@ def evaluate_shadow_experiment_from_persisted(
         freeze_receipt=freeze_receipt,
         evaluation_horizon=evaluation_horizon,
         generated_at=generated_at,
-        durable_freeze_at=durable_freeze_at,
+        durable_freeze_at=authority.durable_freeze_at,
         rank_cutoff_k=rank_cutoff_k,
     )
     if receipt_repository is not None:

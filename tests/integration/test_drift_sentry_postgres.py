@@ -33,6 +33,10 @@ from frontier.application.experiment_orchestration import (
     ExperimentOrchestrator,
     FreezeBinding,
 )
+from frontier.application.freeze_publication import (
+    CandidateFreezePublication,
+    first_confirmatory_boundary,
+)
 from frontier.domain.advanced_intelligence import (
     ShadowControlArmRanking,
     ShadowExperimentRun,
@@ -46,6 +50,7 @@ from frontier.domain.digests import Digest
 from frontier.domain.evaluation import EvaluationStatus
 from frontier.domain.health import HealthValue
 from frontier.domain.opportunity import ExperimentAttemptStatus
+from tests.integration.freeze_publication_fixture import record_fixture_publication
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -58,6 +63,8 @@ PEF_CONFIG_DIGEST = Digest(
 
 class _UnusedBaselineRepository:
     """The drift path halts before any baseline work; never called."""
+
+    confirmatory_source_registry_version = Digest("sha256:" + "4" * 64)
 
     def list_baseline_observations_as_of(self, as_of: datetime) -> list[object]:
         raise AssertionError("drift sentry must halt before the baseline repository is used")
@@ -88,23 +95,33 @@ def _stored_frozen_receipt():
     )
 
 
-def _future_boundary() -> datetime:
-    """A due boundary strictly after the canonical durability stamp (now)."""
-    now = datetime.now(UTC) + timedelta(days=365)
-    epoch = int(now.timestamp())
-    return datetime.fromtimestamp(epoch - (epoch % 300), tz=UTC)
-
-
 def test_stored_drifted_receipt_skips_the_confirmatory_attempt_in_postgres() -> None:
     assert DB_URL is not None
     receipt = _stored_frozen_receipt()
-    boundary = _future_boundary()
+    assert receipt.implementation_commit is not None
+    assert receipt.implementation_tree_digest is not None
     with psycopg.connect(DB_URL) as conn:
-        PostgresCandidateFreezeRepository(conn).record_receipt(receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(receipt)
         resolver = PostgresFreezeBindingResolver(conn)
         binding = resolver.latest_binding()
         assert binding is not None
         assert binding.durable_freeze_at is not None
+        publication_at = binding.durable_freeze_at + timedelta(days=30, seconds=1)
+        record_fixture_publication(
+            conn,
+            CandidateFreezePublication(
+                freeze_receipt_id=receipt.receipt_id,
+                freeze_receipt_digest=receipt.receipt_digest,
+                implementation_commit=receipt.implementation_commit,
+                implementation_tree_digest=receipt.implementation_tree_digest,
+                publication_commit="c" * 64,
+                publication_committer_at=publication_at,
+            ),
+        )
+        binding = resolver.latest_binding()
+        assert binding is not None
+        assert binding.publication_committer_at == publication_at
+        boundary = first_confirmatory_boundary(publication_at)
         orchestrator = ExperimentOrchestrator(
             attempts=PostgresExperimentAttemptRepository(conn),
             baseline_repository=_UnusedBaselineRepository(),  # pyright: ignore[reportArgumentType]
@@ -149,7 +166,7 @@ def test_stored_receipt_drift_invalidates_confirmatory_evaluation() -> None:
     horizon = as_of + timedelta(hours=1)
     sentry = DriftSentry(REPO_ROOT)
     with psycopg.connect(DB_URL) as conn:
-        PostgresCandidateFreezeRepository(conn).record_receipt(receipt)
+        PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(receipt)
         stored = PostgresFreezeBindingResolver(conn).latest_binding()
     assert stored is not None and stored.durable_freeze_at is not None
     durable_freeze_at = stored.durable_freeze_at

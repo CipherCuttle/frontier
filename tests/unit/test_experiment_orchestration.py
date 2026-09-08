@@ -16,6 +16,7 @@ from frontier.application.advanced_intelligence import run_shadow_experiment
 from frontier.application.experiment_orchestration import (
     RUN_CLASS_CONFIRMATORY,
     RUN_CLASS_DEV,
+    ConfirmatoryClaimResult,
     ConfirmatoryDecision,
     ExperimentAttemptRepository,
     ExperimentCycleAction,
@@ -96,9 +97,15 @@ def _health(as_of: datetime) -> BaselineHealthInput:
 class FakeBaselineRepository:
     """In-memory BaselineIntelligenceRepository double."""
 
-    def __init__(self, observations: tuple[BaselineObservationInput, ...]) -> None:
+    def __init__(
+        self,
+        observations: tuple[BaselineObservationInput, ...],
+        *,
+        confirmatory_source_registry_version: Digest | None = None,
+    ) -> None:
         self.observations = observations
         self.published: list[tuple[BaselineSnapshot, object]] = []
+        self.confirmatory_source_registry_version = confirmatory_source_registry_version
 
     def list_baseline_observations_as_of(self, as_of: datetime) -> list[BaselineObservationInput]:
         return list(self.observations)
@@ -177,6 +184,46 @@ class FakeAttemptRepository(ExperimentAttemptRepository):
             )
         )
         return True
+
+    def claim_confirmatory(
+        self,
+        attempt_id: str,
+        *,
+        expected_receipt_id: str | None,
+        owner: str,
+        lease_expires_at: datetime,
+        now: datetime,
+        deny_reason: str | None = None,
+    ) -> ConfirmatoryClaimResult:
+        attempt = self.attempts.get(attempt_id)
+        if attempt is None:
+            return ConfirmatoryClaimResult(False, False, "experiment attempt does not exist")
+        if deny_reason is not None or expected_receipt_id is None:
+            reason = deny_reason or "no candidate freeze receipt is bound"
+            if attempt.status is not ExperimentAttemptStatus.PENDING:
+                return ConfirmatoryClaimResult(False, False, "attempt is not claimable")
+            self.set_attempt(
+                ExperimentRunAttempt(
+                    experiment_id=attempt.experiment_id,
+                    as_of=attempt.as_of,
+                    attempt_no=attempt.attempt_no,
+                    status=ExperimentAttemptStatus.SKIPPED,
+                    detail=reason,
+                    schema_version=attempt.schema_version,
+                )
+            )
+            return ConfirmatoryClaimResult(False, True, reason)
+        claimed = self.claim(
+            attempt_id,
+            owner=owner,
+            lease_expires_at=lease_expires_at,
+            now=now,
+        )
+        return ConfirmatoryClaimResult(
+            claimed,
+            False,
+            None if claimed else "attempt is not claimable by this owner",
+        )
 
     def heartbeat(self, attempt_id: str, *, owner: str, at: datetime) -> bool:
         attempt = self.attempts.get(attempt_id)
@@ -326,7 +373,12 @@ def _orchestrator(
     binding: StubBindingResolver | None = None,
     runner: RecordingRunner | None = None,
 ) -> tuple[ExperimentOrchestrator, FakeBaselineRepository]:
-    baseline = FakeBaselineRepository(observations if observations is not None else _observations())
+    baseline = FakeBaselineRepository(
+        observations if observations is not None else _observations(),
+        confirmatory_source_registry_version=(
+            REGISTRY if run_class == RUN_CLASS_CONFIRMATORY else None
+        ),
+    )
     orchestrator = ExperimentOrchestrator(
         attempts=attempts,
         baseline_repository=baseline,
@@ -340,6 +392,39 @@ def _orchestrator(
         clock=lambda: clock,
     )
     return orchestrator, baseline
+
+
+def test_confirmatory_construction_requires_frozen_registry_bound_baseline() -> None:
+    broad_baseline = FakeBaselineRepository(_observations())
+    with pytest.raises(
+        ValueError,
+        match="CONFIRMATORY requires a baseline repository bound to the frozen source registry",
+    ):
+        ExperimentOrchestrator(
+            attempts=FakeAttemptRepository(),
+            baseline_repository=broad_baseline,
+            persistence=FakeShadowRunPersistence(),
+            source_registry_version=REGISTRY,
+            run_class=RUN_CLASS_CONFIRMATORY,
+            canonical_context=True,
+        )
+
+    wrong_registry_baseline = FakeBaselineRepository(
+        _observations(),
+        confirmatory_source_registry_version=Digest("sha256:" + "9" * 64),
+    )
+    with pytest.raises(
+        ValueError,
+        match="CONFIRMATORY requires a baseline repository bound to the frozen source registry",
+    ):
+        ExperimentOrchestrator(
+            attempts=FakeAttemptRepository(),
+            baseline_repository=wrong_registry_baseline,
+            persistence=FakeShadowRunPersistence(),
+            source_registry_version=REGISTRY,
+            run_class=RUN_CLASS_CONFIRMATORY,
+            canonical_context=True,
+        )
 
 
 def test_derive_experiment_boundary_is_epoch_multiple_of_cadence() -> None:
@@ -532,8 +617,8 @@ def test_existing_ran_run_short_circuits_retry_without_new_run_row() -> None:
         (None, True, "no candidate freeze receipt is bound"),
         ("DRIFTED", True, "bound candidate freeze receipt is DRIFTED, not FROZEN"),
         ("NOT_DURABLE", True, "bound freeze receipt has durable_freeze_at NULL (not durable)"),
-        ("EARLIER", True, "run as_of is not strictly after durable_freeze_at"),
-        ("EQUAL", True, "run as_of is not strictly after durable_freeze_at"),
+        ("EARLIER", True, "Git publication precedes canonical DB durability"),
+        ("EQUAL", True, "Git publication precedes canonical DB durability"),
         ("LATER", False, "run is not executing in the canonical DB context"),
     ],
 )
@@ -553,7 +638,20 @@ def test_confirmatory_gate_matrix_skips_every_failing_gate(
             durable = BOUNDARY + timedelta(seconds=300)
         elif binding == "EQUAL":
             durable = BOUNDARY
-        resolved = FreezeBinding(receipt=receipt, durable_freeze_at=durable)
+        resolved = FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=durable,
+            publication_commit=(None if binding == "NOT_DURABLE" else "9" * 40),
+            publication_committer_at=(
+                None
+                if binding == "NOT_DURABLE"
+                else (
+                    BOUNDARY - timedelta(seconds=300)
+                    if binding == "LATER"
+                    else BOUNDARY - timedelta(seconds=301)
+                )
+            ),
+        )
     attempts = FakeAttemptRepository()
     persistence = FakeShadowRunPersistence()
     runner = RecordingRunner()
@@ -577,7 +675,12 @@ def test_confirmatory_gate_matrix_skips_every_failing_gate(
 def test_confirmatory_gates_allow_strictly_after_durable_frozen_in_canonical_context() -> None:
     receipt = _frozen_receipt(frozen_at=BOUNDARY - timedelta(seconds=600))
     binding = StubBindingResolver(
-        FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=300))
+        FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=BOUNDARY - timedelta(seconds=600),
+            publication_commit="9" * 40,
+            publication_committer_at=BOUNDARY - timedelta(seconds=301),
+        )
     )
     attempts = FakeAttemptRepository()
     persistence = FakeShadowRunPersistence()
@@ -601,7 +704,12 @@ def test_confirmatory_gates_allow_strictly_after_durable_frozen_in_canonical_con
 def test_dev_run_never_binds_freeze_receipt_or_marks_confirmatory() -> None:
     receipt = _frozen_receipt(frozen_at=BOUNDARY - timedelta(seconds=300))
     binding = StubBindingResolver(
-        FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=300))
+        FreezeBinding(
+            receipt=receipt,
+            durable_freeze_at=BOUNDARY - timedelta(seconds=600),
+            publication_commit="9" * 40,
+            publication_committer_at=BOUNDARY - timedelta(seconds=301),
+        )
     )
     attempts = FakeAttemptRepository()
     persistence = FakeShadowRunPersistence()
@@ -622,7 +730,12 @@ def test_dev_run_never_binds_freeze_receipt_or_marks_confirmatory() -> None:
 
 def test_gate_evaluation_matrix_pure_function() -> None:
     receipt = _frozen_receipt(frozen_at=BOUNDARY - timedelta(seconds=300))
-    good = FreezeBinding(receipt=receipt, durable_freeze_at=BOUNDARY - timedelta(seconds=1))
+    good = FreezeBinding(
+        receipt=receipt,
+        durable_freeze_at=BOUNDARY - timedelta(seconds=600),
+        publication_commit="9" * 40,
+        publication_committer_at=BOUNDARY - timedelta(seconds=301),
+    )
     assert evaluate_confirmatory_gates(
         good, as_of=BOUNDARY, canonical_context=True
     ) == ConfirmatoryDecision(True, "all confirmatory binding gates hold", receipt)

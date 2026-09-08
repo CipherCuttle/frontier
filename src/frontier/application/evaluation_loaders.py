@@ -208,6 +208,18 @@ class PersistedFreezeReceiptRow:
 
 
 @dataclass(frozen=True, slots=True)
+class PersistedFreezePublicationRow:
+    receipt_id: str
+    schema_version: str
+    freeze_receipt_digest: str
+    implementation_commit: str
+    implementation_tree_digest: str
+    publication_commit: str
+    publication_committer_at: datetime
+    publication_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class PersistedFeatureVectorRow:
     vector_id: str
     batch_id: str
@@ -232,6 +244,9 @@ class EvaluationArtifactStore(Protocol):
         self, receipt_id: str
     ) -> PersistedProjectionReceiptRow | None: ...
     def fetch_freeze_receipt_row(self, receipt_id: str) -> PersistedFreezeReceiptRow | None: ...
+    def fetch_freeze_publication_row(
+        self, receipt_id: str
+    ) -> PersistedFreezePublicationRow | None: ...
     def fetch_feature_batch_rows(self, batch_id: str) -> tuple[PersistedFeatureVectorRow, ...]: ...
 
 
@@ -779,6 +794,7 @@ __all__ = [
     "PersistedBaselineSnapshotRow",
     "PersistedEvaluationError",
     "PersistedFeatureVectorRow",
+    "PersistedFreezePublicationRow",
     "PersistedFreezeReceiptRow",
     "PersistedProjectionReceiptRow",
     "PersistedRunRef",

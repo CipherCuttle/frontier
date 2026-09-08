@@ -473,8 +473,12 @@ def _seed_experiment_state(
             ),
             frozen_at=FROZEN_AT,
         )
-        PostgresCandidateFreezeRepository(connection).record_receipt(dev_freeze)
-        PostgresCandidateFreezeRepository(connection).record_receipt(conf_freeze)
+        PostgresCandidateFreezeRepository(connection, persistence_authorized=True).record_receipt(
+            dev_freeze
+        )
+        PostgresCandidateFreezeRepository(connection, persistence_authorized=True).record_receipt(
+            conf_freeze
+        )
         durable_row = connection.execute(
             """
             SELECT durable_freeze_at FROM candidate_freeze_receipts

@@ -227,7 +227,9 @@ def _persist(conn: ConnectionT, world: _World, *, run_class: str = "DEV") -> Non
     PostgresPefArtifactRepository(conn).publish_complete_artifact(
         world.candidate.artifact, world.candidate.receipt
     )
-    PostgresCandidateFreezeRepository(conn).record_receipt(world.freeze)
+    PostgresCandidateFreezeRepository(conn, persistence_authorized=True).record_receipt(
+        world.freeze
+    )
     PostgresShadowRunPersister(conn).persist(world.run, run_class=run_class)
 
 
