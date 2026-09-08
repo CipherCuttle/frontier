@@ -1,0 +1,67 @@
+name: G2-03 CI reconcile temp
+
+on:
+  push:
+    branches:
+      - agent/g203-ci-reconcile-temp
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: frontier
+          POSTGRES_PASSWORD: frontier
+          POSTGRES_DB: frontier
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U frontier -d frontier"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      FRONTIER_TEST_DATABASE_URL: postgresql://frontier:frontier@localhost:5432/frontier
+      FRONTIER_DATABASE_URL: postgresql+psycopg://frontier:frontier@localhost:5432/frontier
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.10"
+      - run: uv sync --all-extras --frozen
+      - name: Apply bounded test-only reconciliation
+        run: uv run python scripts/g203_ci_reconcile_temp.py
+      - name: Verify exact repair surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run ruff format tests/integration/test_freeze_workflow_postgres.py tests/integration/test_postgres_store.py tests/unit/test_drift_sentry.py
+          uv run ruff check tests/integration/test_freeze_workflow_postgres.py tests/integration/test_postgres_store.py tests/unit/test_drift_sentry.py
+          uv run pyright
+          uv run alembic upgrade head
+          uv run pytest -q tests/unit/test_drift_sentry.py tests/integration/test_freeze_workflow_postgres.py tests/integration/test_postgres_store.py
+          printf '%s\n' \
+            tests/integration/test_freeze_workflow_postgres.py \
+            tests/integration/test_postgres_store.py \
+            tests/unit/test_drift_sentry.py | sort > /tmp/expected
+          git diff --name-only | sort > /tmp/actual
+          diff -u /tmp/expected /tmp/actual
+          git diff --check
+      - name: Materialize verified repair blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/integration/test_freeze_workflow_postgres.py tests/integration/test_postgres_store.py tests/unit/test_drift_sentry.py
+          git commit -m "test(gigasprint02): reconcile persisted authority CI fixtures [skip ci]"
+          git push origin HEAD:agent/g203-ci-reconcile-temp
