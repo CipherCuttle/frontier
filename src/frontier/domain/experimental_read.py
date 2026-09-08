@@ -37,6 +37,8 @@ EXPERIMENTAL_READ_UNKNOWN = "UNKNOWN"
 EXPERIMENTAL_READ_AVAILABLE = "AVAILABLE"
 EXPERIMENTAL_READ_NO_DATA = "NO_DATA"
 EXPERIMENTAL_READ_UNAVAILABLE = "UNAVAILABLE"
+EXPERIMENTAL_READ_AS_OF_SINGLE_BOUNDARY = "SINGLE_BOUNDARY"
+EXPERIMENTAL_READ_AS_OF_MIXED_BOUNDARIES = "MIXED_BOUNDARIES"
 EXPERIMENTAL_READ_INVALID_LIMIT = "INVALID_LIMIT"
 HISTORY_LIMIT_DEFAULT = 50
 HISTORY_LIMIT_MAX = 200
@@ -353,6 +355,7 @@ class ExperimentalOverview:
     candidate_id: str
     configuration_digest: str
     as_of: str
+    as_of_consistency: str
     generated_at: str
     availability: dict[str, str]
     latest_shadow_run: ShadowRunSummary | None
@@ -424,6 +427,28 @@ def build_experimental_overview(
         candidates.extend(item.as_of for item in analysis_artifacts.values())
         resolved_as_of = max(candidates) if candidates else EXPERIMENTAL_READ_UNKNOWN
 
+    section_as_ofs = {
+        item.as_of
+        for item in (shadow_run, pef_artifact, evaluation_receipt, feature_batch)
+        if item is not None
+    }
+    section_as_ofs.update(item.as_of for item in analysis_artifacts.values())
+    any_section_failed = (
+        shadow_run_failed
+        or pef_artifact_failed
+        or evaluation_receipt_failed
+        or feature_batch_failed
+        or analysis_failed
+    )
+    if any_section_failed:
+        as_of_consistency = EXPERIMENTAL_READ_UNKNOWN
+    elif not section_as_ofs:
+        as_of_consistency = EXPERIMENTAL_READ_NO_DATA
+    elif len(section_as_ofs) == 1:
+        as_of_consistency = EXPERIMENTAL_READ_AS_OF_SINGLE_BOUNDARY
+    else:
+        as_of_consistency = EXPERIMENTAL_READ_AS_OF_MIXED_BOUNDARIES
+
     generated_candidates = [
         item.generated_at
         for item in (shadow_run, pef_artifact, evaluation_receipt, feature_batch)
@@ -455,6 +480,7 @@ def build_experimental_overview(
         candidate_id=PEF_CANDIDATE_ID,
         configuration_digest=str(PEF_CONFIGURATION_DIGEST),
         as_of=resolved_as_of,
+        as_of_consistency=as_of_consistency,
         generated_at=resolved_generated_at,
         availability=availability,
         latest_shadow_run=shadow_run,
