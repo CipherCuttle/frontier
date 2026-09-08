@@ -26,7 +26,7 @@ from frontier.domain.grouping_v1 import (
     build_compact_grouping_receipt,
     is_group_pair_v1,
 )
-from tests.unit.test_grouping_baseline import corpus_cases
+from test_grouping_baseline import corpus_cases
 
 NOW = datetime(2026, 9, 8, 20, tzinfo=UTC)
 SOURCE_REGISTRY_DIGEST = Digest(
