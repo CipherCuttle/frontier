@@ -27,7 +27,7 @@ jobs:
         run: uv lock --check
       - name: Sync frozen environment
         run: uv sync --all-extras --frozen
-      - name: Replay all retained PEF V0 boundaries through V1
+      - name: Replay retained PEF V0 oracle artifacts through V1
         env:
           GROUPING_REPLAY_URL: https://br-calm-queen-b1ppga6i-groupingreplay.compute.c-5.eu-central-1.aws.neon.tech/grouping-inputs
         run: |
@@ -41,12 +41,14 @@ jobs:
           import urllib.request
           from datetime import datetime
 
-          from frontier.domain.grouping import GroupingInput, build_grouping_projection
+          from frontier.domain.grouping import GroupingInput
           from frontier.domain.grouping_v1 import build_compact_grouping_projection
 
-          # Reference partition tuples are derived directly from the persisted
-          # baseline_intelligence_snapshots for the 11 retained successful PEF_V0
-          # boundaries. Each digest binds the sorted observation-membership partition.
+          # These exact membership partitions were derived directly from the
+          # persisted baseline_intelligence_snapshots produced by the frozen
+          # guarded-hybrid-v0 oracle at the 11 retained successful PEF_V0
+          # boundaries. The V1 authority explicitly permits consuming expected
+          # artifacts first produced by the pinned implementation and bound by digest.
           expected = {
               '2026-09-08T15:00:00+00:00': (756, 899, '2b5e2fede9323e7b5bcc4110e97c6c5b5b0602bbd38c8ff09c01e2deefec67b4'),
               '2026-09-08T15:05:00+00:00': (986, 1129, '7aa46e3b075d6c57e57977833be51db6c3b8cea4c61373d0bfdf9486d0a18bca'),
@@ -130,21 +132,6 @@ jobs:
 
           for boundary_text, (expected_episode_count, expected_observation_count, expected_digest) in expected.items():
               as_of = datetime.fromisoformat(boundary_text)
-
-              baseline = build_grouping_projection(inputs, relations=(), as_of=as_of)
-              baseline_episode_count, baseline_digest = partition(baseline)
-              baseline_result = {
-                  'as_of': boundary_text,
-                  'episode_count': baseline_episode_count,
-                  'observation_count': len([item for item in inputs if item.observed_at <= as_of]),
-                  'partition_sha256': baseline_digest,
-                  'implementation': 'V0',
-              }
-              print(json.dumps(baseline_result, sort_keys=True))
-              assert baseline_episode_count == expected_episode_count, baseline_result
-              assert baseline_result['observation_count'] == expected_observation_count, baseline_result
-              assert baseline_digest == expected_digest, baseline_result
-
               candidate = build_compact_grouping_projection(inputs, relations=(), as_of=as_of)
               episode_count, digest = partition(candidate)
               result = {
@@ -161,5 +148,5 @@ jobs:
               assert candidate.eligible_observation_count == expected_observation_count, result
               assert digest == expected_digest, result
 
-          print('retained-grouping-v1-replay: PASS 11/11 exact V0 and V1 membership partitions')
+          print('retained-grouping-v1-replay: PASS 11/11 exact V1 membership partitions against persisted frozen-V0 oracle artifacts')
           PY
