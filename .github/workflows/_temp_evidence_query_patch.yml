@@ -34,6 +34,9 @@ jobs:
         run: uv sync --all-extras --frozen
       - name: Apply bounded runtime changes
         run: python scripts/_temp_evidence_query_patch.py
+      - name: Remove redundant API-test cast
+        run: |
+          python -c 'from pathlib import Path; p=Path("tests/unit/test_public_read_api.py"); t=p.read_text(); old="    assert cast(dict[str, Any], response.json()) == {"; assert t.count(old) == 1; p.write_text(t.replace(old, "    assert response.json() == {", 1))'
       - name: Format bounded product changes
         run: |
           uv run ruff format src/frontier/domain/public_read.py src/frontier/application/public_read.py src/frontier/adapters/api/public_read.py tests/unit/test_public_read.py tests/unit/test_public_read_api.py scripts/generate_public_contracts.py
