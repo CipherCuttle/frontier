@@ -78,6 +78,7 @@ def github_repo(*, pushed_at: str, stars: int) -> dict[str, object]:
         "topics": ["agents", "machine-learning"],
         "archived": False,
         "fork": False,
+        "score": 1.0,
         "stargazers_count": stars,
         "forks_count": stars // 2,
         "watchers_count": stars,
@@ -110,6 +111,7 @@ def test_github_popularity_counters_do_not_manufacture_activity_observations() -
 
     assert first.observation_id == second.observation_id
     assert isinstance(first.payload, ArtifactPayload)
+    assert "score" not in first.payload.source_metadata
     assert "stargazers_count" not in first.payload.source_metadata
     assert "forks_count" not in first.payload.source_metadata
     assert "watchers_count" not in first.payload.source_metadata
@@ -156,3 +158,22 @@ def test_github_search_incomplete_flag_degrades_coverage_not_schema() -> None:
     assert batch.schema_health is HealthValue.OK
     assert batch.completeness_health is HealthValue.DEGRADED
     assert batch.details["search_incomplete"] is True
+
+
+def test_github_fractional_required_field_remains_rejected() -> None:
+    entry = github_repo(pushed_at="2026-09-05T20:00:00Z", stars=10)
+    entry["full_name"] = 1.5
+    body = json.dumps(
+        {
+            "total_count": 1,
+            "incomplete_results": False,
+            "items": [entry],
+        }
+    ).encode()
+
+    batch = normalize_github_ml_repos(body, retrieved_at=NOW, fetch_digest=sha256_digest(body))
+
+    assert batch.candidates == ()
+    assert batch.records_received == 1
+    assert batch.records_rejected == 1
+    assert batch.schema_health is HealthValue.DEGRADED
