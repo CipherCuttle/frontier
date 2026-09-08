@@ -167,6 +167,7 @@ class ExperimentalOverviewResponse(BaseModel):
     candidate_id: str
     configuration_digest: str
     as_of: str
+    as_of_consistency: str
     generated_at: str
     availability: dict[str, str]
     latest_shadow_run: ExperimentalShadowRunResponse | None
@@ -527,6 +528,7 @@ def _overview_model(overview: ExperimentalOverview) -> ExperimentalOverviewRespo
             "candidate_id": overview.candidate_id,
             "configuration_digest": overview.configuration_digest,
             "as_of": overview.as_of,
+            "as_of_consistency": overview.as_of_consistency,
             "generated_at": overview.generated_at,
             "availability": overview.availability,
             "latest_shadow_run": (

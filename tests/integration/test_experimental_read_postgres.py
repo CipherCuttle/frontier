@@ -15,6 +15,7 @@ from psycopg.types.json import Jsonb
 from frontier.adapters.postgres.experimental_read import (
     PostgresExperimentalReadRepository,
 )
+from frontier.application.experimental_read import ExperimentalReadService
 from frontier.domain.canonical_json import canonical_json_bytes
 from frontier.domain.digests import sha256_digest
 from frontier.domain.experimental_analysis import ExperimentalAnalysisKind
@@ -308,6 +309,22 @@ def test_latest_summaries_round_trip_identity_fields() -> None:
         )
         assert (
             analyses[ExperimentalAnalysisKind.CORROBORATION].output_digest == "sha256:" + "3" * 64
+        )
+    finally:
+        connection.close()
+
+
+def test_overview_exposes_mixed_as_of_consistency() -> None:
+    connection, repository = _connect_and_seed()
+    try:
+        overview = ExperimentalReadService(repository).get_overview()
+        assert overview.as_of == "2099-01-01T00:05:00.000000Z"
+        assert overview.as_of_consistency == "MIXED_BOUNDARIES"
+        assert overview.latest_shadow_run is not None
+        assert overview.latest_shadow_run.as_of == "2099-01-01T00:00:00.000000Z"
+        assert (
+            overview.analysis_artifacts[ExperimentalAnalysisKind.INDICATORS].as_of
+            == "2099-01-01T00:05:00.000000Z"
         )
     finally:
         connection.close()

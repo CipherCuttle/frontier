@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -8,6 +9,8 @@ from frontier.application.experimental_read import ExperimentalReadService
 from frontier.domain.experiment_status import ExperimentStatusInputs
 from frontier.domain.experimental_analysis import ExperimentalAnalysisKind
 from frontier.domain.experimental_read import (
+    EXPERIMENTAL_READ_AS_OF_MIXED_BOUNDARIES,
+    EXPERIMENTAL_READ_AS_OF_SINGLE_BOUNDARY,
     EXPERIMENTAL_READ_AUTHORITY_STATE,
     EXPERIMENTAL_READ_AVAILABLE,
     EXPERIMENTAL_READ_INTERPRETATION,
@@ -226,6 +229,7 @@ def test_overview_resolves_horizon_and_unknown_when_empty() -> None:
         analysis_failed=False,
     )
     assert overview.as_of == EXPERIMENTAL_READ_UNKNOWN
+    assert overview.as_of_consistency == EXPERIMENTAL_READ_NO_DATA
     assert overview.generated_at == EXPERIMENTAL_READ_UNKNOWN
     assert all(state == EXPERIMENTAL_READ_NO_DATA for state in overview.availability.values())
 
@@ -255,6 +259,7 @@ def test_overview_labels_authority_state_and_identities() -> None:
     assert overview.experiment_id == "advanced-ranking-pef-v0"
     assert overview.candidate_id == "prospective-primary-emission-freshness-v0"
     assert overview.as_of == AS_OF_TEXT
+    assert overview.as_of_consistency == EXPERIMENTAL_READ_AS_OF_SINGLE_BOUNDARY
     assert overview.availability["shadow_run"] == EXPERIMENTAL_READ_AVAILABLE
     assert overview.availability["pef_artifact"] == EXPERIMENTAL_READ_AVAILABLE
     assert overview.availability["evaluation_receipt"] == EXPERIMENTAL_READ_NO_DATA
@@ -266,6 +271,30 @@ def test_overview_labels_authority_state_and_identities() -> None:
     ].output_digest.startswith("sha256:")
 
 
+def test_overview_marks_mixed_as_of_boundaries_explicitly() -> None:
+    later = replace(
+        _analysis_summary(ExperimentalAnalysisKind.INDICATORS),
+        as_of="2026-09-05T12:05:00.000000Z",
+    )
+    overview = build_experimental_overview(
+        as_of=None,
+        shadow_run=_shadow_run_summary(),
+        pef_artifact=_pef_artifact_summary(),
+        evaluation_receipt=None,
+        feature_batch=_feature_batch_summary(),
+        analysis_artifacts={ExperimentalAnalysisKind.INDICATORS: later},
+        shadow_run_failed=False,
+        pef_artifact_failed=False,
+        evaluation_receipt_failed=False,
+        feature_batch_failed=False,
+        analysis_failed=False,
+    )
+    assert overview.as_of == "2026-09-05T12:05:00.000000Z"
+    assert overview.as_of_consistency == EXPERIMENTAL_READ_AS_OF_MIXED_BOUNDARIES
+    assert overview.latest_shadow_run is not None
+    assert overview.latest_shadow_run.as_of == AS_OF_TEXT
+
+
 def test_service_maps_repository_failure_to_unknown() -> None:
     service = ExperimentalReadService(_RecordingRepository(fail=True))
     overview = service.get_overview()
@@ -273,6 +302,7 @@ def test_service_maps_repository_failure_to_unknown() -> None:
     assert overview.availability["pef_artifact"] == EXPERIMENTAL_READ_UNKNOWN
     assert overview.availability["feature_batch"] == EXPERIMENTAL_READ_UNKNOWN
     assert overview.availability["analysis:CORROBORATION"] == EXPERIMENTAL_READ_UNKNOWN
+    assert overview.as_of_consistency == EXPERIMENTAL_READ_UNKNOWN
     assert overview.latest_shadow_run is None
 
 
