@@ -294,17 +294,27 @@ class PostgresShadowRunRepository:
                     raise RuntimeError("shadow run identity conflict with different digest")
 
     def latest_run_id_and_class_for_as_of(self, as_of: datetime) -> tuple[str, str, str] | None:
-        """Read (run_id, run_class, status) of the retained run for one boundary."""
+        """Read PEF (run_id, run_class, status) retained for one boundary.
+
+        The repository is PEF-specific, so foreign experiments at the same
+        boundary are never eligible. If DEV and CONFIRMATORY both exist, DEV
+        wins deliberately: recovery must fail closed rather than let arbitrary
+        content-derived run-id ordering erase evidence of a lower-authority run.
+        """
         with self._connection.cursor() as cur:
             cur.execute(
                 """
                 SELECT run_id, run_class, status
                 FROM shadow_experiment_runs
-                WHERE as_of = %s
-                ORDER BY run_id DESC
+                WHERE experiment_id = %s AND as_of = %s
+                ORDER BY CASE run_class
+                    WHEN 'DEV' THEN 0
+                    WHEN 'CONFIRMATORY' THEN 1
+                    ELSE 2
+                END, run_id DESC
                 LIMIT 1
                 """,
-                (as_of,),
+                (PEF_EXPERIMENT_ID, as_of),
             )
             row = cur.fetchone()
         return None if row is None else (cast(str, row[0]), cast(str, row[1]), cast(str, row[2]))

@@ -5,7 +5,7 @@ from typing import cast
 
 import psycopg
 
-EXPECTED_DATABASE_REVISION = "0013_freeze_publication"
+EXPECTED_DATABASE_REVISION = "0014_shadow_run_identity"
 REQUIRED_RELATIONS = (
     "sources",
     "collection_runs",

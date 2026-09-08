@@ -318,7 +318,8 @@ class TestHostileMutationDb:
     def test_g10_c09_db_delete_mid_window_run_is_refused_by_trigger(
         self, conn: ConnectionT
     ) -> None:
-        world = _build_world(_observations(BOUNDARY), as_of=BOUNDARY)
+        boundary = BOUNDARY + timedelta(seconds=300)
+        world = _build_world(_observations(boundary), as_of=boundary)
         _persist(conn, world)
         # The append-only substrate refuses ANY deletion of stored evidence.
         with pytest.raises(psycopg.errors.Error), conn.cursor() as cur:
@@ -334,7 +335,7 @@ class TestHostileMutationDb:
         )
         # The intact store still evaluates: deletion cannot erase the window.
         store = PostgresEvaluationArtifactStore(conn)
-        loaded = load_paired_snapshot(store, world.run.run_id, as_of=BOUNDARY)
+        loaded = load_paired_snapshot(store, world.run.run_id, as_of=boundary)
         assert loaded.run == world.run
 
     def test_g10_c10_duplicate_experiment_as_of_insert_is_idempotent_noop(

@@ -310,7 +310,8 @@ def test_persisted_run_evaluates_end_to_end_and_appends_receipt(conn: Connection
 
 
 def test_artifact_tampering_is_refused_and_loader_stays_intact(conn: ConnectionT) -> None:
-    _, candidate, run, _ = _persisted_paired(conn, as_of=BOUNDARY, run_class="DEV")
+    as_of = BOUNDARY + timedelta(seconds=600)
+    _, candidate, run, _ = _persisted_paired(conn, as_of=as_of, run_class="DEV")
     artifact_id = candidate.artifact.artifact_id
     with conn.cursor() as cur:
         cur.execute(
@@ -337,7 +338,7 @@ def test_artifact_tampering_is_refused_and_loader_stays_intact(conn: ConnectionT
         assert intact_row[0] == original_json
     # The digest-recomputing loader accepts only the intact artifact.
     store = PostgresEvaluationArtifactStore(conn)
-    loaded = load_paired_snapshot(store, run.run_id, as_of=BOUNDARY)
+    loaded = load_paired_snapshot(store, run.run_id, as_of=as_of)
     assert loaded.run == run
 
 
