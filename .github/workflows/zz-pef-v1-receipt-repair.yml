@@ -66,44 +66,49 @@ jobs:
               "        forged_evidence = replace(\n            evidence,\n            run=replace(evidence.run, candidate_freeze_receipt_id=wrong),\n        )\n",
           )
           with Path(test).open("a") as handle:
-              handle.write(\n                  "\n\ndef test_v1_persistence_rejects_candidate_receipt_provenance_forgery() -> None:\n"
-                  "    assert DB_URL is not None\n"
-                  "    with psycopg.connect(DB_URL) as conn:\n"
-                  "        receipt, publication = _store_v1_authority(conn)\n"
-                  "        boundary = first_confirmatory_boundary(publication.publication_committer_at)\n"
-                  "        evidence = build_pef_v1_confirmatory_evidence(\n"
-                  "            _Repository(boundary),\n"
-                  "            as_of=boundary,\n"
-                  "            generated_at=boundary,\n"
-                  "            source_registry_version=REGISTRY,\n"
-                  "            freeze_receipt=receipt,\n"
-                  "        )\n"
-                  "        forged_receipts = (\n"
-                  "            replace(\n"
-                  "                evidence.candidate_receipt,\n"
-                  "                input_digest=Digest(\"sha256:\" + \"8\" * 64),\n"
-                  "            ),\n"
-                  "            replace(\n"
-                  "                evidence.candidate_receipt,\n"
-                  "                generated_at=evidence.candidate_receipt.generated_at + timedelta(seconds=1),\n"
-                  "            ),\n"
-                  "            replace(\n"
-                  "                evidence.candidate_receipt,\n"
-                  "                receipt_schema_version=\"projection-receipt-forged\",\n"
-                  "            ),\n"
-                  "        )\n"
-                  "        persistence = PostgresPefV1ConfirmatoryPersistence(conn)\n"
-                  "        for forged_receipt in forged_receipts:\n"
-                  "            forged_evidence = replace(evidence, candidate_receipt=forged_receipt)\n"
-                  "            with pytest.raises(ValueError, match=\"full candidate input provenance\"):\n"
-                  "                persistence.persist(\n"
-                  "                    forged_evidence,\n"
-                  "                    expected_freeze_receipt_id=receipt.receipt_id,\n"
-                  "                )\n"
-                  "            assert conn.execute(\n"
-                  "                \"SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s\",\n"
-                  "                (forged_evidence.run.run_id,),\n"
-                  "            ).fetchone() == (0,)\n"
+              handle.write(
+                  """
+
+
+def test_v1_persistence_rejects_candidate_receipt_provenance_forgery() -> None:
+    assert DB_URL is not None
+    with psycopg.connect(DB_URL) as conn:
+        receipt, publication = _store_v1_authority(conn)
+        boundary = first_confirmatory_boundary(publication.publication_committer_at)
+        evidence = build_pef_v1_confirmatory_evidence(
+            _Repository(boundary),
+            as_of=boundary,
+            generated_at=boundary,
+            source_registry_version=REGISTRY,
+            freeze_receipt=receipt,
+        )
+        forged_receipts = (
+            replace(
+                evidence.candidate_receipt,
+                input_digest=Digest("sha256:" + "8" * 64),
+            ),
+            replace(
+                evidence.candidate_receipt,
+                generated_at=evidence.candidate_receipt.generated_at + timedelta(seconds=1),
+            ),
+            replace(
+                evidence.candidate_receipt,
+                receipt_schema_version="projection-receipt-forged",
+            ),
+        )
+        persistence = PostgresPefV1ConfirmatoryPersistence(conn)
+        for forged_receipt in forged_receipts:
+            forged_evidence = replace(evidence, candidate_receipt=forged_receipt)
+            with pytest.raises(ValueError, match="full candidate input provenance"):
+                persistence.persist(
+                    forged_evidence,
+                    expected_freeze_receipt_id=receipt.receipt_id,
+                )
+            assert conn.execute(
+                "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
+                (forged_evidence.run.run_id,),
+            ).fetchone() == (0,)
+"""
               )
           PY
 
