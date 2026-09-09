@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -32,12 +33,12 @@ def test_v1_freeze_persistence_is_authorized_and_db_durable() -> None:
     with psycopg.connect(DB_URL) as conn:
         unauthorized = postgres_v1.PostgresCandidateFreezeV1Repository(conn)
         with pytest.raises(PermissionError, match="PEF_V1 candidate freeze persistence"):
-            unauthorized.record_receipt(receipt)
+            unauthorized.record_receipt(receipt, root=REPO_ROOT)
 
         repository = postgres_v1.PostgresCandidateFreezeV1Repository(
             conn, persistence_authorized=True
         )
-        repository.record_receipt(receipt)
+        repository.record_receipt(receipt, root=REPO_ROOT)
         assert repository.get_receipt_json(receipt.receipt_id) == receipt.to_canonical()
         durable_freeze_at = repository.get_durable_freeze_at(receipt.receipt_id)
         assert durable_freeze_at is not None
@@ -58,6 +59,36 @@ def test_v1_freeze_persistence_is_authorized_and_db_durable() -> None:
         )
 
 
+def test_v1_freeze_persistence_rejects_drifted_and_forged_frozen_receipts() -> None:
+    assert DB_URL is not None
+    receipt = freeze_candidate_v1(REPO_ROOT, frozen_at=datetime.now(UTC) - timedelta(minutes=1))
+    assert receipt.status is FreezeStatus.FROZEN
+    drifted = replace(receipt, status=FreezeStatus.DRIFTED, drift_reasons=("test drift",))
+    forged = replace(
+        receipt,
+        preregistration_config_digest=None,
+        implementation_commit=None,
+        implementation_tree_digest=None,
+        dependency_lock_digest=None,
+        source_registry_digest=None,
+        registry_entry_digests=(),
+    )
+
+    with psycopg.connect(DB_URL) as conn:
+        repository = postgres_v1.PostgresCandidateFreezeV1Repository(
+            conn, persistence_authorized=True
+        )
+        with pytest.raises(ValueError, match="requires a FROZEN receipt"):
+            repository.record_receipt(drifted, root=REPO_ROOT)
+        with pytest.raises(ValueError, match="does not exactly bind current Git HEAD"):
+            repository.record_receipt(forged, root=REPO_ROOT)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM candidate_freeze_receipts WHERE receipt_id IN (%s, %s)",
+            (drifted.receipt_id, forged.receipt_id),
+        ).fetchone()
+        assert count == (0,)
+
+
 def test_v1_publication_repository_routes_through_v1_verifier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -69,7 +100,7 @@ def test_v1_publication_repository_routes_through_v1_verifier(
         receipt_repository = postgres_v1.PostgresCandidateFreezeV1Repository(
             conn, persistence_authorized=True
         )
-        receipt_repository.record_receipt(receipt)
+        receipt_repository.record_receipt(receipt, root=REPO_ROOT)
         durable_freeze_at = receipt_repository.get_durable_freeze_at(receipt.receipt_id)
         assert durable_freeze_at is not None
         assert receipt.implementation_commit is not None
