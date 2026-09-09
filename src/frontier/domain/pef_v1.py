@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 
 from .advanced_intelligence import (
@@ -21,11 +22,14 @@ from .advanced_intelligence import (
     shadow_universe_digest,
 )
 from .canonical_json import CanonicalValue, canonical_json_bytes
-from .digests import Digest, sha256_digest
+from .digests import Digest, sha256_digest, sha256_hex
 from .grouping_v1 import (
     GROUPING_V1_ALGORITHM_VERSION,
     GROUPING_V1_CONFIGURATION_DIGEST,
+    GROUPING_V1_PROJECTION_NAME,
     GROUPING_V1_PROJECTION_VERSION,
+    GROUPING_V1_SCHEMA_VERSION,
+    CompactGroupingProjection,
 )
 from .intelligence import (
     BASELINE_ALGORITHM_VERSION,
@@ -68,9 +72,34 @@ PEF_V1_CONTROL_CONFIGURATION_DIGEST = sha256_digest(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class PefV1Artifact(PefArtifact):
+    """PEF_V1 candidate artifact with an explicit scalable-grouping binding."""
+
+    grouping_receipt_id: str = ""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.grouping_receipt_id.startswith("receipt_"):
+            raise ValueError("PEF_V1 artifact requires a grouping receipt binding")
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        material = super().to_canonical()
+        material["grouping_receipt_id"] = self.grouping_receipt_id
+        return material
+
+
 def require_pef_v1_configuration_identity() -> None:
     if PEF_V1_CONFIGURATION_DIGEST != PEF_V1_PREREGISTERED_CONFIG_DIGEST:
         raise RuntimeError("PEF_V1 configuration digest drifted from preregistration")
+
+
+def pef_v1_episode_id(observation_ids: tuple[str, ...]) -> str:
+    material: dict[str, CanonicalValue] = {
+        "grouping_algorithm_version": GROUPING_V1_ALGORITHM_VERSION,
+        "observation_ids": list(observation_ids),
+    }
+    return "episode_" + sha256_hex(canonical_json_bytes(material))
 
 
 def require_pef_v1_control_identity(
@@ -95,6 +124,51 @@ def require_pef_v1_control_identity(
         raise ValueError("control receipt ranking policy version mismatch")
     if control_receipt.configuration_digest != PEF_V1_CONTROL_CONFIGURATION_DIGEST:
         raise ValueError("PEF_V1 control receipt grouping configuration mismatch")
+    for episode in control_snapshot.episodes:
+        if episode.episode_id != pef_v1_episode_id(episode.observation_ids):
+            raise ValueError("PEF_V1 control episode identity is not bound to grouping V1")
+
+
+def require_pef_v1_grouping_binding(
+    grouping_projection: CompactGroupingProjection,
+    grouping_receipt: ProjectionReceipt,
+    *,
+    control_snapshot: BaselineSnapshot,
+    source_registry_version: Digest,
+) -> None:
+    if grouping_receipt.status is not ProjectionStatus.COMPLETE:
+        raise ValueError("PEF_V1 requires a COMPLETE grouping V1 receipt")
+    if grouping_receipt.projection_name != GROUPING_V1_PROJECTION_NAME:
+        raise ValueError("PEF_V1 grouping receipt projection name mismatch")
+    if grouping_receipt.projection_version != GROUPING_V1_PROJECTION_VERSION:
+        raise ValueError("PEF_V1 grouping receipt projection version mismatch")
+    if grouping_receipt.schema_version != GROUPING_V1_SCHEMA_VERSION:
+        raise ValueError("PEF_V1 grouping receipt schema version mismatch")
+    if grouping_receipt.algorithm_version != GROUPING_V1_ALGORITHM_VERSION:
+        raise ValueError("PEF_V1 grouping receipt algorithm version mismatch")
+    if grouping_receipt.configuration_digest != GROUPING_V1_CONFIGURATION_DIGEST:
+        raise ValueError("PEF_V1 grouping receipt configuration mismatch")
+    if grouping_receipt.source_registry_version != source_registry_version:
+        raise ValueError("PEF_V1 grouping receipt source registry mismatch")
+    if grouping_receipt.as_of != control_snapshot.as_of:
+        raise ValueError("PEF_V1 grouping receipt as_of mismatch")
+    if grouping_projection.as_of != control_snapshot.as_of:
+        raise ValueError("PEF_V1 grouping projection as_of mismatch")
+    expected_output = sha256_digest(canonical_json_bytes(grouping_projection.to_canonical()))
+    if grouping_receipt.output_digest != expected_output:
+        raise ValueError("PEF_V1 grouping receipt does not bind the supplied projection")
+
+    grouping_universe = {
+        frozenset(group.observation_ids) for group in grouping_projection.groups
+    } | {
+        frozenset((observation_id,))
+        for observation_id in grouping_projection.ungrouped_observation_ids
+    }
+    control_universe = {
+        frozenset(episode.observation_ids) for episode in control_snapshot.episodes
+    }
+    if grouping_universe != control_universe:
+        raise ValueError("PEF_V1 control snapshot does not match the bound grouping V1 universe")
 
 
 def build_pef_v1_artifact(
@@ -102,14 +176,22 @@ def build_pef_v1_artifact(
     *,
     control_snapshot: BaselineSnapshot,
     control_receipt: ProjectionReceipt,
+    grouping_projection: CompactGroupingProjection,
+    grouping_receipt: ProjectionReceipt,
     as_of: datetime,
     generated_at: datetime,
     source_registry_version: Digest,
-) -> PefArtifact:
+) -> PefV1Artifact:
     require_pef_v1_configuration_identity()
     require_pef_v1_control_identity(control_snapshot, control_receipt)
+    require_pef_v1_grouping_binding(
+        grouping_projection,
+        grouping_receipt,
+        control_snapshot=control_snapshot,
+        source_registry_version=source_registry_version,
+    )
     ranking = build_pef_ranking(observations, control_snapshot=control_snapshot, as_of=as_of)
-    return PefArtifact(
+    return PefV1Artifact(
         as_of=as_of,
         control_snapshot_id=control_snapshot.snapshot_id,
         control_receipt_id=control_receipt.receipt_id,
@@ -119,6 +201,7 @@ def build_pef_v1_artifact(
         experiment_id=PEF_V1_EXPERIMENT_ID,
         candidate_id=PEF_V1_CANDIDATE_ID,
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
+        grouping_receipt_id=grouping_receipt.receipt_id,
     )
 
 
@@ -126,14 +209,22 @@ def failed_pef_v1_artifact(
     *,
     control_snapshot: BaselineSnapshot,
     control_receipt: ProjectionReceipt,
+    grouping_projection: CompactGroupingProjection,
+    grouping_receipt: ProjectionReceipt,
     as_of: datetime,
     generated_at: datetime,
     source_registry_version: Digest,
     failure_reason: str,
-) -> PefArtifact:
+) -> PefV1Artifact:
     require_pef_v1_configuration_identity()
     require_pef_v1_control_identity(control_snapshot, control_receipt)
-    return PefArtifact(
+    require_pef_v1_grouping_binding(
+        grouping_projection,
+        grouping_receipt,
+        control_snapshot=control_snapshot,
+        source_registry_version=source_registry_version,
+    )
+    return PefV1Artifact(
         as_of=as_of,
         control_snapshot_id=control_snapshot.snapshot_id,
         control_receipt_id=control_receipt.receipt_id,
@@ -144,11 +235,12 @@ def failed_pef_v1_artifact(
         experiment_id=PEF_V1_EXPERIMENT_ID,
         candidate_id=PEF_V1_CANDIDATE_ID,
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
+        grouping_receipt_id=grouping_receipt.receipt_id,
     )
 
 
 def build_pef_v1_receipt(
-    artifact: PefArtifact,
+    artifact: PefV1Artifact,
     *,
     observations: Iterable[BaselineObservationInput],
     control_snapshot: BaselineSnapshot,
@@ -160,6 +252,8 @@ def build_pef_v1_receipt(
         raise ValueError("PEF_V1 artifact candidate id mismatch")
     if artifact.configuration_digest != PEF_V1_CONFIGURATION_DIGEST:
         raise ValueError("PEF_V1 artifact configuration digest mismatch")
+    if not artifact.grouping_receipt_id.startswith("receipt_"):
+        raise ValueError("PEF_V1 artifact grouping receipt binding missing")
     if artifact.status is PefArtifactStatus.RAN:
         status = ProjectionStatus.COMPLETE
     elif artifact.status is PefArtifactStatus.FAILED:
@@ -184,8 +278,10 @@ def build_pef_v1_receipt(
 
 
 def _require_v1_candidate_identity(
-    artifact: PefArtifact,
+    artifact: PefV1Artifact,
     receipt: ProjectionReceipt,
+    *,
+    grouping_receipt: ProjectionReceipt,
 ) -> None:
     if artifact.experiment_id != PEF_V1_EXPERIMENT_ID:
         raise ValueError("candidate artifact experiment id mismatch")
@@ -201,6 +297,8 @@ def _require_v1_candidate_identity(
         raise ValueError("candidate artifact configuration digest mismatch")
     if artifact.authority_state != PEF_AUTHORITY_STATE:
         raise ValueError("candidate artifact authority state mismatch")
+    if artifact.grouping_receipt_id != grouping_receipt.receipt_id:
+        raise ValueError("candidate artifact grouping receipt binding mismatch")
     if receipt.projection_name != PEF_V1_PROJECTION_NAME:
         raise ValueError("candidate receipt projection name mismatch")
     if receipt.projection_version != PEF_V1_PROJECTION_VERSION:
@@ -226,7 +324,7 @@ def _require_v1_candidate_identity(
 
 def _require_paired_universe(
     control_snapshot: BaselineSnapshot,
-    candidate_artifact: PefArtifact,
+    candidate_artifact: PefV1Artifact,
 ) -> None:
     control_universe = {
         episode.episode_id: tuple(episode.observation_ids) for episode in control_snapshot.episodes
@@ -252,7 +350,9 @@ def build_shadow_experiment_run_v1(
     *,
     control_snapshot: BaselineSnapshot,
     control_receipt: ProjectionReceipt,
-    candidate_artifact: PefArtifact,
+    grouping_projection: CompactGroupingProjection,
+    grouping_receipt: ProjectionReceipt,
+    candidate_artifact: PefV1Artifact,
     candidate_receipt: ProjectionReceipt,
     as_of: datetime,
     generated_at: datetime,
@@ -260,7 +360,17 @@ def build_shadow_experiment_run_v1(
 ) -> ShadowExperimentRun:
     require_pef_v1_configuration_identity()
     require_pef_v1_control_identity(control_snapshot, control_receipt)
-    _require_v1_candidate_identity(candidate_artifact, candidate_receipt)
+    require_pef_v1_grouping_binding(
+        grouping_projection,
+        grouping_receipt,
+        control_snapshot=control_snapshot,
+        source_registry_version=control_receipt.source_registry_version,
+    )
+    _require_v1_candidate_identity(
+        candidate_artifact,
+        candidate_receipt,
+        grouping_receipt=grouping_receipt,
+    )
     if as_of.tzinfo is None or as_of.utcoffset() is None:
         raise ValueError("PEF_V1 shadow run as_of must be timezone-aware")
     if as_of != control_snapshot.as_of or candidate_artifact.as_of != as_of:
