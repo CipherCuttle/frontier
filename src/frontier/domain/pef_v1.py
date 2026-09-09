@@ -22,9 +22,14 @@ from .advanced_intelligence import (
 )
 from .canonical_json import CanonicalValue, canonical_json_bytes
 from .digests import Digest, sha256_digest
+from .grouping_v1 import (
+    GROUPING_V1_ALGORITHM_VERSION,
+    GROUPING_V1_CONFIGURATION_DIGEST,
+    GROUPING_V1_PROJECTION_VERSION,
+)
 from .intelligence import (
     BASELINE_ALGORITHM_VERSION,
-    BASELINE_CONFIGURATION_DIGEST,
+    BASELINE_CONFIGURATION,
     BASELINE_PROJECTION_NAME,
     BASELINE_PROJECTION_VERSION,
     BASELINE_RANKING_POLICY_VERSION,
@@ -50,6 +55,16 @@ PEF_V1_CONFIGURATION["grouping_contract"] = PEF_V1_GROUPING_CONTRACT
 PEF_V1_CONFIGURATION_DIGEST = sha256_digest(canonical_json_bytes(PEF_V1_CONFIGURATION))
 PEF_V1_PREREGISTERED_CONFIG_DIGEST = Digest(
     "sha256:db2305ee0d89ee56b4c0a2837fd7034dad899ec5fc41acc710358b434a52fd67"
+)
+
+PEF_V1_CONTROL_CONFIGURATION: dict[str, CanonicalValue] = dict(BASELINE_CONFIGURATION)
+PEF_V1_CONTROL_CONFIGURATION["grouping_algorithm_version"] = GROUPING_V1_ALGORITHM_VERSION
+PEF_V1_CONTROL_CONFIGURATION["grouping_projection_version"] = GROUPING_V1_PROJECTION_VERSION
+PEF_V1_CONTROL_CONFIGURATION["grouping_configuration_digest"] = str(
+    GROUPING_V1_CONFIGURATION_DIGEST
+)
+PEF_V1_CONTROL_CONFIGURATION_DIGEST = sha256_digest(
+    canonical_json_bytes(PEF_V1_CONTROL_CONFIGURATION)
 )
 
 
@@ -79,8 +94,8 @@ def require_pef_v1_control_identity(
         raise ValueError("control receipt algorithm version mismatch")
     if control_receipt.ranking_policy_version != BASELINE_RANKING_POLICY_VERSION:
         raise ValueError("control receipt ranking policy version mismatch")
-    if control_receipt.configuration_digest != BASELINE_CONFIGURATION_DIGEST:
-        raise ValueError("control receipt configuration digest mismatch")
+    if control_receipt.configuration_digest != PEF_V1_CONTROL_CONFIGURATION_DIGEST:
+        raise ValueError("PEF_V1 control receipt grouping configuration mismatch")
 
 
 def build_pef_v1_artifact(
