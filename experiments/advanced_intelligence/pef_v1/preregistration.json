@@ -1,0 +1,78 @@
+{
+  "schema_version": "advanced-ranking-successor-preregistration-v1",
+  "authority": {
+    "document": "docs/ADVANCED_INTELLIGENCE_EXPERIMENTS.md",
+    "authority_commit": "1d38caf9a74ef278a6c4418bf6298aec6bb50c66"
+  },
+  "experiment_id": "advanced-ranking-pef-v1",
+  "candidate_id": "prospective-primary-emission-freshness-v1",
+  "predecessor": {
+    "experiment_id": "advanced-ranking-pef-v0",
+    "preregistration_path": "experiments/advanced_intelligence/pef_v0/preregistration.json",
+    "preregistration_blob_sha": "0ce6320854634b8cd7228361b127e26f9dd0600c",
+    "canonical_parent_commit": "8ff19dbf5b27c639b9d7df28d844672b25016196",
+    "inheritance_semantics": "DEEP_COPY_PREDECESSOR_THEN_APPLY_ONLY_FROZEN_JSON_POINTER_OVERRIDES"
+  },
+  "frozen_overrides": [
+    {
+      "json_pointer": "/experiment_id",
+      "value": "advanced-ranking-pef-v1"
+    },
+    {
+      "json_pointer": "/candidate/candidate_id",
+      "value": "prospective-primary-emission-freshness-v1"
+    },
+    {
+      "json_pointer": "/candidate/configuration/grouping_contract",
+      "value": "candidate and control use the exact grouping-scalable-v1 projection at each as_of; candidate never regroups observations; grouping identity is bound by this successor preregistration"
+    },
+    {
+      "json_pointer": "/candidate/configuration_digest",
+      "value": "sha256:db2305ee0d89ee56b4c0a2837fd7034dad899ec5fc41acc710358b434a52fd67"
+    },
+    {
+      "json_pointer": "/evaluation/multiplicity/family_id",
+      "value": "advanced-ranking-v1-pef-single-candidate-family"
+    }
+  ],
+  "grouping_binding": {
+    "canonical_publication_commit": "8ff19dbf5b27c639b9d7df28d844672b25016196",
+    "canonical_publication_tree": "47793421f47dbb00f5028867a84a4ed0e0f86939",
+    "source_path": "src/frontier/domain/grouping_v1.py",
+    "source_blob": "5c3b7d57e5bf6ef8d6fb9d0c2dd4fa79bbd52252",
+    "projection_name": "episode-grouping",
+    "projection_version": "grouping-scalable-v1",
+    "schema_version": "grouping-projection-v1",
+    "algorithm_version": "guarded-hybrid-group-complete-blocking-v1",
+    "configuration_digest": "sha256:57dce4c0ca86ce6fbf3c2dbabf6fd1413f0fef254a4873622dd59e3573177ab2",
+    "pair_semantics_version": "guarded-hybrid-v0@db206cda7eed92b62c706a10089c2571b4381d66",
+    "pair_oracle_blob": "943affde20b08f500f8dba2716ffedfc428f58e1",
+    "omitted_pair_semantics": "OMITTED_PAIRS_HAVE_NO_NEGATIVE_OR_INDEPENDENCE_MEANING"
+  },
+  "evidence_isolation": {
+    "predecessor_status": "ABORTED_BY_OPERATIONAL_SCALABILITY_FAILURE",
+    "predecessor_abort_record_path": "docs/PEF_V0_CONFIRMATORY_ABORT_2026-09-08.md",
+    "retained_predecessor_confirmatory_boundaries": 11,
+    "pool_predecessor_evidence": "FORBIDDEN",
+    "backfill_missed_predecessor_boundaries": "FORBIDDEN",
+    "shift_or_extend_predecessor_window": "FORBIDDEN",
+    "successor_confirmatory_window": "FRESH_ONLY_AFTER_SUCCESSOR_DURABLE_CANDIDATE_FREEZE_PUBLICATION"
+  },
+  "scientific_change_scope": {
+    "ranking_algorithm_changed": false,
+    "candidate_feature_definitions_changed": false,
+    "ranking_order_changed": false,
+    "global_k_changed": false,
+    "outcome_label_changed": false,
+    "domain_mapping_changed": false,
+    "precision_rule_changed": false,
+    "lead_time_rule_changed": false,
+    "sample_adequacy_changed": false,
+    "source_registry_changed": false,
+    "grouping_input_authority_changed": true,
+    "change_summary": "PEF_V1 repeats the PEF_V0 ranking hypothesis on the canonical scalable grouping V1 universe; the predecessor confirmatory run is retained as aborted incident evidence only."
+  },
+  "implementation_authorized_by_this_preregistration_pr": false,
+  "candidate_freeze_authorized_by_this_preregistration_pr": false,
+  "confirmatory_execution_authorized_by_this_preregistration_pr": false
+}
