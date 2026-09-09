@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 
-from frontier.application.pef_v1 import run_pef_v1_paired
+import pytest
+
+from frontier.application.pef_v1 import (
+    run_pef_v1_control,
+    run_pef_v1_paired,
+    run_pef_v1_ranking,
+)
 from frontier.domain.advanced_intelligence import PEF_CONFIGURATION_DIGEST
 from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes
 from frontier.domain.digests import Digest, sha256_hex
@@ -169,7 +176,7 @@ def test_paired_runtime_uses_v1_grouping_for_exact_same_candidate_control_univer
         source_registry_version=REGISTRY,
     )
 
-    assert len(repository.published) == 1
+    assert repository.published == []
     control_membership = _membership_sets(result.control.snapshot)
     grouping_membership = _grouping_membership_sets(result.control.grouping_projection)
     assert control_membership == grouping_membership
@@ -180,6 +187,65 @@ def test_paired_runtime_uses_v1_grouping_for_exact_same_candidate_control_univer
     assert result.shadow.candidate_id == PEF_V1_CANDIDATE_ID
     assert result.shadow.configuration_digest == PEF_V1_CONFIGURATION_DIGEST
     assert result.shadow.episode_universe_digest.value.startswith("sha256:")
+
+
+def test_v1_control_is_never_published_through_canonical_baseline_repository() -> None:
+    repository = _Repository()
+    control = run_pef_v1_control(
+        repository,
+        as_of=AS_OF,
+        generated_at=AS_OF,
+        source_registry_version=REGISTRY,
+    )
+
+    assert control.receipt.status is ProjectionStatus.COMPLETE
+    assert repository.published == []
+
+
+def test_v1_candidate_artifact_binds_exact_grouping_receipt() -> None:
+    repository = _Repository()
+    control = run_pef_v1_control(
+        repository,
+        as_of=AS_OF,
+        generated_at=AS_OF,
+        source_registry_version=REGISTRY,
+    )
+    ranking = run_pef_v1_ranking(
+        repository.observations,
+        control_snapshot=control.snapshot,
+        control_receipt=control.receipt,
+        grouping_projection=control.grouping_projection,
+        grouping_receipt=control.grouping_receipt,
+        generated_at=AS_OF,
+        source_registry_version=REGISTRY,
+    )
+
+    assert ranking.artifact.grouping_receipt_id == control.grouping_receipt.receipt_id
+
+
+def test_v1_candidate_rejects_grouping_receipt_identity_drift() -> None:
+    repository = _Repository()
+    control = run_pef_v1_control(
+        repository,
+        as_of=AS_OF,
+        generated_at=AS_OF,
+        source_registry_version=REGISTRY,
+    )
+    drifted_receipt = replace(
+        control.grouping_receipt,
+        configuration_digest=Digest("sha256:" + "2" * 64),
+    )
+
+    with pytest.raises(ValueError, match="grouping receipt configuration mismatch"):
+        run_pef_v1_ranking(
+            repository.observations,
+            control_snapshot=control.snapshot,
+            control_receipt=control.receipt,
+            grouping_projection=control.grouping_projection,
+            grouping_receipt=drifted_receipt,
+            generated_at=AS_OF,
+            source_registry_version=REGISTRY,
+        )
 
 
 def test_v1_control_binds_v1_grouping_configuration_and_episode_identity() -> None:
