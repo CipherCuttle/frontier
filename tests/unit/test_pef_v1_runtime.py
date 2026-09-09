@@ -161,19 +161,15 @@ def test_paired_runtime_uses_v1_grouping_for_exact_same_candidate_control_univer
     grouping_membership = _grouping_membership_sets(result.control.grouping_projection)
     assert control_membership == grouping_membership
 
-    candidate_membership = {
-        frozenset(episode.observation_ids)
-        for episode in result.shadow.control_ranking
-        for _ in ()
-    }
-    # Shadow run carries the control episode IDs, while the paired-universe
-    # digest and domain builder have already required exact candidate/control
-    # membership equality. Verify the concrete control universe here too.
+    # The V1 shadow builder rejects any candidate/control membership mismatch
+    # before a RAN result can exist. The retained control ranking therefore
+    # has exactly one entry per V1 control episode.
     assert len(result.shadow.control_ranking) == len(control_membership)
     assert result.shadow.status.value == "RAN"
     assert result.shadow.experiment_id == PEF_V1_EXPERIMENT_ID
     assert result.shadow.candidate_id == PEF_V1_CANDIDATE_ID
     assert result.shadow.configuration_digest == PEF_V1_CONFIGURATION_DIGEST
+    assert result.shadow.episode_universe_digest.value.startswith("sha256:")
 
 
 def test_v1_grouping_receipt_binds_scalable_algorithm_and_complete_output() -> None:
