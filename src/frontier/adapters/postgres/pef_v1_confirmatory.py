@@ -333,6 +333,16 @@ def _validate_receipt_identities(evidence: PefV1ConfirmatoryEvidence) -> None:
     if candidate.configuration_digest != PEF_V1_CONFIGURATION_DIGEST:
         raise ValueError("PEF_V1 candidate receipt configuration mismatch")
 
+    artifact_status = evidence.candidate_artifact.status.value
+    if artifact_status == "RAN":
+        expected_candidate_status = ProjectionStatus.COMPLETE
+    elif artifact_status == "FAILED":
+        expected_candidate_status = ProjectionStatus.FAILED
+    else:
+        raise ValueError("PEF_V1 candidate artifact status is not persistable")
+    if candidate.status is not expected_candidate_status:
+        raise ValueError("PEF_V1 candidate receipt status does not match candidate artifact")
+
     if not (
         grouping.source_registry_version
         == control.source_registry_version
