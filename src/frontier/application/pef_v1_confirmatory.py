@@ -20,7 +20,7 @@ from frontier.domain.advanced_intelligence import ShadowExperimentRun, ShadowRun
 from frontier.domain.candidate_freeze import FreezeStatus
 from frontier.domain.candidate_freeze_v1 import CandidateFreezeReceiptV1
 from frontier.domain.digests import Digest
-from frontier.domain.intelligence import BaselineObservationInput
+from frontier.domain.intelligence import BaselineObservationInput, BaselineSnapshot
 from frontier.domain.opportunity import ExperimentAttemptStatus, ExperimentRunAttempt
 from frontier.domain.pef_v1 import (
     PEF_V1_CANDIDATE_ID,
@@ -50,6 +50,8 @@ class PefV1FreezeBinding:
 class PefV1ConfirmatoryEvidence:
     grouping_receipt: ProjectionReceipt
     control_receipt: ProjectionReceipt
+    control_snapshot: BaselineSnapshot
+    candidate_observations: tuple[BaselineObservationInput, ...]
     candidate_artifact: PefV1Artifact
     candidate_receipt: ProjectionReceipt
     run: ShadowExperimentRun
@@ -231,6 +233,8 @@ def build_pef_v1_confirmatory_evidence(
     return PefV1ConfirmatoryEvidence(
         grouping_receipt=control.grouping_receipt,
         control_receipt=control.receipt,
+        control_snapshot=control.snapshot,
+        candidate_observations=observations,
         candidate_artifact=candidate_artifact,
         candidate_receipt=candidate_receipt,
         run=run,

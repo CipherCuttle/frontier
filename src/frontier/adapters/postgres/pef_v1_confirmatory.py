@@ -46,6 +46,7 @@ from frontier.domain.pef_v1 import (
     PEF_V1_EXPERIMENT_ID,
     PEF_V1_PROJECTION_NAME,
     PEF_V1_PROJECTION_VERSION,
+    build_pef_v1_receipt,
 )
 from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 
@@ -362,6 +363,15 @@ def _validate_evidence(
     run = evidence.run
     artifact = evidence.candidate_artifact
     candidate_receipt = evidence.candidate_receipt
+    if evidence.control_snapshot.snapshot_id != artifact.control_snapshot_id:
+        raise ValueError("PEF_V1 candidate receipt control snapshot mismatch")
+    expected_candidate_receipt = build_pef_v1_receipt(
+        artifact,
+        observations=evidence.candidate_observations,
+        control_snapshot=evidence.control_snapshot,
+    )
+    if candidate_receipt != expected_candidate_receipt:
+        raise ValueError("PEF_V1 candidate receipt does not bind full candidate input provenance")
     if run.experiment_id != PEF_V1_EXPERIMENT_ID:
         raise ValueError("PEF_V1 confirmatory run experiment identity mismatch")
     if run.candidate_id != PEF_V1_CANDIDATE_ID:

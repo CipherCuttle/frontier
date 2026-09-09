@@ -278,11 +278,8 @@ def test_v1_persistence_rejects_wrong_expected_freeze_without_partial_evidence()
             freeze_receipt=receipt,
         )
         wrong = "freezereceipt_" + "e" * 64
-        forged_evidence = PefV1ConfirmatoryEvidence(
-            grouping_receipt=evidence.grouping_receipt,
-            control_receipt=evidence.control_receipt,
-            candidate_artifact=evidence.candidate_artifact,
-            candidate_receipt=evidence.candidate_receipt,
+        forged_evidence = replace(
+            evidence,
             run=replace(evidence.run, candidate_freeze_receipt_id=wrong),
         )
         with pytest.raises(RuntimeError, match="not latest canonical authority"):
@@ -359,3 +356,43 @@ def test_v1_persistence_rejects_candidate_receipt_status_mismatch() -> None:
             "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
             (forged_evidence.run.run_id,),
         ).fetchone() == (0,)
+
+
+def test_v1_persistence_rejects_candidate_receipt_provenance_forgery() -> None:
+    assert DB_URL is not None
+    with psycopg.connect(DB_URL) as conn:
+        receipt, publication = _store_v1_authority(conn)
+        boundary = first_confirmatory_boundary(publication.publication_committer_at)
+        evidence = build_pef_v1_confirmatory_evidence(
+            _Repository(boundary),
+            as_of=boundary,
+            generated_at=boundary,
+            source_registry_version=REGISTRY,
+            freeze_receipt=receipt,
+        )
+        forged_receipts = (
+            replace(
+                evidence.candidate_receipt,
+                input_digest=Digest("sha256:" + "8" * 64),
+            ),
+            replace(
+                evidence.candidate_receipt,
+                generated_at=evidence.candidate_receipt.generated_at + timedelta(seconds=1),
+            ),
+            replace(
+                evidence.candidate_receipt,
+                receipt_schema_version="projection-receipt-forged",
+            ),
+        )
+        persistence = PostgresPefV1ConfirmatoryPersistence(conn)
+        for forged_receipt in forged_receipts:
+            forged_evidence = replace(evidence, candidate_receipt=forged_receipt)
+            with pytest.raises(ValueError, match="full candidate input provenance"):
+                persistence.persist(
+                    forged_evidence,
+                    expected_freeze_receipt_id=receipt.receipt_id,
+                )
+            assert conn.execute(
+                "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
+                (forged_evidence.run.run_id,),
+            ).fetchone() == (0,)
