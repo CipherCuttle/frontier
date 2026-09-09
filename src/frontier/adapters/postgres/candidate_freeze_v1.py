@@ -9,6 +9,7 @@ from psycopg.types.json import Jsonb
 
 from frontier.application.freeze_publication import CandidateFreezePublication
 from frontier.application.freeze_publication_v1 import derive_github_main_freeze_publication_v1
+from frontier.domain.advanced_intelligence import PEF_ALGORITHM_VERSION
 from frontier.domain.candidate_freeze import FREEZE_SCHEMA_VERSION, FreezeStatus
 from frontier.domain.candidate_freeze_v1 import (
     FREEZE_V1_PREREGISTRATION_PATH,
@@ -21,7 +22,6 @@ from frontier.domain.pef_v1 import (
     PEF_V1_CONFIGURATION_DIGEST,
     PEF_V1_EXPERIMENT_ID,
 )
-from frontier.domain.advanced_intelligence import PEF_ALGORITHM_VERSION
 
 
 class PostgresCandidateFreezeV1Repository:
@@ -182,7 +182,9 @@ class PostgresCandidateFreezePublicationV1Repository:
         receipt_path: Path | None = None,
     ) -> CandidateFreezePublication:
         if not self._persistence_authorized:
-            raise PermissionError("PEF_V1 candidate freeze publication persistence is not authorized")
+            raise PermissionError(
+                "PEF_V1 candidate freeze publication persistence is not authorized"
+            )
         publication = derive_github_main_freeze_publication_v1(
             root, receipt, receipt_path=receipt_path
         )
