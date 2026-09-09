@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import subprocess
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from pathlib import Path
 
 import pytest
 
@@ -11,7 +13,10 @@ from frontier.application.pef_v1_confirmatory import (
     build_pef_v1_confirmatory_evidence,
     evaluate_pef_v1_confirmatory_gates,
 )
-from frontier.cli.pef_v1_confirmatory import require_direct_session_database_url
+from frontier.cli.pef_v1_confirmatory import (
+    require_clean_repository_tree,
+    require_direct_session_database_url,
+)
 from frontier.domain.candidate_freeze import FreezeInputs, RegistryEntryDigest
 from frontier.domain.candidate_freeze_v1 import build_candidate_freeze_receipt_v1
 from frontier.domain.digests import Digest
@@ -220,3 +225,28 @@ def test_direct_session_endpoint_guard_rejects_neon_transaction_pooler() -> None
         "postgresql://user:pass@ep-example.eu-central-1.aws.neon.tech/frontier?sslmode=require"
     )
     assert host == "ep-example.eu-central-1.aws.neon.tech"
+
+
+def test_confirmatory_operator_rejects_dirty_git_worktree(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "frontier@example.test"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Frontier Test"], cwd=tmp_path, check=True)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("frozen\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "frozen"], cwd=tmp_path, check=True, capture_output=True)
+
+    require_clean_repository_tree(tmp_path)
+
+    tracked.write_text("dirty\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="forbids a dirty Git worktree"):
+        require_clean_repository_tree(tmp_path)
+
+    subprocess.run(["git", "restore", "tracked.txt"], cwd=tmp_path, check=True)
+    (tmp_path / "untracked.txt").write_text("dirty\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="forbids a dirty Git worktree"):
+        require_clean_repository_tree(tmp_path)
