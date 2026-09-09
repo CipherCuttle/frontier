@@ -24,6 +24,8 @@ from frontier.domain.pef_v1 import (
     PEF_V1_EXPERIMENT_ID,
 )
 
+_DEPLOYED_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+
 
 class PostgresCandidateFreezeV1Repository:
     """Append-only persistence for exact FROZEN PEF_V1 candidate receipts."""
@@ -37,7 +39,7 @@ class PostgresCandidateFreezeV1Repository:
         self._connection = connection
         self._persistence_authorized = persistence_authorized
 
-    def record_receipt(self, receipt: CandidateFreezeReceiptV1, *, root: Path) -> None:
+    def record_receipt(self, receipt: CandidateFreezeReceiptV1) -> None:
         if not self._persistence_authorized:
             raise PermissionError("PEF_V1 candidate freeze persistence is not authorized")
         if receipt.status is not FreezeStatus.FROZEN:
@@ -59,11 +61,14 @@ class PostgresCandidateFreezeV1Repository:
         if receipt.receipt_digest != sha256_digest(canonical_json_bytes(receipt.to_canonical())):
             raise ValueError("PEF_V1 freeze receipt digest does not bind its canonical payload")
 
-        expected = freeze_candidate_v1(root, frozen_at=receipt.frozen_at)
+        expected = freeze_candidate_v1(
+            _DEPLOYED_REPOSITORY_ROOT,
+            frozen_at=receipt.frozen_at,
+        )
         if expected.status is not FreezeStatus.FROZEN:
-            raise ValueError("current Git HEAD cannot produce a FROZEN PEF_V1 candidate receipt")
+            raise ValueError("deployed Git HEAD cannot produce a FROZEN PEF_V1 candidate receipt")
         if expected != receipt:
-            raise ValueError("PEF_V1 freeze receipt does not exactly bind current Git HEAD")
+            raise ValueError("PEF_V1 freeze receipt does not exactly bind deployed Git HEAD")
 
         entry_values = [
             {"digest": str(entry.digest), "path": entry.path}
@@ -183,7 +188,6 @@ class PostgresCandidateFreezePublicationV1Repository:
         self,
         receipt: CandidateFreezeReceiptV1,
         *,
-        root: Path,
         receipt_path: Path | None = None,
     ) -> CandidateFreezePublication:
         if not self._persistence_authorized:
@@ -191,7 +195,9 @@ class PostgresCandidateFreezePublicationV1Repository:
                 "PEF_V1 candidate freeze publication persistence is not authorized"
             )
         publication = derive_github_main_freeze_publication_v1(
-            root, receipt, receipt_path=receipt_path
+            _DEPLOYED_REPOSITORY_ROOT,
+            receipt,
+            receipt_path=receipt_path,
         )
         with self._connection.transaction(), self._connection.cursor() as cur:
             cur.execute(
