@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,6 +49,22 @@ def require_direct_session_database_url(database_url: str) -> str:
     return normalized
 
 
+def require_clean_repository_tree(root: Path) -> None:
+    """Fail closed when live confirmatory code or inputs differ from committed Git bytes."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError("PEF_V1 confirmatory operation requires a readable Git worktree") from error
+    if result.stdout:
+        raise ValueError("PEF_V1 confirmatory operation forbids a dirty Git worktree")
+
+
 def _acquire_operator_lease(conn: psycopg.Connection[tuple[object, ...]]) -> bool:
     with conn.cursor() as cur:
         cur.execute("SELECT pg_try_advisory_lock(%s)", (_OPERATOR_LEASE_KEY,))
@@ -73,6 +90,7 @@ def run_once(
     now: datetime | None = None,
 ) -> int:
     require_direct_session_database_url(database_url)
+    require_clean_repository_tree(root)
     registry = load_source_registry(root)
     at = now or datetime.now(UTC)
     with psycopg.connect(database_url) as conn:
