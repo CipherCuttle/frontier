@@ -167,9 +167,7 @@ def _v0_run(as_of: datetime) -> ShadowExperimentRun:
         episode_universe_digest=Digest("sha256:" + "3" * 64),
         candidate_artifact_id="artifact_" + "4" * 64,
         candidate_output_digest=Digest("sha256:" + "5" * 64),
-        control_ranking=(
-            ShadowControlArmRanking(rank=1, episode_id="episode-v0-retained"),
-        ),
+        control_ranking=(ShadowControlArmRanking(rank=1, episode_id="episode-v0-retained"),),
     )
 
 
