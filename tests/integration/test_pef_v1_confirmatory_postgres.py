@@ -114,7 +114,11 @@ def _store_v1_authority(conn: ConnectionT):
         (PEF_V1_EXPERIMENT_ID,),
     ).fetchone()
     frozen_at = datetime.now(UTC)
-    if latest_row is not None and isinstance(latest_row[0], datetime) and latest_row[0] >= frozen_at:
+    if (
+        latest_row is not None
+        and isinstance(latest_row[0], datetime)
+        and latest_row[0] >= frozen_at
+    ):
         frozen_at = latest_row[0] + timedelta(seconds=1)
 
     receipt = freeze_candidate_v1(REPO_ROOT, frozen_at=frozen_at)
