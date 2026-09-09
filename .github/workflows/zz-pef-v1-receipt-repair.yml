@@ -1,0 +1,117 @@
+name: bounded-pef-v1-receipt-repair
+
+on:
+  push:
+    branches:
+      - feature/pef-v1-confirmatory-orchestration
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/pef-v1-confirmatory-orchestration
+          fetch-depth: 0
+      - name: Apply bounded receipt provenance repair
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          app = "src/frontier/application/pef_v1_confirmatory.py"
+          replace_once(
+              app,
+              "from frontier.domain.intelligence import BaselineObservationInput\n",
+              "from frontier.domain.intelligence import BaselineObservationInput, BaselineSnapshot\n",
+          )
+          replace_once(
+              app,
+              "class PefV1ConfirmatoryEvidence:\n    grouping_receipt: ProjectionReceipt\n    control_receipt: ProjectionReceipt\n    candidate_artifact: PefV1Artifact\n    candidate_receipt: ProjectionReceipt\n    run: ShadowExperimentRun\n",
+              "class PefV1ConfirmatoryEvidence:\n    grouping_receipt: ProjectionReceipt\n    control_receipt: ProjectionReceipt\n    control_snapshot: BaselineSnapshot\n    candidate_observations: tuple[BaselineObservationInput, ...]\n    candidate_artifact: PefV1Artifact\n    candidate_receipt: ProjectionReceipt\n    run: ShadowExperimentRun\n",
+          )
+          replace_once(
+              app,
+              "    return PefV1ConfirmatoryEvidence(\n        grouping_receipt=control.grouping_receipt,\n        control_receipt=control.receipt,\n        candidate_artifact=candidate_artifact,\n        candidate_receipt=candidate_receipt,\n        run=run,\n    )\n",
+              "    return PefV1ConfirmatoryEvidence(\n        grouping_receipt=control.grouping_receipt,\n        control_receipt=control.receipt,\n        control_snapshot=control.snapshot,\n        candidate_observations=observations,\n        candidate_artifact=candidate_artifact,\n        candidate_receipt=candidate_receipt,\n        run=run,\n    )\n",
+          )
+
+          adapter = "src/frontier/adapters/postgres/pef_v1_confirmatory.py"
+          replace_once(
+              adapter,
+              "    PEF_V1_PROJECTION_NAME,\n    PEF_V1_PROJECTION_VERSION,\n)\n",
+              "    PEF_V1_PROJECTION_NAME,\n    PEF_V1_PROJECTION_VERSION,\n    build_pef_v1_receipt,\n)\n",
+          )
+          replace_once(
+              adapter,
+              "    run = evidence.run\n    artifact = evidence.candidate_artifact\n    candidate_receipt = evidence.candidate_receipt\n    if run.experiment_id != PEF_V1_EXPERIMENT_ID:\n",
+              "    run = evidence.run\n    artifact = evidence.candidate_artifact\n    candidate_receipt = evidence.candidate_receipt\n    if evidence.control_snapshot.snapshot_id != artifact.control_snapshot_id:\n        raise ValueError(\"PEF_V1 candidate receipt control snapshot mismatch\")\n    expected_candidate_receipt = build_pef_v1_receipt(\n        artifact,\n        observations=evidence.candidate_observations,\n        control_snapshot=evidence.control_snapshot,\n    )\n    if candidate_receipt != expected_candidate_receipt:\n        raise ValueError(\"PEF_V1 candidate receipt does not bind full candidate input provenance\")\n    if run.experiment_id != PEF_V1_EXPERIMENT_ID:\n",
+          )
+
+          test = "tests/integration/test_pef_v1_confirmatory_postgres.py"
+          replace_once(
+              test,
+              "        forged_evidence = PefV1ConfirmatoryEvidence(\n            grouping_receipt=evidence.grouping_receipt,\n            control_receipt=evidence.control_receipt,\n            candidate_artifact=evidence.candidate_artifact,\n            candidate_receipt=evidence.candidate_receipt,\n            run=replace(evidence.run, candidate_freeze_receipt_id=wrong),\n        )\n",
+              "        forged_evidence = replace(\n            evidence,\n            run=replace(evidence.run, candidate_freeze_receipt_id=wrong),\n        )\n",
+          )
+          with Path(test).open("a") as handle:
+              handle.write(\n                  "\n\ndef test_v1_persistence_rejects_candidate_receipt_provenance_forgery() -> None:\n"
+                  "    assert DB_URL is not None\n"
+                  "    with psycopg.connect(DB_URL) as conn:\n"
+                  "        receipt, publication = _store_v1_authority(conn)\n"
+                  "        boundary = first_confirmatory_boundary(publication.publication_committer_at)\n"
+                  "        evidence = build_pef_v1_confirmatory_evidence(\n"
+                  "            _Repository(boundary),\n"
+                  "            as_of=boundary,\n"
+                  "            generated_at=boundary,\n"
+                  "            source_registry_version=REGISTRY,\n"
+                  "            freeze_receipt=receipt,\n"
+                  "        )\n"
+                  "        forged_receipts = (\n"
+                  "            replace(\n"
+                  "                evidence.candidate_receipt,\n"
+                  "                input_digest=Digest(\"sha256:\" + \"8\" * 64),\n"
+                  "            ),\n"
+                  "            replace(\n"
+                  "                evidence.candidate_receipt,\n"
+                  "                generated_at=evidence.candidate_receipt.generated_at + timedelta(seconds=1),\n"
+                  "            ),\n"
+                  "            replace(\n"
+                  "                evidence.candidate_receipt,\n"
+                  "                receipt_schema_version=\"projection-receipt-forged\",\n"
+                  "            ),\n"
+                  "        )\n"
+                  "        persistence = PostgresPefV1ConfirmatoryPersistence(conn)\n"
+                  "        for forged_receipt in forged_receipts:\n"
+                  "            forged_evidence = replace(evidence, candidate_receipt=forged_receipt)\n"
+                  "            with pytest.raises(ValueError, match=\"full candidate input provenance\"):\n"
+                  "                persistence.persist(\n"
+                  "                    forged_evidence,\n"
+                  "                    expected_freeze_receipt_id=receipt.receipt_id,\n"
+                  "                )\n"
+                  "            assert conn.execute(\n"
+                  "                \"SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s\",\n"
+                  "                (forged_evidence.run.run_id,),\n"
+                  "            ).fetchone() == (0,)\n"
+              )
+          PY
+
+          git rm .github/workflows/zz-pef-v1-receipt-repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/frontier/application/pef_v1_confirmatory.py \
+                  src/frontier/adapters/postgres/pef_v1_confirmatory.py \
+                  tests/integration/test_pef_v1_confirmatory_postgres.py
+          git commit -m "fix(pef-v1): bind full candidate receipt provenance"
+          git push origin HEAD:feature/pef-v1-confirmatory-orchestration
