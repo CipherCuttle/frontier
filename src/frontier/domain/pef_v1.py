@@ -164,9 +164,7 @@ def require_pef_v1_grouping_binding(
         frozenset((observation_id,))
         for observation_id in grouping_projection.ungrouped_observation_ids
     }
-    control_universe = {
-        frozenset(episode.observation_ids) for episode in control_snapshot.episodes
-    }
+    control_universe = {frozenset(episode.observation_ids) for episode in control_snapshot.episodes}
     if grouping_universe != control_universe:
         raise ValueError("PEF_V1 control snapshot does not match the bound grouping V1 universe")
 
