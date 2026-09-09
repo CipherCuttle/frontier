@@ -275,7 +275,29 @@ def build_shadow_experiment_run_v1(
         raise ValueError("candidate receipt and control source registry versions differ")
 
     freeze_id = canonical_freeze_components(candidate_freeze_receipt_id)
-    common = dict(
+    universe_digest = shadow_universe_digest(control_snapshot)
+    if candidate_artifact.status is PefArtifactStatus.RAN:
+        _require_paired_universe(control_snapshot, candidate_artifact)
+        return ShadowExperimentRun(
+            as_of=as_of,
+            generated_at=generated_at,
+            control_snapshot_id=control_snapshot.snapshot_id,
+            control_receipt_id=control_receipt.receipt_id,
+            coverage_state=control_snapshot.coverage_state,
+            freshness_state=control_snapshot.freshness_state,
+            transport_state=control_snapshot.transport_state,
+            schema_state=control_snapshot.schema_state,
+            status=ShadowRunStatus.RAN,
+            episode_universe_digest=universe_digest,
+            candidate_artifact_id=candidate_artifact.artifact_id,
+            candidate_output_digest=candidate_artifact.output_digest,
+            control_ranking=_control_ranking(control_snapshot),
+            experiment_id=PEF_V1_EXPERIMENT_ID,
+            candidate_id=PEF_V1_CANDIDATE_ID,
+            configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
+            candidate_freeze_receipt_id=freeze_id,
+        )
+    return ShadowExperimentRun(
         as_of=as_of,
         generated_at=generated_at,
         control_snapshot_id=control_snapshot.snapshot_id,
@@ -284,23 +306,13 @@ def build_shadow_experiment_run_v1(
         freshness_state=control_snapshot.freshness_state,
         transport_state=control_snapshot.transport_state,
         schema_state=control_snapshot.schema_state,
-        episode_universe_digest=shadow_universe_digest(control_snapshot),
+        status=ShadowRunStatus.FAILED,
+        episode_universe_digest=universe_digest,
         candidate_artifact_id=candidate_artifact.artifact_id,
         candidate_output_digest=candidate_artifact.output_digest,
+        failure_reason=candidate_artifact.failure_reason,
         experiment_id=PEF_V1_EXPERIMENT_ID,
         candidate_id=PEF_V1_CANDIDATE_ID,
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
         candidate_freeze_receipt_id=freeze_id,
-    )
-    if candidate_artifact.status is PefArtifactStatus.RAN:
-        _require_paired_universe(control_snapshot, candidate_artifact)
-        return ShadowExperimentRun(
-            **common,
-            status=ShadowRunStatus.RAN,
-            control_ranking=_control_ranking(control_snapshot),
-        )
-    return ShadowExperimentRun(
-        **common,
-        status=ShadowRunStatus.FAILED,
-        failure_reason=candidate_artifact.failure_reason,
     )
