@@ -25,12 +25,29 @@ from frontier.domain.candidate_freeze import FreezeStatus, RegistryEntryDigest
 from frontier.domain.candidate_freeze_v1 import CandidateFreezeReceiptV1
 from frontier.domain.canonical_json import canonical_json_bytes
 from frontier.domain.digests import Digest, sha256_digest
+from frontier.domain.grouping_v1 import (
+    GROUPING_V1_ALGORITHM_VERSION,
+    GROUPING_V1_CONFIGURATION_DIGEST,
+    GROUPING_V1_PROJECTION_NAME,
+    GROUPING_V1_PROJECTION_VERSION,
+    GROUPING_V1_SCHEMA_VERSION,
+)
+from frontier.domain.intelligence import (
+    BASELINE_ALGORITHM_VERSION,
+    BASELINE_PROJECTION_NAME,
+    BASELINE_PROJECTION_VERSION,
+    BASELINE_RANKING_POLICY_VERSION,
+    BASELINE_SCHEMA_VERSION,
+)
 from frontier.domain.pef_v1 import (
     PEF_V1_CANDIDATE_ID,
     PEF_V1_CONFIGURATION_DIGEST,
+    PEF_V1_CONTROL_CONFIGURATION_DIGEST,
     PEF_V1_EXPERIMENT_ID,
+    PEF_V1_PROJECTION_NAME,
+    PEF_V1_PROJECTION_VERSION,
 )
-from frontier.domain.receipt import ProjectionReceipt
+from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 
 RUN_CLASS_CONFIRMATORY = "CONFIRMATORY"
 
@@ -65,14 +82,20 @@ def _receipt_from_canonical(raw: object) -> CandidateFreezeReceiptV1:
     if not isinstance(raw, dict):
         raise RuntimeError("PEF_V1 freeze receipt JSON is not an object")
     document = cast(dict[str, object], raw)
-    raw_reasons = document.get("drift_reasons")
-    if not isinstance(raw_reasons, list) or not all(isinstance(item, str) for item in raw_reasons):
+    raw_reasons_value = document.get("drift_reasons")
+    if not isinstance(raw_reasons_value, list):
         raise RuntimeError("PEF_V1 freeze drift reasons are invalid")
-    raw_entries = document.get("registry_entry_digests")
+    raw_reasons = cast(list[object], raw_reasons_value)
+    if not all(isinstance(item, str) for item in raw_reasons):
+        raise RuntimeError("PEF_V1 freeze drift reasons are invalid")
+    drift_reasons = tuple(cast(str, item) for item in raw_reasons)
+
+    raw_entries_value = document.get("registry_entry_digests")
     entries: tuple[RegistryEntryDigest, ...] | None
-    if raw_entries is None:
+    if raw_entries_value is None:
         entries = None
-    elif isinstance(raw_entries, list):
+    elif isinstance(raw_entries_value, list):
+        raw_entries = cast(list[object], raw_entries_value)
         parsed_entries: list[RegistryEntryDigest] = []
         for raw_entry in raw_entries:
             if not isinstance(raw_entry, dict):
@@ -102,7 +125,7 @@ def _receipt_from_canonical(raw: object) -> CandidateFreezeReceiptV1:
     return CandidateFreezeReceiptV1(
         frozen_at=_timestamp(document.get("frozen_at")),
         status=status,
-        drift_reasons=tuple(cast(list[str], raw_reasons)),
+        drift_reasons=drift_reasons,
         preregistration_digest=_digest(document.get("preregistration_digest")),
         preregistration_config_digest=_optional_digest(
             document.get("preregistration_config_digest")
@@ -185,26 +208,31 @@ def _load_binding(cur: CursorT, receipt_id: str) -> PefV1FreezeBinding | None:
     )
 
 
+def _latest_v1_receipt_id(cur: CursorT) -> str | None:
+    cur.execute(
+        """
+        SELECT receipt_id
+        FROM candidate_freeze_receipts
+        WHERE experiment_id = %s
+        ORDER BY frozen_at DESC, receipt_id DESC
+        LIMIT 1
+        """,
+        (PEF_V1_EXPERIMENT_ID,),
+    )
+    row = cur.fetchone()
+    return None if row is None else cast(str, row[0])
+
+
 class PostgresPefV1FreezeBindingResolver:
     def __init__(self, connection: ConnectionT) -> None:
         self._connection = connection
 
     def latest_binding(self) -> PefV1FreezeBinding | None:
         with self._connection.cursor() as cur:
-            cur.execute(
-                """
-                SELECT receipt_id
-                FROM candidate_freeze_receipts
-                WHERE experiment_id = %s
-                ORDER BY frozen_at DESC, receipt_id DESC
-                LIMIT 1
-                """,
-                (PEF_V1_EXPERIMENT_ID,),
-            )
-            row = cur.fetchone()
-            if row is None:
+            receipt_id = _latest_v1_receipt_id(cur)
+            if receipt_id is None:
                 return None
-            return _load_binding(cur, cast(str, row[0]))
+            return _load_binding(cur, receipt_id)
 
 
 def _receipt_values(receipt: ProjectionReceipt) -> tuple[object, ...]:
@@ -260,12 +288,67 @@ def _persist_receipt(cur: CursorT, receipt: ProjectionReceipt) -> None:
         raise RuntimeError("PEF_V1 projection receipt identity conflict")
 
 
+def _validate_receipt_identities(evidence: PefV1ConfirmatoryEvidence) -> None:
+    grouping = evidence.grouping_receipt
+    control = evidence.control_receipt
+    candidate = evidence.candidate_receipt
+    if grouping.status is not ProjectionStatus.COMPLETE:
+        raise ValueError("PEF_V1 grouping receipt must be COMPLETE")
+    if grouping.projection_name != GROUPING_V1_PROJECTION_NAME:
+        raise ValueError("PEF_V1 grouping receipt projection name mismatch")
+    if grouping.projection_version != GROUPING_V1_PROJECTION_VERSION:
+        raise ValueError("PEF_V1 grouping receipt projection version mismatch")
+    if grouping.schema_version != GROUPING_V1_SCHEMA_VERSION:
+        raise ValueError("PEF_V1 grouping receipt schema mismatch")
+    if grouping.algorithm_version != GROUPING_V1_ALGORITHM_VERSION:
+        raise ValueError("PEF_V1 grouping receipt algorithm mismatch")
+    if grouping.configuration_digest != GROUPING_V1_CONFIGURATION_DIGEST:
+        raise ValueError("PEF_V1 grouping receipt configuration mismatch")
+
+    if control.status is not ProjectionStatus.COMPLETE:
+        raise ValueError("PEF_V1 control receipt must be COMPLETE")
+    if control.projection_name != BASELINE_PROJECTION_NAME:
+        raise ValueError("PEF_V1 control receipt projection name mismatch")
+    if control.projection_version != BASELINE_PROJECTION_VERSION:
+        raise ValueError("PEF_V1 control receipt projection version mismatch")
+    if control.schema_version != BASELINE_SCHEMA_VERSION:
+        raise ValueError("PEF_V1 control receipt schema mismatch")
+    if control.algorithm_version != BASELINE_ALGORITHM_VERSION:
+        raise ValueError("PEF_V1 control receipt algorithm mismatch")
+    if control.ranking_policy_version != BASELINE_RANKING_POLICY_VERSION:
+        raise ValueError("PEF_V1 control receipt ranking policy mismatch")
+    if control.configuration_digest != PEF_V1_CONTROL_CONFIGURATION_DIGEST:
+        raise ValueError("PEF_V1 control receipt configuration mismatch")
+
+    if candidate.projection_name != PEF_V1_PROJECTION_NAME:
+        raise ValueError("PEF_V1 candidate receipt projection name mismatch")
+    if candidate.projection_version != PEF_V1_PROJECTION_VERSION:
+        raise ValueError("PEF_V1 candidate receipt projection version mismatch")
+    if candidate.schema_version != PEF_SCHEMA_VERSION:
+        raise ValueError("PEF_V1 candidate receipt schema mismatch")
+    if candidate.algorithm_version != PEF_ALGORITHM_VERSION:
+        raise ValueError("PEF_V1 candidate receipt algorithm mismatch")
+    if candidate.ranking_policy_version != PEF_RANKING_POLICY_VERSION:
+        raise ValueError("PEF_V1 candidate receipt ranking policy mismatch")
+    if candidate.configuration_digest != PEF_V1_CONFIGURATION_DIGEST:
+        raise ValueError("PEF_V1 candidate receipt configuration mismatch")
+
+    if not (
+        grouping.source_registry_version
+        == control.source_registry_version
+        == candidate.source_registry_version
+        == evidence.candidate_artifact.source_registry_version
+    ):
+        raise ValueError("PEF_V1 confirmatory evidence source registry mismatch")
+
+
 def _validate_evidence(
     evidence: PefV1ConfirmatoryEvidence,
     *,
     expected_freeze_receipt_id: str,
     binding: PefV1FreezeBinding,
 ) -> None:
+    _validate_receipt_identities(evidence)
     run = evidence.run
     artifact = evidence.candidate_artifact
     candidate_receipt = evidence.candidate_receipt
@@ -325,6 +408,8 @@ def _validate_evidence(
         raise ValueError("PEF_V1 shadow run does not bind control receipt")
     if artifact.control_receipt_id != evidence.control_receipt.receipt_id:
         raise ValueError("PEF_V1 candidate artifact does not bind control receipt")
+    if run.control_snapshot_id != artifact.control_snapshot_id:
+        raise ValueError("PEF_V1 run and candidate artifact control snapshot mismatch")
     if not (
         run.as_of
         == artifact.as_of
@@ -363,6 +448,13 @@ class PostgresPefV1ConfirmatoryPersistence:
         expected_freeze_receipt_id: str,
     ) -> str:
         with self._connection.transaction(), self._connection.cursor() as cur:
+            # Hold the freeze authority stable for the entire append transaction.
+            # INSERTs into candidate_freeze_receipts require ROW EXCLUSIVE and
+            # therefore cannot supersede this authority until this transaction commits.
+            cur.execute("LOCK TABLE candidate_freeze_receipts IN SHARE MODE")
+            latest_receipt_id = _latest_v1_receipt_id(cur)
+            if latest_receipt_id != expected_freeze_receipt_id:
+                raise RuntimeError("PEF_V1 expected freeze is not latest canonical authority")
             binding = _load_binding(cur, expected_freeze_receipt_id)
             if binding is None:
                 raise RuntimeError("PEF_V1 canonical freeze authority is missing")
@@ -391,7 +483,7 @@ class PostgresPefV1ConfirmatoryPersistence:
                 """,
                 (
                     artifact.artifact_id,
-                    PEF_V1_CANDIDATE_ID,
+                    PEF_V1_PROJECTION_VERSION,
                     artifact.schema_version,
                     artifact.algorithm_version,
                     artifact.ranking_policy_version,
@@ -410,16 +502,17 @@ class PostgresPefV1ConfirmatoryPersistence:
             if cur.fetchone() is None:
                 cur.execute(
                     """
-                    SELECT receipt_id, output_digest, artifact_json
+                    SELECT projection_version, receipt_id, output_digest, artifact_json
                     FROM pef_ranking_artifacts WHERE artifact_id = %s
                     """,
                     (artifact.artifact_id,),
                 )
                 row = cur.fetchone()
                 if row is None or (
-                    cast(str, row[0]) != evidence.candidate_receipt.receipt_id
-                    or cast(str, row[1]) != str(evidence.candidate_receipt.output_digest)
-                    or cast(dict[str, object], row[2]) != artifact.to_canonical()
+                    cast(str, row[0]) != PEF_V1_PROJECTION_VERSION
+                    or cast(str, row[1]) != evidence.candidate_receipt.receipt_id
+                    or cast(str, row[2]) != str(evidence.candidate_receipt.output_digest)
+                    or cast(dict[str, object], row[3]) != artifact.to_canonical()
                 ):
                     raise RuntimeError("PEF_V1 candidate artifact identity conflict")
 
@@ -462,17 +555,18 @@ class PostgresPefV1ConfirmatoryPersistence:
             if cur.fetchone() is None:
                 cur.execute(
                     """
-                    SELECT run_digest, status, run_class, run_json
+                    SELECT experiment_id, run_digest, status, run_class, run_json
                     FROM shadow_experiment_runs WHERE run_id = %s
                     """,
                     (run.run_id,),
                 )
                 row = cur.fetchone()
                 if row is None or (
-                    cast(str, row[0]) != str(run.run_digest)
-                    or cast(str, row[1]) != run.status.value
-                    or cast(str, row[2]) != RUN_CLASS_CONFIRMATORY
-                    or cast(dict[str, object], row[3]) != run.to_canonical()
+                    cast(str, row[0]) != PEF_V1_EXPERIMENT_ID
+                    or cast(str, row[1]) != str(run.run_digest)
+                    or cast(str, row[2]) != run.status.value
+                    or cast(str, row[3]) != RUN_CLASS_CONFIRMATORY
+                    or cast(dict[str, object], row[4]) != run.to_canonical()
                 ):
                     raise RuntimeError("PEF_V1 shadow run identity conflict")
         return evidence.run.run_id
