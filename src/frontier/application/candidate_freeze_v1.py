@@ -57,16 +57,12 @@ def _v1_preregistration_config_digest(path: Path, file_digest: Digest | None) ->
         return None
 
 
-def collect_freeze_inputs_v1(
-    root: Path, *, implementation_ref: str | None = None
-) -> FreezeInputs:
+def collect_freeze_inputs_v1(root: Path, *, implementation_ref: str | None = None) -> FreezeInputs:
     """Collect the exact PEF_V1 freeze inputs without touching PEF_V0 semantics."""
     preregistration_path = root / FREEZE_V1_PREREGISTRATION_PATH
     preregistration_digest = _read_digest(preregistration_path)
     if preregistration_digest is None:
-        raise FileNotFoundError(
-            f"preregistration file missing: {FREEZE_V1_PREREGISTRATION_PATH}"
-        )
+        raise FileNotFoundError(f"preregistration file missing: {FREEZE_V1_PREREGISTRATION_PATH}")
     commit, tree = _git_identity(root, ref=implementation_ref or "HEAD")
     return FreezeInputs(
         preregistration_digest=preregistration_digest,
