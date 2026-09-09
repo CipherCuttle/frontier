@@ -185,9 +185,8 @@ def run_shadow_experiment_v1(
     grouping_receipt: ProjectionReceipt,
     generated_at: datetime,
     source_registry_version: Digest,
-    candidate_freeze_receipt_id: str | None = None,
 ) -> ShadowExperimentRun:
-    """Run PEF_V1 candidate and frozen naive control on one bound V1 universe."""
+    """Run one freeze-unbound PEF_V1 implementation/dev shadow comparison."""
     try:
         candidate = run_pef_v1_ranking(
             observations,
@@ -223,7 +222,6 @@ def run_shadow_experiment_v1(
             candidate_receipt=failed_receipt,
             as_of=control_snapshot.as_of,
             generated_at=generated_at,
-            candidate_freeze_receipt_id=candidate_freeze_receipt_id,
         )
         if run.status is not ShadowRunStatus.FAILED:
             raise RuntimeError(
@@ -240,7 +238,6 @@ def run_shadow_experiment_v1(
         candidate_receipt=candidate.receipt,
         as_of=control_snapshot.as_of,
         generated_at=generated_at,
-        candidate_freeze_receipt_id=candidate_freeze_receipt_id,
     )
 
 
@@ -254,10 +251,11 @@ def run_pef_v1_paired(
     """Fetch one PIT universe and run both PEF_V1 arms over it.
 
     This is implementation/dev execution only. The V1 control remains in
-    memory and is never published through canonical baseline storage. This
-    function does not authorize candidate freeze, publication, confirmatory
-    classification, a prospective window, backfill, or reuse of retained
-    PEF_V0 boundaries.
+    memory and is never published through canonical baseline storage. Runs are
+    deliberately freeze-unbound until a separate PEF_V1 candidate-freeze
+    authority exists. This function does not authorize publication,
+    confirmatory classification, a prospective window, backfill, or reuse of
+    retained PEF_V0 boundaries.
     """
     observations = tuple(
         sorted(
@@ -293,4 +291,6 @@ def run_pef_v1_paired(
         raise RuntimeError("PEF_V1 paired run emitted the wrong candidate identity")
     if shadow.configuration_digest != PEF_V1_CONFIGURATION_DIGEST:
         raise RuntimeError("PEF_V1 paired run emitted the wrong configuration identity")
+    if shadow.candidate_freeze_receipt_id is not None:
+        raise RuntimeError("PEF_V1 implementation runs must remain freeze-unbound")
     return PefV1PairedRun(control=control, shadow=shadow)
