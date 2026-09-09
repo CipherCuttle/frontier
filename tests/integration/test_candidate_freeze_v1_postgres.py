@@ -33,12 +33,12 @@ def test_v1_freeze_persistence_is_authorized_and_db_durable() -> None:
     with psycopg.connect(DB_URL) as conn:
         unauthorized = postgres_v1.PostgresCandidateFreezeV1Repository(conn)
         with pytest.raises(PermissionError, match="PEF_V1 candidate freeze persistence"):
-            unauthorized.record_receipt(receipt, root=REPO_ROOT)
+            unauthorized.record_receipt(receipt)
 
         repository = postgres_v1.PostgresCandidateFreezeV1Repository(
             conn, persistence_authorized=True
         )
-        repository.record_receipt(receipt, root=REPO_ROOT)
+        repository.record_receipt(receipt)
         assert repository.get_receipt_json(receipt.receipt_id) == receipt.to_canonical()
         durable_freeze_at = repository.get_durable_freeze_at(receipt.receipt_id)
         assert durable_freeze_at is not None
@@ -79,9 +79,9 @@ def test_v1_freeze_persistence_rejects_drifted_and_forged_frozen_receipts() -> N
             conn, persistence_authorized=True
         )
         with pytest.raises(ValueError, match="requires a FROZEN receipt"):
-            repository.record_receipt(drifted, root=REPO_ROOT)
-        with pytest.raises(ValueError, match="does not exactly bind current Git HEAD"):
-            repository.record_receipt(forged, root=REPO_ROOT)
+            repository.record_receipt(drifted)
+        with pytest.raises(ValueError, match="does not exactly bind deployed Git HEAD"):
+            repository.record_receipt(forged)
         count = conn.execute(
             "SELECT COUNT(*) FROM candidate_freeze_receipts WHERE receipt_id IN (%s, %s)",
             (drifted.receipt_id, forged.receipt_id),
@@ -89,7 +89,7 @@ def test_v1_freeze_persistence_rejects_drifted_and_forged_frozen_receipts() -> N
         assert count == (0,)
 
 
-def test_v1_publication_repository_routes_through_v1_verifier(
+def test_v1_publication_repository_routes_through_deployed_v1_verifier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert DB_URL is not None
@@ -100,7 +100,7 @@ def test_v1_publication_repository_routes_through_v1_verifier(
         receipt_repository = postgres_v1.PostgresCandidateFreezeV1Repository(
             conn, persistence_authorized=True
         )
-        receipt_repository.record_receipt(receipt, root=REPO_ROOT)
+        receipt_repository.record_receipt(receipt)
         durable_freeze_at = receipt_repository.get_durable_freeze_at(receipt.receipt_id)
         assert durable_freeze_at is not None
         assert receipt.implementation_commit is not None
@@ -120,7 +120,8 @@ def test_v1_publication_repository_routes_through_v1_verifier(
             *,
             receipt_path: Path | None = None,
         ) -> CandidateFreezePublication:
-            del root, receipt_path
+            del receipt_path
+            assert root == REPO_ROOT
             assert bound_receipt == receipt
             return publication
 
@@ -131,12 +132,12 @@ def test_v1_publication_repository_routes_through_v1_verifier(
         )
         repository = postgres_v1.PostgresCandidateFreezePublicationV1Repository(conn)
         with pytest.raises(PermissionError, match="publication persistence is not authorized"):
-            repository.record_verified_publication(receipt, root=REPO_ROOT)
+            repository.record_verified_publication(receipt)
         with pytest.raises(PermissionError, match="raw PEF_V1"):
             repository.record_publication(publication)
 
         authorized = postgres_v1.PostgresCandidateFreezePublicationV1Repository(
             conn, persistence_authorized=True
         )
-        assert authorized.record_verified_publication(receipt, root=REPO_ROOT) == publication
+        assert authorized.record_verified_publication(receipt) == publication
         assert authorized.get_publication(receipt.receipt_id) == publication
