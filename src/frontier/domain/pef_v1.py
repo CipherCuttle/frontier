@@ -17,7 +17,6 @@ from .advanced_intelligence import (
     ShadowExperimentRun,
     ShadowRunStatus,
     build_pef_ranking,
-    canonical_freeze_components,
     pef_input_digest,
     shadow_universe_digest,
 )
@@ -108,6 +107,8 @@ def require_pef_v1_control_identity(
 ) -> None:
     if control_receipt.status is not ProjectionStatus.COMPLETE:
         raise ValueError("PEF_V1 requires a COMPLETE control snapshot")
+    if control_receipt.as_of != control_snapshot.as_of:
+        raise ValueError("PEF_V1 control receipt as_of mismatch")
     if control_receipt.output_digest.value.removeprefix(
         "sha256:"
     ) != control_snapshot.snapshot_id.removeprefix("snapshot_"):
@@ -354,7 +355,6 @@ def build_shadow_experiment_run_v1(
     candidate_receipt: ProjectionReceipt,
     as_of: datetime,
     generated_at: datetime,
-    candidate_freeze_receipt_id: str | None = None,
 ) -> ShadowExperimentRun:
     require_pef_v1_configuration_identity()
     require_pef_v1_control_identity(control_snapshot, control_receipt)
@@ -382,7 +382,6 @@ def build_shadow_experiment_run_v1(
     if candidate_receipt.source_registry_version != control_receipt.source_registry_version:
         raise ValueError("candidate receipt and control source registry versions differ")
 
-    freeze_id = canonical_freeze_components(candidate_freeze_receipt_id)
     universe_digest = shadow_universe_digest(control_snapshot)
     if candidate_artifact.status is PefArtifactStatus.RAN:
         _require_paired_universe(control_snapshot, candidate_artifact)
@@ -403,7 +402,7 @@ def build_shadow_experiment_run_v1(
             experiment_id=PEF_V1_EXPERIMENT_ID,
             candidate_id=PEF_V1_CANDIDATE_ID,
             configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
-            candidate_freeze_receipt_id=freeze_id,
+            candidate_freeze_receipt_id=None,
         )
     return ShadowExperimentRun(
         as_of=as_of,
@@ -422,5 +421,5 @@ def build_shadow_experiment_run_v1(
         experiment_id=PEF_V1_EXPERIMENT_ID,
         candidate_id=PEF_V1_CANDIDATE_ID,
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
-        candidate_freeze_receipt_id=freeze_id,
+        candidate_freeze_receipt_id=None,
     )
