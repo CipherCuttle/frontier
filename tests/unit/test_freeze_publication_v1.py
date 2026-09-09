@@ -9,7 +9,10 @@ import pytest
 
 from frontier.application.freeze_publication_v1 import derive_freeze_publication_v1
 from frontier.domain.candidate_freeze import FreezeInputs, FreezeStatus
-from frontier.domain.candidate_freeze_v1 import build_candidate_freeze_receipt_v1
+from frontier.domain.candidate_freeze_v1 import (
+    CandidateFreezeReceiptV1,
+    build_candidate_freeze_receipt_v1,
+)
 from frontier.domain.canonical_json import canonical_json_text
 from frontier.domain.digests import Digest
 from frontier.domain.pef_v1 import PEF_V1_CONFIGURATION_DIGEST
@@ -21,7 +24,7 @@ def _git(root: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-def _frozen_receipt(root: Path):
+def _frozen_receipt(root: Path) -> CandidateFreezeReceiptV1:
     implementation = _git(root, "rev-parse", "HEAD")
     tree = _git(root, "rev-parse", "HEAD^{tree}")
     receipt = build_candidate_freeze_receipt_v1(
@@ -39,7 +42,7 @@ def _frozen_receipt(root: Path):
     return receipt
 
 
-def _publish_receipt_merge(root: Path, receipt) -> Path:
+def _publish_receipt_merge(root: Path, receipt: CandidateFreezeReceiptV1) -> Path:
     _git(root, "checkout", "-b", "freeze-publication")
     path = root / "experiments/advanced_intelligence/pef_v1/candidate_freeze_receipt_v0.json"
     path.parent.mkdir(parents=True)
