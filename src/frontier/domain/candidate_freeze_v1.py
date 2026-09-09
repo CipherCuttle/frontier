@@ -23,9 +23,7 @@ from .pef_v1 import (
     require_pef_v1_configuration_identity,
 )
 
-FREEZE_V1_PREREGISTRATION_PATH = (
-    "experiments/advanced_intelligence/pef_v1/preregistration.json"
-)
+FREEZE_V1_PREREGISTRATION_PATH = "experiments/advanced_intelligence/pef_v1/preregistration.json"
 _IMPLEMENTATION_HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
 
 
@@ -139,7 +137,9 @@ def _drift_reasons(inputs: FreezeInputs) -> list[str]:
     if inputs.preregistration_config_digest is None:
         reasons.append("preregistration configuration digest unavailable")
     elif inputs.preregistration_config_digest != PEF_V1_CONFIGURATION_DIGEST:
-        reasons.append("preregistration configuration digest drifted from frozen PEF_V1 configuration")
+        reasons.append(
+            "preregistration configuration digest drifted from frozen PEF_V1 configuration"
+        )
     if inputs.implementation_commit is None or inputs.implementation_tree_digest is None:
         reasons.append("implementation commit/tree digest unavailable")
     if inputs.dependency_lock_digest is None:
