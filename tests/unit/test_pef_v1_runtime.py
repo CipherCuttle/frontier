@@ -137,8 +137,7 @@ def _membership_sets(snapshot: BaselineSnapshot) -> set[frozenset[str]]:
 def _grouping_membership_sets(projection: CompactGroupingProjection) -> set[frozenset[str]]:
     groups = {frozenset(group.observation_ids) for group in projection.groups}
     singletons = {
-        frozenset((observation_id,))
-        for observation_id in projection.ungrouped_observation_ids
+        frozenset((observation_id,)) for observation_id in projection.ungrouped_observation_ids
     }
     return groups | singletons
 
