@@ -287,7 +287,9 @@ class PefV1ConfirmatoryOrchestrator:
                     attempt=latest,
                     detail=f"attempt owned by {latest.lease_owner}",
                 )
-        attempt_no = 1 if latest is None or not latest.status.is_retryable else latest.attempt_no + 1
+        attempt_no = (
+            1 if latest is None or not latest.status.is_retryable else latest.attempt_no + 1
+        )
         pending = ExperimentRunAttempt(
             experiment_id=PEF_V1_EXPERIMENT_ID,
             as_of=boundary,
