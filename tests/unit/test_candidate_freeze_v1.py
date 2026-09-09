@@ -146,7 +146,7 @@ def test_v1_collector_binds_selected_git_tree_not_dirty_worktree(tmp_path: Path)
 
     committed = collect_freeze_inputs_v1(tmp_path)
 
-    preregistration["dirty_worktree_only"] = True
+    preregistration["dirty_worktree_only"] = "dirty"
     preregistration_path.write_text(json.dumps(preregistration), encoding="utf-8")
     dependency_lock_path.write_text("dirty lock\n", encoding="utf-8")
     source_registry_path.write_text(
