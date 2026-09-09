@@ -5,25 +5,32 @@ from hashlib import sha256
 
 from frontier.application.pef_v1 import run_pef_v1_paired
 from frontier.domain.advanced_intelligence import PEF_CONFIGURATION_DIGEST
-from frontier.domain.digests import Digest
+from frontier.domain.canonical_json import canonical_json_bytes
+from frontier.domain.digests import Digest, sha256_hex
 from frontier.domain.grouping import GroupingInput, GroupingRelationInput
 from frontier.domain.grouping_v1 import (
     GROUPING_V1_ALGORITHM_VERSION,
     GROUPING_V1_CONFIGURATION_DIGEST,
     GROUPING_V1_PROJECTION_VERSION,
+    CompactGroupingProjection,
 )
 from frontier.domain.health import HealthValue
-from frontier.domain.intelligence import BaselineHealthInput, BaselineObservationInput
+from frontier.domain.intelligence import (
+    BaselineHealthInput,
+    BaselineObservationInput,
+    BaselineSnapshot,
+)
 from frontier.domain.pef_v1 import (
     PEF_V1_CANDIDATE_ID,
     PEF_V1_CONFIGURATION,
     PEF_V1_CONFIGURATION_DIGEST,
+    PEF_V1_CONTROL_CONFIGURATION_DIGEST,
     PEF_V1_EXPERIMENT_ID,
     PEF_V1_GROUPING_CONTRACT,
     PEF_V1_PREREGISTERED_CONFIG_DIGEST,
     require_pef_v1_configuration_identity,
 )
-from frontier.domain.receipt import ProjectionStatus
+from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 
 AS_OF = datetime(2026, 9, 9, 14, 55, tzinfo=UTC)
 REGISTRY = Digest("sha256:" + "1" * 64)
@@ -101,7 +108,7 @@ class _Repository:
         self.relations: tuple[GroupingRelationInput, ...] = ()
         self.enabled = ("hn.frontpage", "pypi.updates")
         self.health = tuple(_health(source_id) for source_id in self.enabled)
-        self.published: list[tuple[object, object]] = []
+        self.published: list[tuple[BaselineSnapshot, ProjectionReceipt]] = []
 
     def list_baseline_observations_as_of(
         self, as_of: datetime
@@ -117,24 +124,35 @@ class _Repository:
     def list_latest_health_as_of(self, as_of: datetime) -> list[BaselineHealthInput]:
         return [item for item in self.health if item.as_of <= as_of]
 
-    def publish_complete_snapshot(self, snapshot: object, receipt: object) -> None:
+    def publish_complete_snapshot(
+        self,
+        snapshot: BaselineSnapshot,
+        receipt: ProjectionReceipt,
+    ) -> None:
         self.published.append((snapshot, receipt))
 
 
-def _membership_sets(values: object) -> set[frozenset[str]]:
-    episodes = getattr(values, "episodes")
-    return {frozenset(episode.observation_ids) for episode in episodes}
+def _membership_sets(snapshot: BaselineSnapshot) -> set[frozenset[str]]:
+    return {frozenset(episode.observation_ids) for episode in snapshot.episodes}
 
 
-def _grouping_membership_sets(projection: object) -> set[frozenset[str]]:
-    groups = {
-        frozenset(group.observation_ids) for group in getattr(projection, "groups")
-    }
+def _grouping_membership_sets(
+    projection: CompactGroupingProjection,
+) -> set[frozenset[str]]:
+    groups = {frozenset(group.observation_ids) for group in projection.groups}
     singletons = {
         frozenset((observation_id,))
-        for observation_id in getattr(projection, "ungrouped_observation_ids")
+        for observation_id in projection.ungrouped_observation_ids
     }
     return groups | singletons
+
+
+def _expected_v1_episode_id(observation_ids: tuple[str, ...]) -> str:
+    material = {
+        "grouping_algorithm_version": GROUPING_V1_ALGORITHM_VERSION,
+        "observation_ids": list(observation_ids),
+    }
+    return "episode_" + sha256_hex(canonical_json_bytes(material))
 
 
 def test_v1_configuration_digest_is_exact_preregistered_successor_identity() -> None:
@@ -161,15 +179,25 @@ def test_paired_runtime_uses_v1_grouping_for_exact_same_candidate_control_univer
     grouping_membership = _grouping_membership_sets(result.control.grouping_projection)
     assert control_membership == grouping_membership
 
-    # The V1 shadow builder rejects any candidate/control membership mismatch
-    # before a RAN result can exist. The retained control ranking therefore
-    # has exactly one entry per V1 control episode.
     assert len(result.shadow.control_ranking) == len(control_membership)
     assert result.shadow.status.value == "RAN"
     assert result.shadow.experiment_id == PEF_V1_EXPERIMENT_ID
     assert result.shadow.candidate_id == PEF_V1_CANDIDATE_ID
     assert result.shadow.configuration_digest == PEF_V1_CONFIGURATION_DIGEST
     assert result.shadow.episode_universe_digest.value.startswith("sha256:")
+
+
+def test_v1_control_binds_v1_grouping_configuration_and_episode_identity() -> None:
+    repository = _Repository()
+    result = run_pef_v1_paired(
+        repository,
+        as_of=AS_OF,
+        generated_at=AS_OF,
+        source_registry_version=REGISTRY,
+    )
+    assert result.control.receipt.configuration_digest == PEF_V1_CONTROL_CONFIGURATION_DIGEST
+    for episode in result.control.snapshot.episodes:
+        assert episode.episode_id == _expected_v1_episode_id(episode.observation_ids)
 
 
 def test_v1_grouping_receipt_binds_scalable_algorithm_and_complete_output() -> None:
