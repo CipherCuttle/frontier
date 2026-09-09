@@ -12,19 +12,6 @@ from pathlib import Path
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
 
-from frontier.adapters.acquisition.config import load_source_registry
-from frontier.adapters.postgres.experiment_attempts import PostgresExperimentAttemptRepository
-from frontier.adapters.postgres.frozen_registry_intelligence import (
-    PostgresFrozenRegistryBaselineIntelligenceRepository,
-)
-from frontier.adapters.postgres.pef_v1_confirmatory import (
-    PostgresPefV1ConfirmatoryPersistence,
-    PostgresPefV1FreezeBindingResolver,
-)
-from frontier.adapters.postgres.readiness import verify_database_readiness
-from frontier.application.experiment_orchestration import ExperimentCycleAction
-from frontier.application.pef_v1_confirmatory import PefV1ConfirmatoryOrchestrator
-
 _OPERATOR_LEASE_NAME = "frontier-pef-v1-confirmatory-lease"
 _OPERATOR_LEASE_KEY = int.from_bytes(
     hashlib.sha256(_OPERATOR_LEASE_NAME.encode()).digest()[:8], "big"
@@ -91,6 +78,23 @@ def run_once(
 ) -> int:
     require_direct_session_database_url(database_url)
     require_clean_repository_tree(root)
+
+    # Project/runtime imports are intentionally delayed until the Git worktree
+    # is proven clean. Dirty candidate code or registry-loader code therefore
+    # cannot execute before the confirmatory contamination gate.
+    from frontier.adapters.acquisition.config import load_source_registry
+    from frontier.adapters.postgres.experiment_attempts import PostgresExperimentAttemptRepository
+    from frontier.adapters.postgres.frozen_registry_intelligence import (
+        PostgresFrozenRegistryBaselineIntelligenceRepository,
+    )
+    from frontier.adapters.postgres.pef_v1_confirmatory import (
+        PostgresPefV1ConfirmatoryPersistence,
+        PostgresPefV1FreezeBindingResolver,
+    )
+    from frontier.adapters.postgres.readiness import verify_database_readiness
+    from frontier.application.experiment_orchestration import ExperimentCycleAction
+    from frontier.application.pef_v1_confirmatory import PefV1ConfirmatoryOrchestrator
+
     registry = load_source_registry(root)
     at = now or datetime.now(UTC)
     with psycopg.connect(database_url) as conn:
