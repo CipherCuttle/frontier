@@ -1,20 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import cast
 
 from frontier.application.advanced_intelligence import PefRankingRun
 from frontier.application.intelligence import BaselineIntelligenceRepository
 from frontier.domain.advanced_intelligence import PefArtifact, ShadowExperimentRun, ShadowRunStatus
-from frontier.domain.digests import Digest
+from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes
+from frontier.domain.digests import Digest, sha256_hex
 from frontier.domain.grouping import GroupingProjection, GroupingRelationInput
 from frontier.domain.grouping_v1 import (
+    GROUPING_V1_ALGORITHM_VERSION,
     CompactGroupingProjection,
     build_compact_grouping_projection,
     build_compact_grouping_receipt,
 )
 from frontier.domain.intelligence import (
+    BaselineEpisode,
     BaselineHealthInput,
     BaselineObservationInput,
     BaselineSnapshot,
@@ -24,6 +27,7 @@ from frontier.domain.intelligence import (
 from frontier.domain.pef_v1 import (
     PEF_V1_CANDIDATE_ID,
     PEF_V1_CONFIGURATION_DIGEST,
+    PEF_V1_CONTROL_CONFIGURATION_DIGEST,
     PEF_V1_EXPERIMENT_ID,
     build_pef_v1_artifact,
     build_pef_v1_receipt,
@@ -47,6 +51,36 @@ class PefV1PairedRun:
     shadow: ShadowExperimentRun
 
 
+def _v1_episode_id(observation_ids: tuple[str, ...]) -> str:
+    material: dict[str, CanonicalValue] = {
+        "grouping_algorithm_version": GROUPING_V1_ALGORITHM_VERSION,
+        "observation_ids": list(observation_ids),
+    }
+    return "episode_" + sha256_hex(canonical_json_bytes(material))
+
+
+def _rerank_control(episodes: tuple[BaselineEpisode, ...]) -> tuple[BaselineEpisode, ...]:
+    ordered = list(episodes)
+    ordered.sort(key=lambda episode: episode.episode_id)
+    ordered.sort(key=lambda episode: episode.evidence_count_total, reverse=True)
+    ordered.sort(key=lambda episode: episode.last_observed_at, reverse=True)
+    ordered.sort(key=lambda episode: episode.source_role_diversity, reverse=True)
+    ordered.sort(key=lambda episode: episode.mentions_24h, reverse=True)
+    ordered.sort(key=lambda episode: episode.acceleration_6h, reverse=True)
+    ordered.sort(key=lambda episode: episode.velocity_6h_delta, reverse=True)
+    ordered.sort(key=lambda episode: episode.mentions_6h, reverse=True)
+    ordered.sort(key=lambda episode: episode.mentions_1h, reverse=True)
+    return tuple(replace(episode, rank=index) for index, episode in enumerate(ordered, start=1))
+
+
+def _bind_v1_episode_identity(snapshot: BaselineSnapshot) -> BaselineSnapshot:
+    episodes = tuple(
+        replace(episode, episode_id=_v1_episode_id(episode.observation_ids))
+        for episode in snapshot.episodes
+    )
+    return replace(snapshot, episodes=_rerank_control(episodes))
+
+
 def run_pef_v1_control(
     repository: BaselineIntelligenceRepository,
     *,
@@ -62,9 +96,8 @@ def run_pef_v1_control(
 
     The public baseline projection identity and ranking policy stay unchanged,
     exactly as preregistered. Only the grouping input authority changes. The
-    baseline receipt input digest therefore binds the compact V1 projection,
-    while the separate grouping receipt binds the V1 grouping algorithm,
-    configuration, inputs and compact output directly.
+    experiment-only control receipt binds the V1 grouping configuration, while
+    the separate grouping receipt binds V1 grouping inputs and compact output.
     """
     if observations is None:
         observations = tuple(repository.list_baseline_observations_as_of(as_of))
@@ -89,10 +122,8 @@ def run_pef_v1_control(
     )
 
     # Baseline intelligence consumes only groups, ungrouped ids, as_of and the
-    # projection canonical form. CompactGroupingProjection intentionally
-    # supplies that complete structural surface but omits the V0 O(n^2)
-    # ambiguous-pair array. The cast documents this experiment-only type seam;
-    # no semantic conversion or V0 regrouping occurs.
+    # projection canonical form. CompactGroupingProjection intentionally omits
+    # the V0 O(n^2) ambiguous-pair array. No V0 regrouping occurs here.
     baseline_grouping = cast(GroupingProjection, grouping_projection)
     snapshot = build_baseline_snapshot(
         observations,
@@ -101,6 +132,7 @@ def run_pef_v1_control(
         health=health,
         as_of=as_of,
     )
+    snapshot = _bind_v1_episode_identity(snapshot)
     receipt = build_baseline_receipt(
         snapshot,
         observations=observations,
@@ -110,6 +142,7 @@ def run_pef_v1_control(
         generated_at=generated_at,
         source_registry_version=source_registry_version,
     )
+    receipt = replace(receipt, configuration_digest=PEF_V1_CONTROL_CONFIGURATION_DIGEST)
     repository.publish_complete_snapshot(snapshot, receipt)
     return PefV1ControlRun(
         snapshot=snapshot,
