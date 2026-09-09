@@ -4,14 +4,11 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import cast
 
-from frontier.application.advanced_intelligence import PefRankingRun
 from frontier.application.intelligence import BaselineIntelligenceRepository
-from frontier.domain.advanced_intelligence import PefArtifact, ShadowExperimentRun, ShadowRunStatus
-from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes
-from frontier.domain.digests import Digest, sha256_hex
+from frontier.domain.advanced_intelligence import ShadowExperimentRun, ShadowRunStatus
+from frontier.domain.digests import Digest
 from frontier.domain.grouping import GroupingProjection, GroupingRelationInput
 from frontier.domain.grouping_v1 import (
-    GROUPING_V1_ALGORITHM_VERSION,
     CompactGroupingProjection,
     build_compact_grouping_projection,
     build_compact_grouping_receipt,
@@ -29,10 +26,12 @@ from frontier.domain.pef_v1 import (
     PEF_V1_CONFIGURATION_DIGEST,
     PEF_V1_CONTROL_CONFIGURATION_DIGEST,
     PEF_V1_EXPERIMENT_ID,
+    PefV1Artifact,
     build_pef_v1_artifact,
     build_pef_v1_receipt,
     build_shadow_experiment_run_v1,
     failed_pef_v1_artifact,
+    pef_v1_episode_id,
 )
 from frontier.domain.receipt import ProjectionReceipt
 
@@ -46,17 +45,15 @@ class PefV1ControlRun:
 
 
 @dataclass(frozen=True, slots=True)
+class PefV1RankingRun:
+    artifact: PefV1Artifact
+    receipt: ProjectionReceipt
+
+
+@dataclass(frozen=True, slots=True)
 class PefV1PairedRun:
     control: PefV1ControlRun
     shadow: ShadowExperimentRun
-
-
-def _v1_episode_id(observation_ids: tuple[str, ...]) -> str:
-    material: dict[str, CanonicalValue] = {
-        "grouping_algorithm_version": GROUPING_V1_ALGORITHM_VERSION,
-        "observation_ids": list(observation_ids),
-    }
-    return "episode_" + sha256_hex(canonical_json_bytes(material))
 
 
 def _rerank_control(episodes: tuple[BaselineEpisode, ...]) -> tuple[BaselineEpisode, ...]:
@@ -75,7 +72,7 @@ def _rerank_control(episodes: tuple[BaselineEpisode, ...]) -> tuple[BaselineEpis
 
 def _bind_v1_episode_identity(snapshot: BaselineSnapshot) -> BaselineSnapshot:
     episodes = tuple(
-        replace(episode, episode_id=_v1_episode_id(episode.observation_ids))
+        replace(episode, episode_id=pef_v1_episode_id(episode.observation_ids))
         for episode in snapshot.episodes
     )
     return replace(snapshot, episodes=_rerank_control(episodes))
@@ -92,12 +89,12 @@ def run_pef_v1_control(
     enabled_source_ids: tuple[str, ...] | None = None,
     health: tuple[BaselineHealthInput, ...] | None = None,
 ) -> PefV1ControlRun:
-    """Build the frozen naive control on the scalable V1 grouping universe.
+    """Build an experiment-only naive control on the scalable V1 grouping universe.
 
-    The public baseline projection identity and ranking policy stay unchanged,
-    exactly as preregistered. Only the grouping input authority changes. The
-    experiment-only control receipt binds the V1 grouping configuration, while
-    the separate grouping receipt binds V1 grouping inputs and compact output.
+    The frozen baseline ranking policy is reused, but this experiment-only
+    control is never published through the canonical baseline repository. Its
+    receipt binds the V1 grouping configuration and the separate grouping
+    receipt binds the exact V1 projection, inputs, and source registry.
     """
     if observations is None:
         observations = tuple(repository.list_baseline_observations_as_of(as_of))
@@ -121,7 +118,7 @@ def run_pef_v1_control(
         source_registry_version=source_registry_version,
     )
 
-    # Baseline intelligence consumes only groups, ungrouped ids, as_of and the
+    # Baseline intelligence consumes groups, ungrouped ids, as_of, and the
     # projection canonical form. CompactGroupingProjection intentionally omits
     # the V0 O(n^2) ambiguous-pair array. No V0 regrouping occurs here.
     baseline_grouping = cast(GroupingProjection, grouping_projection)
@@ -143,7 +140,6 @@ def run_pef_v1_control(
         source_registry_version=source_registry_version,
     )
     receipt = replace(receipt, configuration_digest=PEF_V1_CONTROL_CONFIGURATION_DIGEST)
-    repository.publish_complete_snapshot(snapshot, receipt)
     return PefV1ControlRun(
         snapshot=snapshot,
         receipt=receipt,
@@ -157,13 +153,17 @@ def run_pef_v1_ranking(
     *,
     control_snapshot: BaselineSnapshot,
     control_receipt: ProjectionReceipt,
+    grouping_projection: CompactGroupingProjection,
+    grouping_receipt: ProjectionReceipt,
     generated_at: datetime,
     source_registry_version: Digest,
-) -> PefRankingRun:
+) -> PefV1RankingRun:
     artifact = build_pef_v1_artifact(
         observations,
         control_snapshot=control_snapshot,
         control_receipt=control_receipt,
+        grouping_projection=grouping_projection,
+        grouping_receipt=grouping_receipt,
         as_of=control_snapshot.as_of,
         generated_at=generated_at,
         source_registry_version=source_registry_version,
@@ -173,7 +173,7 @@ def run_pef_v1_ranking(
         observations=observations,
         control_snapshot=control_snapshot,
     )
-    return PefRankingRun(artifact=artifact, receipt=receipt)
+    return PefV1RankingRun(artifact=artifact, receipt=receipt)
 
 
 def run_shadow_experiment_v1(
@@ -181,23 +181,29 @@ def run_shadow_experiment_v1(
     *,
     control_snapshot: BaselineSnapshot,
     control_receipt: ProjectionReceipt,
+    grouping_projection: CompactGroupingProjection,
+    grouping_receipt: ProjectionReceipt,
     generated_at: datetime,
     source_registry_version: Digest,
     candidate_freeze_receipt_id: str | None = None,
 ) -> ShadowExperimentRun:
-    """Run PEF_V1 candidate and frozen naive control on one V1 episode universe."""
+    """Run PEF_V1 candidate and frozen naive control on one bound V1 universe."""
     try:
         candidate = run_pef_v1_ranking(
             observations,
             control_snapshot=control_snapshot,
             control_receipt=control_receipt,
+            grouping_projection=grouping_projection,
+            grouping_receipt=grouping_receipt,
             generated_at=generated_at,
             source_registry_version=source_registry_version,
         )
     except Exception as error:
-        failed: PefArtifact = failed_pef_v1_artifact(
+        failed = failed_pef_v1_artifact(
             control_snapshot=control_snapshot,
             control_receipt=control_receipt,
+            grouping_projection=grouping_projection,
+            grouping_receipt=grouping_receipt,
             as_of=control_snapshot.as_of,
             generated_at=generated_at,
             source_registry_version=source_registry_version,
@@ -211,6 +217,8 @@ def run_shadow_experiment_v1(
         run = build_shadow_experiment_run_v1(
             control_snapshot=control_snapshot,
             control_receipt=control_receipt,
+            grouping_projection=grouping_projection,
+            grouping_receipt=grouping_receipt,
             candidate_artifact=failed,
             candidate_receipt=failed_receipt,
             as_of=control_snapshot.as_of,
@@ -226,6 +234,8 @@ def run_shadow_experiment_v1(
     return build_shadow_experiment_run_v1(
         control_snapshot=control_snapshot,
         control_receipt=control_receipt,
+        grouping_projection=grouping_projection,
+        grouping_receipt=grouping_receipt,
         candidate_artifact=candidate.artifact,
         candidate_receipt=candidate.receipt,
         as_of=control_snapshot.as_of,
@@ -243,9 +253,11 @@ def run_pef_v1_paired(
 ) -> PefV1PairedRun:
     """Fetch one PIT universe and run both PEF_V1 arms over it.
 
-    This is intentionally implementation/dev execution only. It does not
-    authorize candidate freeze, publication, confirmatory classification, a
-    prospective window, backfill, or reuse of any retained PEF_V0 boundary.
+    This is implementation/dev execution only. The V1 control remains in
+    memory and is never published through canonical baseline storage. This
+    function does not authorize candidate freeze, publication, confirmatory
+    classification, a prospective window, backfill, or reuse of retained
+    PEF_V0 boundaries.
     """
     observations = tuple(
         sorted(
@@ -270,6 +282,8 @@ def run_pef_v1_paired(
         observations,
         control_snapshot=control.snapshot,
         control_receipt=control.receipt,
+        grouping_projection=control.grouping_projection,
+        grouping_receipt=control.grouping_receipt,
         generated_at=generated_at,
         source_registry_version=source_registry_version,
     )
