@@ -5,7 +5,7 @@ from hashlib import sha256
 
 from frontier.application.pef_v1 import run_pef_v1_paired
 from frontier.domain.advanced_intelligence import PEF_CONFIGURATION_DIGEST
-from frontier.domain.canonical_json import canonical_json_bytes
+from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes
 from frontier.domain.digests import Digest, sha256_hex
 from frontier.domain.grouping import GroupingInput, GroupingRelationInput
 from frontier.domain.grouping_v1 import (
@@ -110,9 +110,7 @@ class _Repository:
         self.health = tuple(_health(source_id) for source_id in self.enabled)
         self.published: list[tuple[BaselineSnapshot, ProjectionReceipt]] = []
 
-    def list_baseline_observations_as_of(
-        self, as_of: datetime
-    ) -> list[BaselineObservationInput]:
+    def list_baseline_observations_as_of(self, as_of: datetime) -> list[BaselineObservationInput]:
         return [item for item in self.observations if item.observed_at <= as_of]
 
     def list_grouping_relations_as_of(self, as_of: datetime) -> list[GroupingRelationInput]:
@@ -136,9 +134,7 @@ def _membership_sets(snapshot: BaselineSnapshot) -> set[frozenset[str]]:
     return {frozenset(episode.observation_ids) for episode in snapshot.episodes}
 
 
-def _grouping_membership_sets(
-    projection: CompactGroupingProjection,
-) -> set[frozenset[str]]:
+def _grouping_membership_sets(projection: CompactGroupingProjection) -> set[frozenset[str]]:
     groups = {frozenset(group.observation_ids) for group in projection.groups}
     singletons = {
         frozenset((observation_id,))
@@ -148,7 +144,7 @@ def _grouping_membership_sets(
 
 
 def _expected_v1_episode_id(observation_ids: tuple[str, ...]) -> str:
-    material = {
+    material: dict[str, CanonicalValue] = {
         "grouping_algorithm_version": GROUPING_V1_ALGORITHM_VERSION,
         "observation_ids": list(observation_ids),
     }
