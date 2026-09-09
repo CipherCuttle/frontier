@@ -199,7 +199,7 @@ def test_v1_confirmatory_persistence_is_freeze_bound_and_v0_isolated() -> None:
             evidence,
             run=replace(evidence.run, candidate_freeze_receipt_id=forged_id),
         )
-        with pytest.raises(RuntimeError, match="canonical freeze authority is missing"):
+        with pytest.raises(RuntimeError, match="expected freeze is not latest canonical authority"):
             persistence.persist(forged, expected_freeze_receipt_id=forged_id)
 
         run_id = persistence.persist(
