@@ -24,7 +24,6 @@ from frontier.application.freeze_publication import (
     first_confirmatory_boundary,
 )
 from frontier.application.pef_v1_confirmatory import (
-    PefV1ConfirmatoryEvidence,
     build_pef_v1_confirmatory_evidence,
 )
 from frontier.domain.advanced_intelligence import (
