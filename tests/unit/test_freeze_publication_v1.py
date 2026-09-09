@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import subprocess
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from frontier.application.freeze_publication_v1 import derive_freeze_publication_v1
-from frontier.domain.candidate_freeze import FreezeInputs
+from frontier.domain.candidate_freeze import FreezeInputs, FreezeStatus
 from frontier.domain.candidate_freeze_v1 import build_candidate_freeze_receipt_v1
 from frontier.domain.canonical_json import canonical_json_text
 from frontier.domain.digests import Digest
@@ -38,6 +39,18 @@ def _frozen_receipt(root: Path):
     return receipt
 
 
+def _publish_receipt_merge(root: Path, receipt) -> Path:
+    _git(root, "checkout", "-b", "freeze-publication")
+    path = root / "experiments/advanced_intelligence/pef_v1/candidate_freeze_receipt_v0.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(canonical_json_text(receipt.to_canonical()) + "\n", encoding="utf-8")
+    _git(root, "add", str(path.relative_to(root)))
+    _git(root, "commit", "-m", "publish receipt")
+    _git(root, "checkout", "main")
+    _git(root, "merge", "--no-ff", "freeze-publication", "-m", "merge durable freeze")
+    return path
+
+
 def test_exact_v1_publication_merge_is_derived_from_git(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-b", "main")
     _git(tmp_path, "config", "user.email", "frontier@example.test")
@@ -46,15 +59,7 @@ def test_exact_v1_publication_merge_is_derived_from_git(tmp_path: Path) -> None:
     _git(tmp_path, "add", "base.txt")
     _git(tmp_path, "commit", "-m", "implementation")
     receipt = _frozen_receipt(tmp_path)
-
-    _git(tmp_path, "checkout", "-b", "freeze-publication")
-    path = tmp_path / "experiments/advanced_intelligence/pef_v1/candidate_freeze_receipt_v0.json"
-    path.parent.mkdir(parents=True)
-    path.write_text(canonical_json_text(receipt.to_canonical()) + "\n", encoding="utf-8")
-    _git(tmp_path, "add", str(path.relative_to(tmp_path)))
-    _git(tmp_path, "commit", "-m", "publish receipt")
-    _git(tmp_path, "checkout", "main")
-    _git(tmp_path, "merge", "--no-ff", "freeze-publication", "-m", "merge durable freeze")
+    path = _publish_receipt_merge(tmp_path, receipt)
 
     publication = derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
     assert publication.implementation_commit == receipt.implementation_commit
@@ -77,3 +82,42 @@ def test_v1_publication_rejects_non_v1_receipt_path(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="canonical versioned publication path"):
         derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+
+
+def test_v1_publication_rejects_drifted_receipt(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    (tmp_path / "base.txt").write_text("base", encoding="utf-8")
+    _git(tmp_path, "add", "base.txt")
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    drifted = replace(
+        receipt,
+        status=FreezeStatus.DRIFTED,
+        drift_reasons=("test drift",),
+    )
+    path = tmp_path / "experiments/advanced_intelligence/pef_v1/candidate_freeze_receipt_v0.json"
+
+    with pytest.raises(RuntimeError, match="requires a FROZEN receipt"):
+        derive_freeze_publication_v1(tmp_path, drifted, receipt_path=path)
+
+
+def test_v1_publication_verifies_receipt_bytes_from_head(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    (tmp_path / "base.txt").write_text("base", encoding="utf-8")
+    _git(tmp_path, "add", "base.txt")
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+
+    spoofed = replace(
+        receipt,
+        source_registry_digest=Digest("sha256:" + "4" * 64),
+    )
+    path.write_text(canonical_json_text(spoofed.to_canonical()) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="committed freeze publication does not equal"):
+        derive_freeze_publication_v1(tmp_path, spoofed, receipt_path=path)
