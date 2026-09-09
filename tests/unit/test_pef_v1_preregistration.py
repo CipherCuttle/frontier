@@ -8,7 +8,6 @@ from typing import Any
 
 from frontier.domain.canonical_json import canonical_json_bytes
 
-
 PEF_V0_PATH = Path("experiments/advanced_intelligence/pef_v0/preregistration.json")
 PEF_V1_PATH = Path("experiments/advanced_intelligence/pef_v1/preregistration.json")
 PEF_V0_BLOB = "0ce6320854634b8cd7228361b127e26f9dd0600c"
@@ -28,7 +27,7 @@ EXPECTED_OVERRIDE_POINTERS = (
 def _git_blob_sha(path: Path) -> str:
     payload = path.read_bytes()
     framed = b"blob " + str(len(payload)).encode("ascii") + b"\0" + payload
-    return hashlib.sha1(framed).hexdigest()  # noqa: S324 - Git object identity is SHA-1 by contract.
+    return hashlib.sha1(framed).hexdigest()
 
 
 def _apply_json_pointer(document: dict[str, Any], pointer: str, value: Any) -> None:
@@ -152,7 +151,8 @@ def test_pef_v1_binds_exact_canonical_grouping_v1_and_isolates_pef_v0_evidence()
         "grouping_input_authority_changed": True,
         "change_summary": (
             "PEF_V1 repeats the PEF_V0 ranking hypothesis on the canonical scalable grouping V1 "
-            "universe; the predecessor confirmatory run is retained as aborted incident evidence only."
+            "universe; the predecessor confirmatory run is retained as aborted incident "
+            "evidence only."
         ),
     }
 
