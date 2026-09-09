@@ -7,6 +7,7 @@ from typing import cast
 import psycopg
 from psycopg.types.json import Jsonb
 
+from frontier.application.candidate_freeze_v1 import freeze_candidate_v1
 from frontier.application.freeze_publication import CandidateFreezePublication
 from frontier.application.freeze_publication_v1 import derive_github_main_freeze_publication_v1
 from frontier.domain.advanced_intelligence import PEF_ALGORITHM_VERSION
@@ -25,7 +26,7 @@ from frontier.domain.pef_v1 import (
 
 
 class PostgresCandidateFreezeV1Repository:
-    """Append-only persistence for PEF_V1 candidate freeze receipts."""
+    """Append-only persistence for exact FROZEN PEF_V1 candidate receipts."""
 
     def __init__(
         self,
@@ -36,9 +37,11 @@ class PostgresCandidateFreezeV1Repository:
         self._connection = connection
         self._persistence_authorized = persistence_authorized
 
-    def record_receipt(self, receipt: CandidateFreezeReceiptV1) -> None:
+    def record_receipt(self, receipt: CandidateFreezeReceiptV1, *, root: Path) -> None:
         if not self._persistence_authorized:
             raise PermissionError("PEF_V1 candidate freeze persistence is not authorized")
+        if receipt.status is not FreezeStatus.FROZEN:
+            raise ValueError("PEF_V1 candidate freeze persistence requires a FROZEN receipt")
         if receipt.candidate_id != PEF_V1_CANDIDATE_ID:
             raise ValueError("PEF_V1 candidate freeze candidate id mismatch")
         if receipt.experiment_id != PEF_V1_EXPERIMENT_ID:
@@ -51,19 +54,21 @@ class PostgresCandidateFreezeV1Repository:
             raise ValueError("PEF_V1 candidate freeze preregistration path mismatch")
         if receipt.schema_version != FREEZE_SCHEMA_VERSION:
             raise ValueError("PEF_V1 candidate freeze schema version mismatch")
-        if receipt.status is FreezeStatus.DRIFTED and not receipt.drift_reasons:
-            raise ValueError("DRIFTED PEF_V1 freeze receipt requires explicit drift reasons")
-        if receipt.status is FreezeStatus.FROZEN and receipt.drift_reasons:
+        if receipt.drift_reasons:
             raise ValueError("FROZEN PEF_V1 freeze receipt cannot carry drift reasons")
         if receipt.receipt_digest != sha256_digest(canonical_json_bytes(receipt.to_canonical())):
             raise ValueError("PEF_V1 freeze receipt digest does not bind its canonical payload")
 
-        entry_values: list[dict[str, str]] | None = None
-        if receipt.registry_entry_digests is not None:
-            entry_values = [
-                {"digest": str(entry.digest), "path": entry.path}
-                for entry in receipt.registry_entry_digests
-            ]
+        expected = freeze_candidate_v1(root, frozen_at=receipt.frozen_at)
+        if expected.status is not FreezeStatus.FROZEN:
+            raise ValueError("current Git HEAD cannot produce a FROZEN PEF_V1 candidate receipt")
+        if expected != receipt:
+            raise ValueError("PEF_V1 freeze receipt does not exactly bind current Git HEAD")
+
+        entry_values = [
+            {"digest": str(entry.digest), "path": entry.path}
+            for entry in receipt.registry_entry_digests or ()
+        ]
         with self._connection.transaction(), self._connection.cursor() as cur:
             cur.execute(
                 """
@@ -107,7 +112,7 @@ class PostgresCandidateFreezeV1Repository:
                         if receipt.source_registry_digest is None
                         else str(receipt.source_registry_digest)
                     ),
-                    None if entry_values is None else Jsonb(entry_values),
+                    Jsonb(entry_values),
                     Jsonb(list(receipt.drift_reasons)),
                     str(receipt.receipt_digest),
                     receipt.frozen_at,
