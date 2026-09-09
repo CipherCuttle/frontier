@@ -1,19 +1,17 @@
 from __future__ import annotations
 
+import json
+import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from frontier.application.candidate_freeze import (
-    _git_identity,
-    _load_json_document,
-    _read_digest,
-    _registry_entry_digests,
-)
 from frontier.domain.candidate_freeze import (
     FREEZE_DEPENDENCY_LOCK_PATH,
     FREEZE_SOURCE_REGISTRY_PATH,
     FreezeInputs,
+    RegistryEntryDigest,
 )
 from frontier.domain.candidate_freeze_v1 import (
     FREEZE_V1_PREREGISTRATION_PATH,
@@ -21,8 +19,72 @@ from frontier.domain.candidate_freeze_v1 import (
     build_candidate_freeze_receipt_v1,
     verify_candidate_freeze_v1,
 )
-from frontier.domain.digests import Digest
+from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.pef_v1 import PEF_V1_CANDIDATE_ID, PEF_V1_EXPERIMENT_ID
+
+_COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
+
+
+def _read_digest(path: Path) -> Digest | None:
+    try:
+        return sha256_digest(path.read_bytes())
+    except FileNotFoundError, IsADirectoryError, PermissionError:
+        return None
+
+
+def _load_json_document(path: Path) -> dict[str, object] | None:
+    try:
+        raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    return cast(dict[str, object], raw)
+
+
+def _registry_entry_digests(root: Path, path: Path) -> tuple[RegistryEntryDigest, ...] | None:
+    document = _load_json_document(path)
+    if document is None:
+        return None
+    raw_paths = document.get("source_contract_paths")
+    if not isinstance(raw_paths, list) or not raw_paths:
+        return None
+    entries: list[RegistryEntryDigest] = []
+    for item in cast(list[object], raw_paths):
+        if not isinstance(item, str):
+            return None
+        entry_digest = _read_digest(root / item)
+        if entry_digest is None:
+            return None
+        entries.append(RegistryEntryDigest(path=item, digest=entry_digest))
+    return tuple(sorted(entries, key=lambda entry: entry.path))
+
+
+def _git_identity(root: Path, *, ref: str = "HEAD") -> tuple[str | None, str | None]:
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", ref],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+        tree = subprocess.run(
+            ["git", "rev-parse", f"{ref}^{{tree}}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        )
+    except OSError, subprocess.SubprocessError:
+        return (None, None)
+    commit_hash = commit.stdout.strip()
+    tree_hash = tree.stdout.strip()
+    if not _COMMIT_HASH_RE.fullmatch(commit_hash) or not _COMMIT_HASH_RE.fullmatch(tree_hash):
+        return (None, None)
+    return (commit_hash, tree_hash)
 
 
 def _v1_preregistration_config_digest(path: Path, file_digest: Digest | None) -> Digest | None:
