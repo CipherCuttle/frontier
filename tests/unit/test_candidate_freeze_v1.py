@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import subprocess
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,7 +11,13 @@ from frontier.application.candidate_freeze_v1 import (
     freeze_candidate_v1,
     verify_freeze_v1,
 )
-from frontier.domain.candidate_freeze import FreezeInputs, FreezeStatus, RegistryEntryDigest
+from frontier.domain.candidate_freeze import (
+    FREEZE_DEPENDENCY_LOCK_PATH,
+    FREEZE_SOURCE_REGISTRY_PATH,
+    FreezeInputs,
+    FreezeStatus,
+    RegistryEntryDigest,
+)
 from frontier.domain.candidate_freeze_v1 import (
     FREEZE_V1_PREREGISTRATION_PATH,
     CandidateFreezeReceiptV1,
@@ -27,6 +35,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FROZEN_AT = datetime(2026, 9, 9, 16, 50, tzinfo=UTC)
 FAKE_COMMIT = "a" * 40
 FAKE_TREE = "b" * 40
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=root, text=True, capture_output=True, check=True
+    ).stdout.strip()
 
 
 def _healthy_inputs() -> FreezeInputs:
@@ -90,6 +104,64 @@ def test_live_v1_collector_extracts_successor_override_and_git_identity() -> Non
     assert inputs.dependency_lock_digest is not None
     assert inputs.source_registry_digest is not None
     assert inputs.registry_entry_digests
+
+
+def test_v1_collector_binds_selected_git_tree_not_dirty_worktree(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+
+    preregistration_path = tmp_path / FREEZE_V1_PREREGISTRATION_PATH
+    dependency_lock_path = tmp_path / FREEZE_DEPENDENCY_LOCK_PATH
+    source_registry_path = tmp_path / FREEZE_SOURCE_REGISTRY_PATH
+    source_contract_relative = "sources/contracts/test-source.json"
+    source_contract_path = tmp_path / source_contract_relative
+    for path in (
+        preregistration_path,
+        dependency_lock_path,
+        source_registry_path,
+        source_contract_path,
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    preregistration = {
+        "experiment_id": PEF_V1_EXPERIMENT_ID,
+        "candidate_id": PEF_V1_CANDIDATE_ID,
+        "frozen_overrides": [
+            {
+                "json_pointer": "/candidate/configuration_digest",
+                "value": str(PEF_V1_CONFIGURATION_DIGEST),
+            }
+        ],
+    }
+    preregistration_path.write_text(json.dumps(preregistration), encoding="utf-8")
+    dependency_lock_path.write_text("locked\n", encoding="utf-8")
+    source_registry_path.write_text(
+        json.dumps({"source_contract_paths": [source_contract_relative]}),
+        encoding="utf-8",
+    )
+    source_contract_path.write_text('{"version": 1}\n', encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "frozen implementation")
+
+    committed = collect_freeze_inputs_v1(tmp_path)
+
+    preregistration["dirty_worktree_only"] = True
+    preregistration_path.write_text(json.dumps(preregistration), encoding="utf-8")
+    dependency_lock_path.write_text("dirty lock\n", encoding="utf-8")
+    source_registry_path.write_text(
+        json.dumps(
+            {
+                "source_contract_paths": [source_contract_relative],
+                "dirty_worktree_only": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    source_contract_path.write_text('{"version": 999}\n', encoding="utf-8")
+
+    dirty = collect_freeze_inputs_v1(tmp_path)
+    assert dirty == committed
 
 
 def test_live_v1_freeze_and_verification_stay_frozen() -> None:
