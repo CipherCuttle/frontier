@@ -47,7 +47,9 @@ def require_clean_repository_tree(root: Path) -> None:
             check=True,
         )
     except (OSError, subprocess.CalledProcessError) as error:
-        raise ValueError("PEF_V1 confirmatory operation requires a readable Git worktree") from error
+        raise ValueError(
+            "PEF_V1 confirmatory operation requires a readable Git worktree"
+        ) from error
     if result.stdout:
         raise ValueError("PEF_V1 confirmatory operation forbids a dirty Git worktree")
 
