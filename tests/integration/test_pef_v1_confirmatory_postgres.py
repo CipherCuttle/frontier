@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-psycopg = pytest.importorskip("psycopg")
+pytest.importorskip("psycopg")
+import psycopg
 from psycopg.types.json import Jsonb
 
 from frontier.adapters.postgres.advanced_intelligence import PostgresShadowRunRepository
@@ -41,13 +42,14 @@ from frontier.domain.intelligence import (
     BaselineObservationInput,
     BaselineSnapshot,
 )
-from frontier.domain.pef_v1 import PEF_V1_EXPERIMENT_ID
+from frontier.domain.pef_v1 import PEF_V1_EXPERIMENT_ID, PEF_V1_PROJECTION_VERSION
 from frontier.domain.receipt import ProjectionReceipt
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
 REGISTRY = Digest("sha256:" + "9" * 64)
+ConnectionT = psycopg.Connection[tuple[object, ...]]
 
 
 def _obs_id(label: str) -> str:
@@ -107,7 +109,7 @@ class _Repository:
         self.published.append((snapshot, receipt))
 
 
-def _store_v1_authority(conn):
+def _store_v1_authority(conn: ConnectionT):
     receipt = freeze_candidate_v1(
         REPO_ROOT,
         frozen_at=datetime.now(UTC) - timedelta(minutes=2),
@@ -242,12 +244,14 @@ def test_v1_confirmatory_persistence_is_freeze_bound_and_v0_isolated() -> None:
         assert baseline_count == (0,)
         artifact = conn.execute(
             """
-            SELECT configuration_digest, artifact_json->>'experiment_id'
+            SELECT projection_version, configuration_digest,
+                   artifact_json->>'experiment_id'
             FROM pef_ranking_artifacts WHERE artifact_id = %s
             """,
             (evidence.candidate_artifact.artifact_id,),
         ).fetchone()
         assert artifact == (
+            PEF_V1_PROJECTION_VERSION,
             str(evidence.candidate_artifact.configuration_digest),
             PEF_V1_EXPERIMENT_ID,
         )
@@ -273,7 +277,7 @@ def test_v1_persistence_rejects_wrong_expected_freeze_without_partial_evidence()
             candidate_receipt=evidence.candidate_receipt,
             run=replace(evidence.run, candidate_freeze_receipt_id=wrong),
         )
-        with pytest.raises(RuntimeError, match="canonical freeze authority is missing"):
+        with pytest.raises(RuntimeError, match="not latest canonical authority"):
             PostgresPefV1ConfirmatoryPersistence(conn).persist(
                 forged_evidence,
                 expected_freeze_receipt_id=wrong,
@@ -281,4 +285,37 @@ def test_v1_persistence_rejects_wrong_expected_freeze_without_partial_evidence()
         assert conn.execute(
             "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
             (forged_evidence.run.run_id,),
+        ).fetchone() == (0,)
+
+
+def test_newer_v1_freeze_supersedes_old_authority_before_run_commit() -> None:
+    assert DB_URL is not None
+    with psycopg.connect(DB_URL) as conn:
+        old_receipt, publication = _store_v1_authority(conn)
+        boundary = first_confirmatory_boundary(publication.publication_committer_at)
+        evidence = build_pef_v1_confirmatory_evidence(
+            _Repository(boundary),
+            as_of=boundary,
+            generated_at=boundary,
+            source_registry_version=REGISTRY,
+            freeze_receipt=old_receipt,
+        )
+        newer_receipt = freeze_candidate_v1(
+            REPO_ROOT,
+            frozen_at=old_receipt.frozen_at + timedelta(seconds=1),
+        )
+        assert newer_receipt.receipt_id != old_receipt.receipt_id
+        PostgresCandidateFreezeV1Repository(
+            conn,
+            persistence_authorized=True,
+        ).record_receipt(newer_receipt)
+
+        with pytest.raises(RuntimeError, match="not latest canonical authority"):
+            PostgresPefV1ConfirmatoryPersistence(conn).persist(
+                evidence,
+                expected_freeze_receipt_id=old_receipt.receipt_id,
+            )
+        assert conn.execute(
+            "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
+            (evidence.run.run_id,),
         ).fetchone() == (0,)
