@@ -11,6 +11,7 @@ from frontier.application.freeze_publication import (
     CandidateFreezePublication,
     require_github_main_publication,
 )
+from frontier.domain.candidate_freeze import FreezeStatus
 from frontier.domain.candidate_freeze_v1 import CandidateFreezeReceiptV1
 
 _FREEZE_V1_RECEIPT_PUBLICATION_PATH_RE = re.compile(
@@ -28,21 +29,31 @@ def _git_text(root: Path, args: list[str]) -> str:
     return result.stdout.strip()
 
 
+def _git_json(root: Path, ref_path: str) -> object:
+    try:
+        return cast(object, json.loads(_git_text(root, ["show", ref_path])))
+    except (RuntimeError, json.JSONDecodeError) as error:
+        raise RuntimeError("PEF_V1 candidate freeze committed publication is unreadable") from error
+
+
 def _matching_receipt_path(root: Path, receipt: CandidateFreezeReceiptV1) -> Path:
-    base = root / "experiments/advanced_intelligence/pef_v1"
-    matches: list[Path] = []
-    for path in sorted(base.glob("candidate_freeze_receipt_v*.json")):
+    base = "experiments/advanced_intelligence/pef_v1"
+    listed = _git_text(root, ["ls-tree", "-r", "--name-only", "HEAD", "--", base])
+    matches: list[str] = []
+    for relative in listed.splitlines():
+        if _FREEZE_V1_RECEIPT_PUBLICATION_PATH_RE.fullmatch(relative) is None:
+            continue
         try:
-            raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
-        except OSError, UnicodeDecodeError, json.JSONDecodeError:
+            raw = _git_json(root, f"HEAD:{relative}")
+        except RuntimeError:
             continue
         if raw == receipt.to_canonical():
-            matches.append(path)
+            matches.append(relative)
     if len(matches) != 1:
         raise RuntimeError(
             "exact canonical PEF_V1 candidate freeze receipt publication is not uniquely present"
         )
-    return matches[0]
+    return root / matches[0]
 
 
 def derive_freeze_publication_v1(
@@ -52,6 +63,8 @@ def derive_freeze_publication_v1(
     receipt_path: Path | None = None,
 ) -> CandidateFreezePublication:
     """Prove the exact one-file, two-parent durable publication shape for PEF_V1."""
+    if receipt.status is not FreezeStatus.FROZEN:
+        raise RuntimeError("PEF_V1 candidate freeze publication requires a FROZEN receipt")
     path = receipt_path or _matching_receipt_path(root, receipt)
     try:
         relative = path.resolve().relative_to(root.resolve()).as_posix()
@@ -65,12 +78,9 @@ def derive_freeze_publication_v1(
         )
     if receipt.implementation_commit is None or receipt.implementation_tree_digest is None:
         raise RuntimeError("PEF_V1 candidate freeze receipt is missing implementation identity")
-    try:
-        raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise RuntimeError("PEF_V1 candidate freeze receipt publication is unreadable") from error
+    raw = _git_json(root, f"HEAD:{relative}")
     if raw != receipt.to_canonical():
-        raise RuntimeError("PEF_V1 freeze publication file does not equal the bound receipt")
+        raise RuntimeError("PEF_V1 committed freeze publication does not equal the bound receipt")
 
     tree = _git_text(root, ["rev-parse", f"{receipt.implementation_commit}^{{tree}}"])
     if tree != receipt.implementation_tree_digest:
