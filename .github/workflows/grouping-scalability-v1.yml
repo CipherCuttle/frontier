@@ -1,0 +1,63 @@
+name: grouping-scalability-v1
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/grouping-scalability-v1.yml"
+      - "docs/GROUPING_SCALABILITY_V1*.md"
+      - "fixtures/grouping/scalability_v1.json"
+      - "scripts/ops/measure_grouping_scalability_v1.py"
+      - "src/frontier/domain/grouping_v1.py"
+      - "tests/unit/test_grouping_scalability_v1.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  equivalence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+      - name: Verify frozen lock
+        run: uv lock --check
+      - name: Sync frozen environment
+        run: uv sync --all-extras --frozen
+      - name: Grouping V1 equivalence tests
+        run: uv run pytest -q tests/unit/test_grouping_scalability_v1.py
+
+  scale:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - incident-2425
+          - sparse-10000
+          - sparse-25000
+          - mixed-150000
+          - dense-5000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+      - name: Verify frozen lock
+        run: uv lock --check
+      - name: Sync frozen environment
+        run: uv sync --all-extras --frozen
+      - name: Run frozen scale case
+        run: uv run python scripts/ops/measure_grouping_scalability_v1.py "${{ matrix.case }}"
