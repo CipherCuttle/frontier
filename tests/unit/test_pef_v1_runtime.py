@@ -187,6 +187,7 @@ def test_paired_runtime_uses_v1_grouping_for_exact_same_candidate_control_univer
     assert result.shadow.candidate_id == PEF_V1_CANDIDATE_ID
     assert result.shadow.configuration_digest == PEF_V1_CONFIGURATION_DIGEST
     assert result.shadow.episode_universe_digest.value.startswith("sha256:")
+    assert result.shadow.candidate_freeze_receipt_id is None
 
 
 def test_v1_control_is_never_published_through_canonical_baseline_repository() -> None:
@@ -243,6 +244,28 @@ def test_v1_candidate_rejects_grouping_receipt_identity_drift() -> None:
             control_receipt=control.receipt,
             grouping_projection=control.grouping_projection,
             grouping_receipt=drifted_receipt,
+            generated_at=AS_OF,
+            source_registry_version=REGISTRY,
+        )
+
+
+def test_v1_candidate_rejects_control_receipt_boundary_drift() -> None:
+    repository = _Repository()
+    control = run_pef_v1_control(
+        repository,
+        as_of=AS_OF,
+        generated_at=AS_OF,
+        source_registry_version=REGISTRY,
+    )
+    drifted_receipt = replace(control.receipt, as_of=AS_OF - timedelta(minutes=5))
+
+    with pytest.raises(ValueError, match="control receipt as_of mismatch"):
+        run_pef_v1_ranking(
+            repository.observations,
+            control_snapshot=control.snapshot,
+            control_receipt=drifted_receipt,
+            grouping_projection=control.grouping_projection,
+            grouping_receipt=control.grouping_receipt,
             generated_at=AS_OF,
             source_registry_version=REGISTRY,
         )
