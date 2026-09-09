@@ -69,32 +69,39 @@ def test_pef_v1_is_exact_successor_delta_over_immutable_pef_v0() -> None:
 
     # Ranking hypothesis and evaluation semantics remain exactly PEF_V0 except for the
     # separately named multiplicity family required by the successor experiment identity.
-    assert expanded["candidate"]["algorithm_version"] == predecessor["candidate"]["algorithm_version"]
+    assert (
+        expanded["candidate"]["algorithm_version"] == predecessor["candidate"]["algorithm_version"]
+    )
     assert expanded["feature_contract"] == predecessor["feature_contract"]
     assert expanded["control"] == predecessor["control"]
 
     expected_evaluation = copy.deepcopy(predecessor["evaluation"])
-    expected_evaluation["multiplicity"]["family_id"] = "advanced-ranking-v1-pef-single-candidate-family"
+    expected_evaluation["multiplicity"]["family_id"] = (
+        "advanced-ranking-v1-pef-single-candidate-family"
+    )
     assert expanded["evaluation"] == expected_evaluation
 
     candidate_configuration = expanded["candidate"]["configuration"]
-    assert candidate_configuration["algorithm_version"] == (
-        predecessor["candidate"]["configuration"]["algorithm_version"]
+    assert (
+        candidate_configuration["algorithm_version"]
+        == (predecessor["candidate"]["configuration"]["algorithm_version"])
     )
-    assert candidate_configuration["ranking_order"] == (
-        predecessor["candidate"]["configuration"]["ranking_order"]
+    assert (
+        candidate_configuration["ranking_order"]
+        == (predecessor["candidate"]["configuration"]["ranking_order"])
     )
-    assert candidate_configuration["feature_definitions"] == (
-        predecessor["candidate"]["configuration"]["feature_definitions"]
+    assert (
+        candidate_configuration["feature_definitions"]
+        == (predecessor["candidate"]["configuration"]["feature_definitions"])
     )
     assert candidate_configuration["grouping_contract"] == (
         "candidate and control use the exact grouping-scalable-v1 projection at each as_of; "
         "candidate never regroups observations; grouping identity is bound by this successor "
         "preregistration"
     )
-    computed_configuration_digest = "sha256:" + hashlib.sha256(
-        canonical_json_bytes(candidate_configuration)
-    ).hexdigest()
+    computed_configuration_digest = (
+        "sha256:" + hashlib.sha256(canonical_json_bytes(candidate_configuration)).hexdigest()
+    )
     assert computed_configuration_digest == PEF_V1_CONFIGURATION_DIGEST
     assert expanded["candidate"]["configuration_digest"] == PEF_V1_CONFIGURATION_DIGEST
 
@@ -114,9 +121,7 @@ def test_pef_v1_binds_exact_canonical_grouping_v1_and_isolates_pef_v0_evidence()
         "configuration_digest": (
             "sha256:57dce4c0ca86ce6fbf3c2dbabf6fd1413f0fef254a4873622dd59e3573177ab2"
         ),
-        "pair_semantics_version": (
-            "guarded-hybrid-v0@db206cda7eed92b62c706a10089c2571b4381d66"
-        ),
+        "pair_semantics_version": ("guarded-hybrid-v0@db206cda7eed92b62c706a10089c2571b4381d66"),
         "pair_oracle_blob": "943affde20b08f500f8dba2716ffedfc428f58e1",
         "omitted_pair_semantics": "OMITTED_PAIRS_HAVE_NO_NEGATIVE_OR_INDEPENDENCE_MEANING",
     }
