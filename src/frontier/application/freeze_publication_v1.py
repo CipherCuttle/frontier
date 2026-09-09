@@ -56,7 +56,9 @@ def derive_freeze_publication_v1(
     try:
         relative = path.resolve().relative_to(root.resolve()).as_posix()
     except (OSError, ValueError) as error:
-        raise ValueError("PEF_V1 candidate freeze receipt must be inside repository root") from error
+        raise ValueError(
+            "PEF_V1 candidate freeze receipt must be inside repository root"
+        ) from error
     if _FREEZE_V1_RECEIPT_PUBLICATION_PATH_RE.fullmatch(relative) is None:
         raise ValueError(
             "PEF_V1 candidate freeze receipt path is not a canonical versioned publication path"
@@ -109,11 +111,15 @@ def derive_freeze_publication_v1(
     status = fields[0].decode("ascii")
     changed = fields[1].decode("utf-8")
     if (status, changed) != ("A", relative):
-        raise RuntimeError("runtime tree drifted outside the exact PEF_V1 freeze receipt publication")
+        raise RuntimeError(
+            "runtime tree drifted outside the exact PEF_V1 freeze receipt publication"
+        )
 
     parts = _git_text(root, ["rev-list", "--parents", "-n", "1", "HEAD"]).split()
     if len(parts) != 3:
-        raise RuntimeError("durable PEF_V1 freeze publication HEAD must be a two-parent merge commit")
+        raise RuntimeError(
+            "durable PEF_V1 freeze publication HEAD must be a two-parent merge commit"
+        )
     publication_commit, first_parent, _ = parts
     if first_parent != receipt.implementation_commit:
         raise RuntimeError(
