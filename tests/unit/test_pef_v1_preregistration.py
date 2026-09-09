@@ -4,7 +4,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from frontier.domain.canonical_json import canonical_json_bytes
 
@@ -36,9 +36,9 @@ def _apply_json_pointer(document: dict[str, Any], pointer: str, value: Any) -> N
     current: Any = document
     for part in parts[:-1]:
         assert isinstance(current, dict)
-        current = current[part]
+        current = cast(dict[str, Any], current)[part]
     assert isinstance(current, dict)
-    current[parts[-1]] = value
+    cast(dict[str, Any], current)[parts[-1]] = value
 
 
 def test_pef_v1_is_exact_successor_delta_over_immutable_pef_v0() -> None:
