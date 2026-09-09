@@ -42,7 +42,7 @@ from frontier.domain.intelligence import (
     BaselineSnapshot,
 )
 from frontier.domain.pef_v1 import PEF_V1_EXPERIMENT_ID, PEF_V1_PROJECTION_VERSION
-from frontier.domain.receipt import ProjectionReceipt
+from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
@@ -317,4 +317,36 @@ def test_newer_v1_freeze_supersedes_old_authority_before_run_commit() -> None:
         assert conn.execute(
             "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
             (evidence.run.run_id,),
+        ).fetchone() == (0,)
+
+
+def test_v1_persistence_rejects_candidate_receipt_status_mismatch() -> None:
+    assert DB_URL is not None
+    with psycopg.connect(DB_URL) as conn:
+        receipt, publication = _store_v1_authority(conn)
+        boundary = first_confirmatory_boundary(publication.publication_committer_at)
+        evidence = build_pef_v1_confirmatory_evidence(
+            _Repository(boundary),
+            as_of=boundary,
+            generated_at=boundary,
+            source_registry_version=REGISTRY,
+            freeze_receipt=receipt,
+        )
+        assert evidence.candidate_receipt.status is ProjectionStatus.COMPLETE
+        forged_evidence = replace(
+            evidence,
+            candidate_receipt=replace(
+                evidence.candidate_receipt,
+                status=ProjectionStatus.FAILED,
+            ),
+        )
+
+        with pytest.raises(ValueError, match="status does not match candidate artifact"):
+            PostgresPefV1ConfirmatoryPersistence(conn).persist(
+                forged_evidence,
+                expected_freeze_receipt_id=receipt.receipt_id,
+            )
+        assert conn.execute(
+            "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
+            (forged_evidence.run.run_id,),
         ).fetchone() == (0,)
