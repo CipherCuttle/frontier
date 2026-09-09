@@ -218,7 +218,9 @@ def run_shadow_experiment_v1(
             candidate_freeze_receipt_id=candidate_freeze_receipt_id,
         )
         if run.status is not ShadowRunStatus.FAILED:
-            raise RuntimeError("failed PEF_V1 candidate must produce a FAILED shadow run")
+            raise RuntimeError(
+                "failed PEF_V1 candidate must produce a FAILED shadow run"
+            ) from error
         return run
 
     return build_shadow_experiment_run_v1(
