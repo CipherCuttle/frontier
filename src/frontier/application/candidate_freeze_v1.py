@@ -25,25 +25,43 @@ from frontier.domain.pef_v1 import PEF_V1_CANDIDATE_ID, PEF_V1_EXPERIMENT_ID
 _COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
 
 
-def _read_digest(path: Path) -> Digest | None:
+def _git_blob(root: Path, *, ref: str, path: str) -> bytes | None:
     try:
-        return sha256_digest(path.read_bytes())
-    except FileNotFoundError, IsADirectoryError, PermissionError:
+        result = subprocess.run(
+            ["git", "show", f"{ref}:{path}"],
+            cwd=root,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
         return None
+    return result.stdout
 
 
-def _load_json_document(path: Path) -> dict[str, object] | None:
+def _load_json_blob(blob: bytes | None) -> dict[str, object] | None:
+    if blob is None:
+        return None
     try:
-        raw = cast(object, json.loads(path.read_text(encoding="utf-8")))
-    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+        raw = cast(object, json.loads(blob.decode("utf-8")))
+    except UnicodeDecodeError, json.JSONDecodeError:
         return None
     if not isinstance(raw, dict):
         return None
     return cast(dict[str, object], raw)
 
 
-def _registry_entry_digests(root: Path, path: Path) -> tuple[RegistryEntryDigest, ...] | None:
-    document = _load_json_document(path)
+def _blob_digest(blob: bytes | None) -> Digest | None:
+    return None if blob is None else sha256_digest(blob)
+
+
+def _registry_entry_digests(
+    root: Path,
+    *,
+    ref: str,
+    registry_blob: bytes | None,
+) -> tuple[RegistryEntryDigest, ...] | None:
+    document = _load_json_blob(registry_blob)
     if document is None:
         return None
     raw_paths = document.get("source_contract_paths")
@@ -53,7 +71,7 @@ def _registry_entry_digests(root: Path, path: Path) -> tuple[RegistryEntryDigest
     for item in cast(list[object], raw_paths):
         if not isinstance(item, str):
             return None
-        entry_digest = _read_digest(root / item)
+        entry_digest = _blob_digest(_git_blob(root, ref=ref, path=item))
         if entry_digest is None:
             return None
         entries.append(RegistryEntryDigest(path=item, digest=entry_digest))
@@ -87,10 +105,7 @@ def _git_identity(root: Path, *, ref: str = "HEAD") -> tuple[str | None, str | N
     return (commit_hash, tree_hash)
 
 
-def _v1_preregistration_config_digest(path: Path, file_digest: Digest | None) -> Digest | None:
-    if file_digest is None:
-        return None
-    document = _load_json_document(path)
+def _v1_preregistration_config_digest(document: dict[str, object] | None) -> Digest | None:
     if document is None:
         return None
     if document.get("experiment_id") != PEF_V1_EXPERIMENT_ID:
@@ -120,22 +135,28 @@ def _v1_preregistration_config_digest(path: Path, file_digest: Digest | None) ->
 
 
 def collect_freeze_inputs_v1(root: Path, *, implementation_ref: str | None = None) -> FreezeInputs:
-    """Collect the exact PEF_V1 freeze inputs without touching PEF_V0 semantics."""
-    preregistration_path = root / FREEZE_V1_PREREGISTRATION_PATH
-    preregistration_digest = _read_digest(preregistration_path)
-    if preregistration_digest is None:
+    """Collect exact PEF_V1 freeze inputs from the selected Git tree."""
+    ref = implementation_ref or "HEAD"
+    commit, tree = _git_identity(root, ref=ref)
+    preregistration_blob = _git_blob(root, ref=ref, path=FREEZE_V1_PREREGISTRATION_PATH)
+    if preregistration_blob is None:
         raise FileNotFoundError(f"preregistration file missing: {FREEZE_V1_PREREGISTRATION_PATH}")
-    commit, tree = _git_identity(root, ref=implementation_ref or "HEAD")
+    dependency_lock_blob = _git_blob(root, ref=ref, path=FREEZE_DEPENDENCY_LOCK_PATH)
+    source_registry_blob = _git_blob(root, ref=ref, path=FREEZE_SOURCE_REGISTRY_PATH)
     return FreezeInputs(
-        preregistration_digest=preregistration_digest,
+        preregistration_digest=sha256_digest(preregistration_blob),
         preregistration_config_digest=_v1_preregistration_config_digest(
-            preregistration_path, preregistration_digest
+            _load_json_blob(preregistration_blob)
         ),
         implementation_commit=commit,
         implementation_tree_digest=tree,
-        dependency_lock_digest=_read_digest(root / FREEZE_DEPENDENCY_LOCK_PATH),
-        source_registry_digest=_read_digest(root / FREEZE_SOURCE_REGISTRY_PATH),
-        registry_entry_digests=_registry_entry_digests(root, root / FREEZE_SOURCE_REGISTRY_PATH),
+        dependency_lock_digest=_blob_digest(dependency_lock_blob),
+        source_registry_digest=_blob_digest(source_registry_blob),
+        registry_entry_digests=_registry_entry_digests(
+            root,
+            ref=ref,
+            registry_blob=source_registry_blob,
+        ),
     )
 
 
