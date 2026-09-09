@@ -81,7 +81,9 @@ def _receipt_from_canonical(raw: object) -> CandidateFreezeReceiptV1:
             path = entry.get("path")
             if not isinstance(path, str):
                 raise RuntimeError("PEF_V1 registry digest path is invalid")
-            parsed_entries.append(RegistryEntryDigest(path=path, digest=_digest(entry.get("digest"))))
+            parsed_entries.append(
+                RegistryEntryDigest(path=path, digest=_digest(entry.get("digest")))
+            )
         entries = tuple(parsed_entries)
     else:
         raise RuntimeError("PEF_V1 registry digest entries are invalid")
@@ -106,9 +108,7 @@ def _receipt_from_canonical(raw: object) -> CandidateFreezeReceiptV1:
             document.get("preregistration_config_digest")
         ),
         implementation_commit=cast(str | None, document.get("implementation_commit")),
-        implementation_tree_digest=cast(
-            str | None, document.get("implementation_tree_digest")
-        ),
+        implementation_tree_digest=cast(str | None, document.get("implementation_tree_digest")),
         dependency_lock_digest=_optional_digest(document.get("dependency_lock_digest")),
         source_registry_digest=_optional_digest(document.get("source_registry_digest")),
         registry_entry_digests=entries,
@@ -319,10 +319,6 @@ def _validate_evidence(
         raise ValueError("PEF_V1 shadow run does not bind candidate output")
     if candidate_receipt.output_digest != artifact.output_digest:
         raise ValueError("PEF_V1 candidate receipt does not bind candidate artifact")
-    if candidate_receipt.receipt_id != artifact.to_canonical().get("receipt_id", candidate_receipt.receipt_id):
-        # Artifact canonical form has no receipt id; this branch intentionally
-        # leaves the actual binding to the persisted artifact receipt_id column.
-        pass
     if artifact.grouping_receipt_id != evidence.grouping_receipt.receipt_id:
         raise ValueError("PEF_V1 candidate artifact does not bind grouping receipt")
     if run.control_receipt_id != evidence.control_receipt.receipt_id:
