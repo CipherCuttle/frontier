@@ -109,10 +109,15 @@ class _Repository:
 
 
 def _store_v1_authority(conn: ConnectionT):
-    receipt = freeze_candidate_v1(
-        REPO_ROOT,
-        frozen_at=datetime.now(UTC) - timedelta(minutes=2),
-    )
+    latest_row = conn.execute(
+        "SELECT max(frozen_at) FROM candidate_freeze_receipts WHERE experiment_id = %s",
+        (PEF_V1_EXPERIMENT_ID,),
+    ).fetchone()
+    frozen_at = datetime.now(UTC)
+    if latest_row is not None and isinstance(latest_row[0], datetime) and latest_row[0] >= frozen_at:
+        frozen_at = latest_row[0] + timedelta(seconds=1)
+
+    receipt = freeze_candidate_v1(REPO_ROOT, frozen_at=frozen_at)
     assert receipt.status is FreezeStatus.FROZEN
     repository = PostgresCandidateFreezeV1Repository(conn, persistence_authorized=True)
     repository.record_receipt(receipt)
@@ -126,7 +131,7 @@ def _store_v1_authority(conn: ConnectionT):
         implementation_commit=receipt.implementation_commit,
         implementation_tree_digest=receipt.implementation_tree_digest,
         publication_commit="c" * 40,
-        publication_committer_at=durable_at + timedelta(seconds=1),
+        publication_committer_at=max(durable_at, receipt.frozen_at) + timedelta(seconds=1),
     )
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(
