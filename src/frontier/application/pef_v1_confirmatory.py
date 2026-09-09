@@ -13,12 +13,14 @@ from frontier.application.experiment_orchestration import (
     derive_experiment_boundary,
 )
 from frontier.application.freeze_publication import require_confirmatory_boundary
+from frontier.application.freeze_publication_v1 import derive_freeze_publication_v1
 from frontier.application.intelligence import BaselineIntelligenceRepository
-from frontier.application.pef_v1 import run_pef_v1_control
+from frontier.application.pef_v1 import PefV1ControlRun, run_pef_v1_control
 from frontier.domain.advanced_intelligence import ShadowExperimentRun, ShadowRunStatus
 from frontier.domain.candidate_freeze import FreezeStatus
 from frontier.domain.candidate_freeze_v1 import CandidateFreezeReceiptV1
 from frontier.domain.digests import Digest
+from frontier.domain.intelligence import BaselineObservationInput
 from frontier.domain.opportunity import ExperimentAttemptStatus, ExperimentRunAttempt
 from frontier.domain.pef_v1 import (
     PEF_V1_CANDIDATE_ID,
@@ -41,6 +43,7 @@ class PefV1FreezeBinding:
     durable_freeze_at: datetime | None
     publication_commit: str | None
     publication_committer_at: datetime | None
+    publication_digest: Digest | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +116,11 @@ def evaluate_pef_v1_confirmatory_gates(
         return False, "bound freeze receipt configuration identity mismatch"
     if binding.durable_freeze_at is None:
         return False, "bound PEF_V1 freeze receipt is not durable"
-    if binding.publication_commit is None or binding.publication_committer_at is None:
+    if (
+        binding.publication_commit is None
+        or binding.publication_committer_at is None
+        or binding.publication_digest is None
+    ):
         return False, "bound PEF_V1 freeze receipt has no verified Git publication"
     if binding.publication_committer_at < binding.durable_freeze_at:
         return False, "PEF_V1 Git publication precedes canonical DB durability"
@@ -130,9 +137,9 @@ def evaluate_pef_v1_confirmatory_gates(
 
 
 def _build_candidate(
-    observations: tuple,
+    observations: tuple[BaselineObservationInput, ...],
     *,
-    control,
+    control: PefV1ControlRun,
     generated_at: datetime,
     source_registry_version: Digest,
 ) -> tuple[PefV1Artifact, ProjectionReceipt]:
@@ -309,39 +316,39 @@ class PefV1ConfirmatoryOrchestrator:
             canonical_context=self._canonical_context,
         )
         if not allowed or binding is None:
-            self._attempts.finish(
-                pending.attempt_id,
-                owner=self._worker_id,
-                status=ExperimentAttemptStatus.SKIPPED,
-                detail=reason,
-                at=at,
-            )
-            return ExperimentCycleResult(
-                boundary=boundary,
-                action=ExperimentCycleAction.SKIPPED_CONFIRMATORY_GATES,
-                attempt=replace(pending, status=ExperimentAttemptStatus.SKIPPED, detail=reason),
-                detail=reason,
-            )
+            return self._skip(pending, reason, at=at, boundary=boundary)
 
         verification = verify_freeze_v1(
             binding.receipt,
             root=self._repository_root,
             verified_at=at,
+            implementation_ref=binding.receipt.implementation_commit,
         )
         if verification.status is not FreezeStatus.FROZEN:
             detail = "DRIFTED: " + "; ".join(verification.drift_reasons)
-            self._attempts.finish(
-                pending.attempt_id,
-                owner=self._worker_id,
-                status=ExperimentAttemptStatus.SKIPPED,
-                detail=detail,
-                at=at,
+            return self._skip(pending, detail, at=at, boundary=boundary)
+        try:
+            runtime_publication = derive_freeze_publication_v1(
+                self._repository_root,
+                binding.receipt,
             )
-            return ExperimentCycleResult(
+        except (RuntimeError, ValueError) as error:
+            return self._skip(
+                pending,
+                f"runtime freeze publication verification failed: {error}",
+                at=at,
                 boundary=boundary,
-                action=ExperimentCycleAction.SKIPPED_CONFIRMATORY_GATES,
-                attempt=replace(pending, status=ExperimentAttemptStatus.SKIPPED, detail=detail),
-                detail=detail,
+            )
+        if (
+            runtime_publication.publication_commit != binding.publication_commit
+            or runtime_publication.publication_committer_at != binding.publication_committer_at
+            or runtime_publication.publication_digest != binding.publication_digest
+        ):
+            return self._skip(
+                pending,
+                "runtime freeze publication does not equal canonical DB publication authority",
+                at=at,
+                boundary=boundary,
             )
 
         existing = self._persistence.latest_run_id_and_class_for_as_of(boundary)
@@ -364,19 +371,11 @@ class PefV1ConfirmatoryOrchestrator:
                     detail=detail,
                 )
             if run_class != RUN_CLASS_CONFIRMATORY:
-                detail = f"existing PEF_V1 run {run_id} is {run_class}, not CONFIRMATORY"
-                self._attempts.finish(
-                    pending.attempt_id,
-                    owner=self._worker_id,
-                    status=ExperimentAttemptStatus.SKIPPED,
-                    detail=detail,
+                return self._skip(
+                    pending,
+                    f"existing PEF_V1 run {run_id} is {run_class}, not CONFIRMATORY",
                     at=at,
-                )
-                return ExperimentCycleResult(
                     boundary=boundary,
-                    action=ExperimentCycleAction.SKIPPED_CONFIRMATORY_GATES,
-                    attempt=replace(pending, status=ExperimentAttemptStatus.SKIPPED, detail=detail),
-                    detail=detail,
                 )
 
         self._attempts.heartbeat(pending.attempt_id, owner=self._worker_id, at=at)
@@ -394,12 +393,13 @@ class PefV1ConfirmatoryOrchestrator:
             )
         except Exception as error:
             detail = f"PEF_V1 confirmatory execution failed: {type(error).__name__}: {error}"
+            finished_at = datetime.now(UTC)
             self._attempts.finish(
                 pending.attempt_id,
                 owner=self._worker_id,
                 status=ExperimentAttemptStatus.FAILED,
                 detail=detail,
-                at=datetime.now(UTC),
+                at=finished_at,
             )
             return ExperimentCycleResult(
                 boundary=boundary,
@@ -432,6 +432,28 @@ class PefV1ConfirmatoryOrchestrator:
             ),
             attempt=replace(pending, status=terminal_status, detail=detail),
             run_id=run_id,
+            detail=detail,
+        )
+
+    def _skip(
+        self,
+        pending: ExperimentRunAttempt,
+        detail: str,
+        *,
+        at: datetime,
+        boundary: datetime,
+    ) -> ExperimentCycleResult:
+        self._attempts.finish(
+            pending.attempt_id,
+            owner=self._worker_id,
+            status=ExperimentAttemptStatus.SKIPPED,
+            detail=detail,
+            at=at,
+        )
+        return ExperimentCycleResult(
+            boundary=boundary,
+            action=ExperimentCycleAction.SKIPPED_CONFIRMATORY_GATES,
+            attempt=replace(pending, status=ExperimentAttemptStatus.SKIPPED, detail=detail),
             detail=detail,
         )
 
