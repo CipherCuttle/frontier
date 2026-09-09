@@ -20,6 +20,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
+          import base64
           from pathlib import Path
 
           def replace_once(path: str, old: str, new: str) -> None:
@@ -31,92 +32,22 @@ jobs:
               file.write_text(text.replace(old, new, 1))
 
           app = "src/frontier/application/pef_v1_confirmatory.py"
-          replace_once(
-              app,
-              "from frontier.domain.intelligence import BaselineObservationInput\n",
-              "from frontier.domain.intelligence import BaselineObservationInput, BaselineSnapshot\n",
-          )
-          replace_once(
-              app,
-              "class PefV1ConfirmatoryEvidence:\n    grouping_receipt: ProjectionReceipt\n    control_receipt: ProjectionReceipt\n    candidate_artifact: PefV1Artifact\n    candidate_receipt: ProjectionReceipt\n    run: ShadowExperimentRun\n",
-              "class PefV1ConfirmatoryEvidence:\n    grouping_receipt: ProjectionReceipt\n    control_receipt: ProjectionReceipt\n    control_snapshot: BaselineSnapshot\n    candidate_observations: tuple[BaselineObservationInput, ...]\n    candidate_artifact: PefV1Artifact\n    candidate_receipt: ProjectionReceipt\n    run: ShadowExperimentRun\n",
-          )
-          replace_once(
-              app,
-              "    return PefV1ConfirmatoryEvidence(\n        grouping_receipt=control.grouping_receipt,\n        control_receipt=control.receipt,\n        candidate_artifact=candidate_artifact,\n        candidate_receipt=candidate_receipt,\n        run=run,\n    )\n",
-              "    return PefV1ConfirmatoryEvidence(\n        grouping_receipt=control.grouping_receipt,\n        control_receipt=control.receipt,\n        control_snapshot=control.snapshot,\n        candidate_observations=observations,\n        candidate_artifact=candidate_artifact,\n        candidate_receipt=candidate_receipt,\n        run=run,\n    )\n",
-          )
+          replace_once(app, "from frontier.domain.intelligence import BaselineObservationInput\n", "from frontier.domain.intelligence import BaselineObservationInput, BaselineSnapshot\n")
+          replace_once(app, "class PefV1ConfirmatoryEvidence:\n    grouping_receipt: ProjectionReceipt\n    control_receipt: ProjectionReceipt\n    candidate_artifact: PefV1Artifact\n    candidate_receipt: ProjectionReceipt\n    run: ShadowExperimentRun\n", "class PefV1ConfirmatoryEvidence:\n    grouping_receipt: ProjectionReceipt\n    control_receipt: ProjectionReceipt\n    control_snapshot: BaselineSnapshot\n    candidate_observations: tuple[BaselineObservationInput, ...]\n    candidate_artifact: PefV1Artifact\n    candidate_receipt: ProjectionReceipt\n    run: ShadowExperimentRun\n")
+          replace_once(app, "    return PefV1ConfirmatoryEvidence(\n        grouping_receipt=control.grouping_receipt,\n        control_receipt=control.receipt,\n        candidate_artifact=candidate_artifact,\n        candidate_receipt=candidate_receipt,\n        run=run,\n    )\n", "    return PefV1ConfirmatoryEvidence(\n        grouping_receipt=control.grouping_receipt,\n        control_receipt=control.receipt,\n        control_snapshot=control.snapshot,\n        candidate_observations=observations,\n        candidate_artifact=candidate_artifact,\n        candidate_receipt=candidate_receipt,\n        run=run,\n    )\n")
 
           adapter = "src/frontier/adapters/postgres/pef_v1_confirmatory.py"
-          replace_once(
-              adapter,
-              "    PEF_V1_PROJECTION_NAME,\n    PEF_V1_PROJECTION_VERSION,\n)\n",
-              "    PEF_V1_PROJECTION_NAME,\n    PEF_V1_PROJECTION_VERSION,\n    build_pef_v1_receipt,\n)\n",
-          )
-          replace_once(
-              adapter,
-              "    run = evidence.run\n    artifact = evidence.candidate_artifact\n    candidate_receipt = evidence.candidate_receipt\n    if run.experiment_id != PEF_V1_EXPERIMENT_ID:\n",
-              "    run = evidence.run\n    artifact = evidence.candidate_artifact\n    candidate_receipt = evidence.candidate_receipt\n    if evidence.control_snapshot.snapshot_id != artifact.control_snapshot_id:\n        raise ValueError(\"PEF_V1 candidate receipt control snapshot mismatch\")\n    expected_candidate_receipt = build_pef_v1_receipt(\n        artifact,\n        observations=evidence.candidate_observations,\n        control_snapshot=evidence.control_snapshot,\n    )\n    if candidate_receipt != expected_candidate_receipt:\n        raise ValueError(\"PEF_V1 candidate receipt does not bind full candidate input provenance\")\n    if run.experiment_id != PEF_V1_EXPERIMENT_ID:\n",
-          )
+          replace_once(adapter, "    PEF_V1_PROJECTION_NAME,\n    PEF_V1_PROJECTION_VERSION,\n)\n", "    PEF_V1_PROJECTION_NAME,\n    PEF_V1_PROJECTION_VERSION,\n    build_pef_v1_receipt,\n)\n")
+          replace_once(adapter, "    run = evidence.run\n    artifact = evidence.candidate_artifact\n    candidate_receipt = evidence.candidate_receipt\n    if run.experiment_id != PEF_V1_EXPERIMENT_ID:\n", "    run = evidence.run\n    artifact = evidence.candidate_artifact\n    candidate_receipt = evidence.candidate_receipt\n    if evidence.control_snapshot.snapshot_id != artifact.control_snapshot_id:\n        raise ValueError(\"PEF_V1 candidate receipt control snapshot mismatch\")\n    expected_candidate_receipt = build_pef_v1_receipt(\n        artifact,\n        observations=evidence.candidate_observations,\n        control_snapshot=evidence.control_snapshot,\n    )\n    if candidate_receipt != expected_candidate_receipt:\n        raise ValueError(\"PEF_V1 candidate receipt does not bind full candidate input provenance\")\n    if run.experiment_id != PEF_V1_EXPERIMENT_ID:\n")
 
           test = "tests/integration/test_pef_v1_confirmatory_postgres.py"
-          replace_once(
-              test,
-              "        forged_evidence = PefV1ConfirmatoryEvidence(\n            grouping_receipt=evidence.grouping_receipt,\n            control_receipt=evidence.control_receipt,\n            candidate_artifact=evidence.candidate_artifact,\n            candidate_receipt=evidence.candidate_receipt,\n            run=replace(evidence.run, candidate_freeze_receipt_id=wrong),\n        )\n",
-              "        forged_evidence = replace(\n            evidence,\n            run=replace(evidence.run, candidate_freeze_receipt_id=wrong),\n        )\n",
-          )
-          with Path(test).open("a") as handle:
-              handle.write(
-                  """
-
-
-def test_v1_persistence_rejects_candidate_receipt_provenance_forgery() -> None:
-    assert DB_URL is not None
-    with psycopg.connect(DB_URL) as conn:
-        receipt, publication = _store_v1_authority(conn)
-        boundary = first_confirmatory_boundary(publication.publication_committer_at)
-        evidence = build_pef_v1_confirmatory_evidence(
-            _Repository(boundary),
-            as_of=boundary,
-            generated_at=boundary,
-            source_registry_version=REGISTRY,
-            freeze_receipt=receipt,
-        )
-        forged_receipts = (
-            replace(
-                evidence.candidate_receipt,
-                input_digest=Digest("sha256:" + "8" * 64),
-            ),
-            replace(
-                evidence.candidate_receipt,
-                generated_at=evidence.candidate_receipt.generated_at + timedelta(seconds=1),
-            ),
-            replace(
-                evidence.candidate_receipt,
-                receipt_schema_version="projection-receipt-forged",
-            ),
-        )
-        persistence = PostgresPefV1ConfirmatoryPersistence(conn)
-        for forged_receipt in forged_receipts:
-            forged_evidence = replace(evidence, candidate_receipt=forged_receipt)
-            with pytest.raises(ValueError, match="full candidate input provenance"):
-                persistence.persist(
-                    forged_evidence,
-                    expected_freeze_receipt_id=receipt.receipt_id,
-                )
-            assert conn.execute(
-                "SELECT count(*) FROM shadow_experiment_runs WHERE run_id = %s",
-                (forged_evidence.run.run_id,),
-            ).fetchone() == (0,)
-"""
-              )
+          replace_once(test, "        forged_evidence = PefV1ConfirmatoryEvidence(\n            grouping_receipt=evidence.grouping_receipt,\n            control_receipt=evidence.control_receipt,\n            candidate_artifact=evidence.candidate_artifact,\n            candidate_receipt=evidence.candidate_receipt,\n            run=replace(evidence.run, candidate_freeze_receipt_id=wrong),\n        )\n", "        forged_evidence = replace(\n            evidence,\n            run=replace(evidence.run, candidate_freeze_receipt_id=wrong),\n        )\n")
+          addition = base64.b64decode("CgpkZWYgdGVzdF92MV9wZXJzaXN0ZW5jZV9yZWplY3RzX2NhbmRpZGF0ZV9yZWNlaXB0X3Byb3ZlbmFuY2VfZm9yZ2VyeSgpIC0+IE5vbmU6CiAgICBhc3NlcnQgREJfVVJMIGlzIG5vdCBOb25lCiAgICB3aXRoIHBzeWNvcGcuY29ubmVjdChEQl9VUkwpIGFzIGNvbm46CiAgICAgICAgcmVjZWlwdCwgcHVibGljYXRpb24gPSBfc3RvcmVfdjFfYXV0aG9yaXR5KGNvbm4pCiAgICAgICAgYm91bmRhcnkgPSBmaXJzdF9jb25maXJtYXRvcnlfYm91bmRhcnkocHVibGljYXRpb24ucHVibGljYXRpb25fY29tbWl0dGVyX2F0KQogICAgICAgIGV2aWRlbmNlID0gYnVpbGRfcGVmX3YxX2NvbmZpcm1hdG9yeV9ldmlkZW5jZSgKICAgICAgICAgICAgX1JlcG9zaXRvcnkoYm91bmRhcnkpLAogICAgICAgICAgICBhc19vZj1ib3VuZGFyeSwKICAgICAgICAgICAgZ2VuZXJhdGVkX2F0PWJvdW5kYXJ5LAogICAgICAgICAgICBzb3VyY2VfcmVnaXN0cnlfdmVyc2lvbj1SRUdJU1RSWSwKICAgICAgICAgICAgZnJlZXplX3JlY2VpcHQ9cmVjZWlwdCwKICAgICAgICApCiAgICAgICAgZm9yZ2VkX3JlY2VpcHRzID0gKAogICAgICAgICAgICByZXBsYWNlKAogICAgICAgICAgICAgICAgZXZpZGVuY2UuY2FuZGlkYXRlX3JlY2VpcHQsCiAgICAgICAgICAgICAgICBpbnB1dF9kaWdlc3Q9RGlnZXN0KCJzaGEyNTY6IiArICI4IiAqIDY0KSwKICAgICAgICAgICAgKSwKICAgICAgICAgICAgcmVwbGFjZSgKICAgICAgICAgICAgICAgIGV2aWRlbmNlLmNhbmRpZGF0ZV9yZWNlaXB0LAogICAgICAgICAgICAgICAgZ2VuZXJhdGVkX2F0PWV2aWRlbmNlLmNhbmRpZGF0ZV9yZWNlaXB0LmdlbmVyYXRlZF9hdCArIHRpbWVkZWx0YShzZWNvbmRzPTEpLAogICAgICAgICAgICApLAogICAgICAgICAgICByZXBsYWNlKAogICAgICAgICAgICAgICAgZXZpZGVuY2UuY2FuZGlkYXRlX3JlY2VpcHQsCiAgICAgICAgICAgICAgICByZWNlaXB0X3NjaGVtYV92ZXJzaW9uPSJwcm9qZWN0aW9uLXJlY2VpcHQtZm9yZ2VkIiwKICAgICAgICAgICAgKSwKICAgICAgICApCiAgICAgICAgcGVyc2lzdGVuY2UgPSBQb3N0Z3Jlc1BlZlYxQ29uZmlybWF0b3J5UGVyc2lzdGVuY2UoY29ubikKICAgICAgICBmb3IgZm9yZ2VkX3JlY2VpcHQgaW4gZm9yZ2VkX3JlY2VpcHRzOgogICAgICAgICAgICBmb3JnZWRfZXZpZGVuY2UgPSByZXBsYWNlKGV2aWRlbmNlLCBjYW5kaWRhdGVfcmVjZWlwdD1mb3JnZWRfcmVjZWlwdCkKICAgICAgICAgICAgd2l0aCBweXRlc3QucmFpc2VzKFZhbHVlRXJyb3IsIG1hdGNoPSJmdWxsIGNhbmRpZGF0ZSBpbnB1dCBwcm92ZW5hbmNlIik6CiAgICAgICAgICAgICAgICBwZXJzaXN0ZW5jZS5wZXJzaXN0KAogICAgICAgICAgICAgICAgICAgIGZvcmdlZF9ldmlkZW5jZSwKICAgICAgICAgICAgICAgICAgICBleHBlY3RlZF9mcmVlemVfcmVjZWlwdF9pZD1yZWNlaXB0LnJlY2VpcHRfaWQsCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgIGFzc2VydCBjb25uLmV4ZWN1dGUoCiAgICAgICAgICAgICAgICAiU0VMRUNUIGNvdW50KCopIEZST00gc2hhZG93X2V4cGVyaW1lbnRfcnVucyBXSEVSRSBydW5faWQgPSAlcyIsCiAgICAgICAgICAgICAgICAoZm9yZ2VkX2V2aWRlbmNlLnJ1bi5ydW5faWQsKSwKICAgICAgICAgICAgKS5mZXRjaG9uZSgpID09ICgwLCkK").decode()
+          Path(test).write_text(Path(test).read_text() + addition)
           PY
-
           git rm .github/workflows/zz-pef-v1-receipt-repair.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/frontier/application/pef_v1_confirmatory.py \
-                  src/frontier/adapters/postgres/pef_v1_confirmatory.py \
-                  tests/integration/test_pef_v1_confirmatory_postgres.py
+          git add src/frontier/application/pef_v1_confirmatory.py src/frontier/adapters/postgres/pef_v1_confirmatory.py tests/integration/test_pef_v1_confirmatory_postgres.py
           git commit -m "fix(pef-v1): bind full candidate receipt provenance"
           git push origin HEAD:feature/pef-v1-confirmatory-orchestration
