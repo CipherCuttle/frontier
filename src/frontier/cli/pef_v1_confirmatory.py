@@ -36,10 +36,10 @@ def require_direct_session_database_url(database_url: str) -> str:
         params = conninfo_to_dict(database_url)
     except psycopg.ProgrammingError as error:
         raise ValueError("database URL is not valid Postgres connection information") from error
-    host = params.get("host")
-    if not host or "," in host:
+    host_value = params.get("host")
+    if not isinstance(host_value, str) or not host_value or "," in host_value:
         raise ValueError("PEF_V1 confirmatory operation requires one explicit direct database host")
-    normalized = host.strip().lower()
+    normalized = host_value.strip().lower()
     if "-pooler" in normalized:
         raise ValueError(
             "PEF_V1 confirmatory operation forbids transaction-pooler hosts; "
