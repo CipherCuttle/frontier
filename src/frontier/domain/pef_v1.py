@@ -79,10 +79,9 @@ def require_pef_v1_control_identity(
 ) -> None:
     if control_receipt.status is not ProjectionStatus.COMPLETE:
         raise ValueError("PEF_V1 requires a COMPLETE control snapshot")
-    if (
-        control_receipt.output_digest.value.removeprefix("sha256:")
-        != control_snapshot.snapshot_id.removeprefix("snapshot_")
-    ):
+    if control_receipt.output_digest.value.removeprefix(
+        "sha256:"
+    ) != control_snapshot.snapshot_id.removeprefix("snapshot_"):
         raise ValueError("control receipt does not bind the given control snapshot")
     if control_receipt.projection_name != BASELINE_PROJECTION_NAME:
         raise ValueError("control receipt projection name mismatch")
@@ -233,7 +232,8 @@ def _require_paired_universe(
         episode.episode_id: tuple(episode.observation_ids) for episode in control_snapshot.episodes
     }
     candidate_universe = {
-        episode.episode_id: tuple(episode.observation_ids) for episode in candidate_artifact.episodes
+        episode.episode_id: tuple(episode.observation_ids)
+        for episode in candidate_artifact.episodes
     }
     if len(candidate_universe) != len(candidate_artifact.episodes):
         raise ValueError("candidate ranking contains duplicate episode ids")
