@@ -34,7 +34,7 @@ def _git_blob(root: Path, *, ref: str, path: str) -> bytes | None:
             check=True,
             timeout=30,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     return result.stdout
 
