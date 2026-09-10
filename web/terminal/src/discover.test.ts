@@ -1,13 +1,31 @@
 import { describe, expect, it } from "vitest";
 import type {
+  EpisodeEvidenceResponse,
   EpisodeResponse,
   ObservationEvidenceResponse,
 } from "../../../clients/typescript/src/generated/public_read_v0";
 import {
-  buildDiscoveryCard,
-  filterDiscoveryCards,
+  buildDiscoveryEvidenceItem,
+  buildDiscoveryGroup,
+  filterDiscoveryGroups,
   formatDiscoveryAge,
 } from "./discover";
+
+const snapshot = {
+  algorithm_version: "windowed-episode-metrics-v0",
+  as_of: "2026-09-10T18:00:00.000000Z",
+  configuration_digest: "sha256:cfg",
+  input_digest: "sha256:input",
+  output_digest: "sha256:output",
+  projection_name: "baseline-intelligence",
+  projection_version: "baseline-intelligence-v0",
+  ranking_policy_version: "naive-episode-activity-v0",
+  receipt_id: "receipt_fixture",
+  receipt_schema_version: "projection-receipt-v1",
+  schema_version: "baseline-intelligence-snapshot-v0",
+  snapshot_id: "snapshot_discover",
+  source_registry_version: "sha256:registry",
+};
 
 function episode(
   rank: number,
@@ -66,47 +84,97 @@ function observation(
   };
 }
 
+function evidenceResponse(
+  item: EpisodeResponse,
+  observations: ObservationEvidenceResponse[],
+): EpisodeEvidenceResponse {
+  return {
+    episode: item,
+    generated_at: "2026-09-10T18:00:02.000000Z",
+    observations,
+    snapshot,
+  };
+}
+
 describe("DISCOVER feed presentation model", () => {
-  it("extracts human-readable artifact identity and searchable metadata", () => {
-    const item = episode(1, "episode_agent");
-    const card = buildDiscoveryCard(
+  it("keeps human-readable text attached to evidence items, not episode identity", () => {
+    const item = episode(1, "episode_agent", {
+      evidence_count_total: 2,
+      observation_ids: ["obs_package", "obs_attention"],
+    });
+    const packageObservation = observation("obs_package", "pypi.updates", {
+      canonical_url: "https://pypi.org/project/hyper-agent/0.2.0/",
+      name: "hyper-agent",
+      version: "0.2.0",
+      source_metadata: { description: "Agent runtime with local tools" },
+    });
+    const attentionObservation = observation("obs_attention", "hn.frontpage", {
+      canonical_url: "https://news.ycombinator.com/item?id=123",
+      title: "Show HN: hyper-agent",
+    });
+
+    const group = buildDiscoveryGroup(
       item,
-      observation("obs_1", "pypi.updates", {
-        canonical_url: "https://pypi.org/project/hyper-agent/0.2.0/",
-        name: "hyper-agent",
-        version: "0.2.0",
-        source_metadata: { description: "Agent runtime with local tools" },
+      evidenceResponse(item, [packageObservation, attentionObservation]),
+    );
+
+    expect(group.episode.episode_id).toBe("episode_agent");
+    expect(group.evidence.map((entry) => entry.title)).toEqual([
+      "hyper-agent 0.2.0",
+      "Show HN: hyper-agent",
+    ]);
+    expect(filterDiscoveryGroups([group], "ALL", "local tools")).toEqual([group]);
+  });
+
+  it("rejects unsafe evidence links instead of rendering arbitrary schemes", () => {
+    const item = buildDiscoveryEvidenceItem(
+      observation("obs_unsafe", "hn.frontpage", {
+        canonical_url: "javascript:alert(1)",
+        title: "Unsafe link fixture",
       }),
     );
 
-    expect(card.title).toBe("hyper-agent 0.2.0");
-    expect(card.excerpt).toBe("Agent runtime with local tools");
-    expect(card.url).toContain("pypi.org");
-    expect(filterDiscoveryCards([card], "ALL", "local tools")).toEqual([card]);
+    expect(item.title).toBe("Unsafe link fixture");
+    expect(item.url).toBeNull();
+  });
+
+  it("fails closed when evidence response episode identity disagrees", () => {
+    const expected = episode(1, "episode_expected");
+    const wrong = episode(1, "episode_wrong");
+
+    expect(() => buildDiscoveryGroup(expected, evidenceResponse(wrong, []))).toThrow(
+      "episode identity mismatch",
+    );
   });
 
   it("filters lanes without changing baseline order", () => {
-    const cards = [
-      buildDiscoveryCard(
+    const groups = [
+      buildDiscoveryGroup(
         episode(1, "episode_quiet", { velocity_6h_delta: 0 }),
-        observation("obs_1", "pypi.updates", { name: "quiet-package" }),
+        null,
       ),
-      buildDiscoveryCard(
+      buildDiscoveryGroup(
         episode(2, "episode_rising", { velocity_6h_delta: 4, mentions_1h: 2 }),
-        observation("obs_2", "pypi.updates", { name: "rising-package" }),
+        null,
       ),
-      buildDiscoveryCard(
+      buildDiscoveryGroup(
         episode(3, "episode_security", {
           source_ids: ["cisa.kev"],
           signal_roles: ["PRIMARY_EMISSION"],
         }),
-        observation("obs_3", "cisa.kev", { title: "A newly exploited vulnerability" }),
+        null,
       ),
     ];
 
-    expect(filterDiscoveryCards(cards, "RISING", "").map((card) => card.episode.rank)).toEqual([2]);
-    expect(filterDiscoveryCards(cards, "SECURITY", "").map((card) => card.episode.rank)).toEqual([3]);
-    expect(filterDiscoveryCards(cards, "PRIMARY", "").map((card) => card.episode.rank)).toEqual([1, 2, 3]);
+    expect(filterDiscoveryGroups(groups, "RISING", "").map((group) => group.episode.rank)).toEqual([
+      2,
+    ]);
+    expect(
+      filterDiscoveryGroups(groups, "SECURITY", "").map((group) => group.episode.rank),
+    ).toEqual([3]);
+    expect(
+      filterDiscoveryGroups(groups, "PRIMARY", "").map((group) => group.episode.rank),
+    ).toEqual([1, 2, 3]);
   });
 
   it("formats feed age compactly", () => {
