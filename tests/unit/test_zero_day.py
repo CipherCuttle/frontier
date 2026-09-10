@@ -15,7 +15,12 @@ from frontier.domain.digests import Digest
 from frontier.domain.grouping import GroupingInput
 from frontier.domain.health import HealthValue
 from frontier.domain.intelligence import BaselineObservationInput
-from frontier.domain.pef_v1 import PEF_V1_CONFIGURATION_DIGEST, PefV1Artifact
+from frontier.domain.pef_v1 import (
+    PEF_V1_CANDIDATE_ID,
+    PEF_V1_CONFIGURATION_DIGEST,
+    PEF_V1_EXPERIMENT_ID,
+    PefV1Artifact,
+)
 from frontier.domain.zero_day import (
     ZeroDayFollowOnEvidence,
     ZeroDayGradeStatus,
@@ -90,6 +95,8 @@ def _pair() -> tuple[PefV1Artifact, ShadowExperimentRun, tuple[BaselineObservati
         source_registry_version=DIGEST_A,
         generated_at=AS_OF,
         episodes=episodes,
+        experiment_id=PEF_V1_EXPERIMENT_ID,
+        candidate_id=PEF_V1_CANDIDATE_ID,
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
         grouping_receipt_id="receipt_grouping",
     )
@@ -113,8 +120,8 @@ def _pair() -> tuple[PefV1Artifact, ShadowExperimentRun, tuple[BaselineObservati
         candidate_artifact_id=artifact.artifact_id,
         candidate_output_digest=artifact.output_digest,
         control_ranking=control,
-        experiment_id=artifact.experiment_id,
-        candidate_id=artifact.candidate_id,
+        experiment_id=PEF_V1_EXPERIMENT_ID,
+        candidate_id=PEF_V1_CANDIDATE_ID,
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
         candidate_freeze_receipt_id=FREEZE_ID,
     )
