@@ -159,10 +159,7 @@ def _require_pef_v1_pair(
         raise ValueError("ZERO-DAY requires a CONFIRMATORY PEF_V1 run")
     if artifact.status is not PefArtifactStatus.RAN or run.status is not ShadowRunStatus.RAN:
         raise ValueError("ZERO-DAY requires complete RAN candidate and paired run artifacts")
-    if (
-        artifact.experiment_id != PEF_V1_EXPERIMENT_ID
-        or run.experiment_id != PEF_V1_EXPERIMENT_ID
-    ):
+    if artifact.experiment_id != PEF_V1_EXPERIMENT_ID or run.experiment_id != PEF_V1_EXPERIMENT_ID:
         raise ValueError("ZERO-DAY requires PEF_V1 experiment identity")
     if artifact.candidate_id != PEF_V1_CANDIDATE_ID or run.candidate_id != PEF_V1_CANDIDATE_ID:
         raise ValueError("ZERO-DAY requires PEF_V1 candidate identity")
