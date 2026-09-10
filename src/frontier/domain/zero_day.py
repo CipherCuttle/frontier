@@ -22,6 +22,7 @@ ZERO_DAY_SELECTION_RULE_VERSION = "pef-v1-top-unnoticed-primary-v0"
 ZERO_DAY_AUTHORITY_STATE = "DIAGNOSTIC_ONLY"
 ZERO_DAY_RUN_CLASS = "CONFIRMATORY"
 ZERO_DAY_COHORT_SIZE = 5
+ZERO_DAY_MAX_SEAL_DELAY_SECONDS = 1_800
 ZERO_DAY_SEAL_HOURS_UTC = frozenset({0, 6, 12, 18})
 ZERO_DAY_FOLLOW_ON_ROLES = frozenset({"ATTENTION", "DISCOVERY"})
 ZERO_DAY_GRADE_HORIZONS_SECONDS = (21_600, 86_400, 259_200, 604_800)
@@ -80,9 +81,7 @@ class ZeroDayCandidate:
             "observation_ids": list(self.observation_ids),
             "position": self.position,
             "prospective_age_seconds": self.prospective_age_seconds,
-            "prospective_last_observed_at": canonical_timestamp(
-                self.prospective_last_observed_at
-            ),
+            "prospective_last_observed_at": canonical_timestamp(self.prospective_last_observed_at),
             "rank_advantage": self.rank_advantage,
         }
 
@@ -107,6 +106,8 @@ class ZeroDaySeal:
         _require_aware(self.sealed_at, "ZERO-DAY sealed_at")
         if self.sealed_at < self.as_of:
             raise ValueError("ZERO-DAY cannot be sealed before its source boundary")
+        if self.sealed_at > self.as_of + timedelta(seconds=ZERO_DAY_MAX_SEAL_DELAY_SECONDS):
+            raise ValueError("ZERO-DAY seal missed its 30-minute live sealing window")
         if not self.run_id.startswith("shadowrun_"):
             raise ValueError("ZERO-DAY seal requires a shadow run id")
         if not self.candidate_artifact_id.startswith("artifact_"):
@@ -465,6 +466,7 @@ __all__ = [
     "ZERO_DAY_FOLLOW_ON_ROLES",
     "ZERO_DAY_GRADE_HORIZONS_SECONDS",
     "ZERO_DAY_GRADE_SCHEMA_VERSION",
+    "ZERO_DAY_MAX_SEAL_DELAY_SECONDS",
     "ZERO_DAY_SCHEMA_VERSION",
     "ZERO_DAY_SELECTION_RULE_VERSION",
     "ZeroDayCandidate",
