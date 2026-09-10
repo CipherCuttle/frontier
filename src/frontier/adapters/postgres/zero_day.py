@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import cast
 
 import psycopg
@@ -27,6 +27,7 @@ from frontier.domain.pef_v1 import (
 )
 from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 from frontier.domain.zero_day import (
+    ZERO_DAY_MAX_SEAL_DELAY_SECONDS,
     ZERO_DAY_RUN_CLASS,
     ZeroDayPefPersistenceBinding,
     ZeroDaySeal,
@@ -486,13 +487,14 @@ def _validate_freeze_authority(cur: CursorT, receipt_id: str, *, as_of: datetime
 
 
 class PostgresZeroDayAdapter:
-    """Read one exact persisted PEF_V1 boundary into a ZERO-DAY diagnostic seal.
+    """Read one live persisted PEF_V1 boundary into a ZERO-DAY diagnostic seal.
 
     The adapter never writes. It reads under one repeatable-read, read-only
-    PostgreSQL transaction, validates all persisted identities, reconstructs
-    the exact baseline observation input set, and delegates selection to the
-    pure ZERO-DAY domain builder. Missing exact RAN boundaries return ``None``;
-    inconsistent or ambiguous persisted evidence fails closed.
+    PostgreSQL transaction, obtains the seal time from PostgreSQL itself,
+    validates all persisted identities, reconstructs the exact baseline input
+    set, and delegates selection to the pure ZERO-DAY domain builder. Missing,
+    not-yet-live, or expired exact boundaries return ``None``; inconsistent or
+    ambiguous persisted evidence fails closed.
     """
 
     def __init__(self, connection: ConnectionT) -> None:
@@ -503,7 +505,6 @@ class PostgresZeroDayAdapter:
         self,
         *,
         as_of: datetime,
-        sealed_at: datetime,
     ) -> ZeroDaySeal | None:
         require_zero_day_boundary(as_of)
         if self._connection.info.transaction_status is not TransactionStatus.IDLE:
@@ -511,6 +512,18 @@ class PostgresZeroDayAdapter:
 
         with self._connection.transaction(), self._connection.cursor() as cur:
             cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            cur.execute("SELECT clock_timestamp()")
+            clock_row = cur.fetchone()
+            if clock_row is None or not isinstance(clock_row[0], datetime):
+                raise RuntimeError("ZERO-DAY could not obtain the PostgreSQL clock")
+            sealed_at = cast(datetime, clock_row[0])
+            if sealed_at.tzinfo is None or sealed_at.utcoffset() is None:
+                raise RuntimeError("ZERO-DAY PostgreSQL clock is not timezone-aware")
+            if sealed_at < as_of:
+                return None
+            if sealed_at > as_of + timedelta(seconds=ZERO_DAY_MAX_SEAL_DELAY_SECONDS):
+                return None
+
             loaded_run = _load_exact_run(cur, as_of)
             if loaded_run is None:
                 return None
