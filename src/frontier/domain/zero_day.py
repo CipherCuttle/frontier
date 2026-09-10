@@ -5,16 +5,29 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
-from .advanced_intelligence import PefArtifactStatus, ShadowExperimentRun, ShadowRunStatus
+from .advanced_intelligence import (
+    PEF_ALGORITHM_VERSION,
+    PEF_AUTHORITY_STATE,
+    PEF_RANKING_POLICY_VERSION,
+    PEF_RECEIPT_SCHEMA_VERSION,
+    PEF_SCHEMA_VERSION,
+    PefArtifactStatus,
+    ShadowExperimentRun,
+    ShadowRunStatus,
+)
 from .canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
 from .digests import Digest, sha256_digest, sha256_hex
+from .health import HealthValue
 from .intelligence import BaselineObservationInput
 from .pef_v1 import (
     PEF_V1_CANDIDATE_ID,
     PEF_V1_CONFIGURATION_DIGEST,
     PEF_V1_EXPERIMENT_ID,
+    PEF_V1_PROJECTION_NAME,
+    PEF_V1_PROJECTION_VERSION,
     PefV1Artifact,
 )
+from .receipt import ProjectionReceipt, ProjectionStatus
 
 ZERO_DAY_SCHEMA_VERSION = "frontier-zero-day-seal-v0"
 ZERO_DAY_GRADE_SCHEMA_VERSION = "frontier-zero-day-grade-v0"
@@ -43,6 +56,33 @@ def require_zero_day_boundary(as_of: datetime) -> None:
         or utc.microsecond != 0
     ):
         raise ValueError("ZERO-DAY seals require an exact 6-hour UTC boundary")
+
+
+@dataclass(frozen=True, slots=True)
+class ZeroDayPefPersistenceBinding:
+    """Trusted persistence metadata loaded from the append-only PEF_V1 store.
+
+    The later read-only adapter is responsible for constructing this object
+    directly from the persisted artifact/run/receipt rows. The pure domain
+    builder verifies the row identities, exact input digest, and persistence
+    timestamps before it will create a live seal.
+    """
+
+    candidate_receipt: ProjectionReceipt
+    artifact_receipt_id: str
+    artifact_persisted_at: datetime
+    candidate_receipt_persisted_at: datetime
+    run_persisted_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.artifact_receipt_id != self.candidate_receipt.receipt_id:
+            raise ValueError("ZERO-DAY persisted artifact receipt binding mismatch")
+        _require_aware(self.artifact_persisted_at, "artifact_persisted_at")
+        _require_aware(
+            self.candidate_receipt_persisted_at,
+            "candidate_receipt_persisted_at",
+        )
+        _require_aware(self.run_persisted_at, "run_persisted_at")
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,8 +132,13 @@ class ZeroDaySeal:
     sealed_at: datetime
     run_id: str
     run_digest: Digest
+    run_persisted_at: datetime
     candidate_artifact_id: str
     candidate_output_digest: Digest
+    candidate_artifact_persisted_at: datetime
+    candidate_receipt_id: str
+    candidate_input_digest: Digest
+    candidate_receipt_persisted_at: datetime
     candidate_freeze_receipt_id: str
     source_registry_version: Digest
     candidates: tuple[ZeroDayCandidate, ...]
@@ -104,14 +149,28 @@ class ZeroDaySeal:
     def __post_init__(self) -> None:
         require_zero_day_boundary(self.as_of)
         _require_aware(self.sealed_at, "ZERO-DAY sealed_at")
+        _require_aware(self.run_persisted_at, "run_persisted_at")
+        _require_aware(self.candidate_artifact_persisted_at, "candidate_artifact_persisted_at")
+        _require_aware(self.candidate_receipt_persisted_at, "candidate_receipt_persisted_at")
         if self.sealed_at < self.as_of:
             raise ValueError("ZERO-DAY cannot be sealed before its source boundary")
         if self.sealed_at > self.as_of + timedelta(seconds=ZERO_DAY_MAX_SEAL_DELAY_SECONDS):
             raise ValueError("ZERO-DAY seal missed its 30-minute live sealing window")
+        if any(
+            persisted_at > self.sealed_at
+            for persisted_at in (
+                self.run_persisted_at,
+                self.candidate_artifact_persisted_at,
+                self.candidate_receipt_persisted_at,
+            )
+        ):
+            raise ValueError("ZERO-DAY source evidence was not persisted by sealed_at")
         if not self.run_id.startswith("shadowrun_"):
             raise ValueError("ZERO-DAY seal requires a shadow run id")
         if not self.candidate_artifact_id.startswith("artifact_"):
             raise ValueError("ZERO-DAY seal requires a candidate artifact id")
+        if not self.candidate_receipt_id.startswith("receipt_"):
+            raise ValueError("ZERO-DAY seal requires a candidate receipt binding")
         if not self.candidate_freeze_receipt_id.startswith("freezereceipt_"):
             raise ValueError("ZERO-DAY seal requires a bound candidate freeze receipt")
         if len(self.candidates) > ZERO_DAY_COHORT_SIZE:
@@ -136,17 +195,79 @@ class ZeroDaySeal:
             "as_of": canonical_timestamp(self.as_of),
             "authority_state": self.authority_state,
             "candidate_artifact_id": self.candidate_artifact_id,
+            "candidate_artifact_persisted_at": canonical_timestamp(
+                self.candidate_artifact_persisted_at
+            ),
             "candidate_freeze_receipt_id": self.candidate_freeze_receipt_id,
+            "candidate_input_digest": str(self.candidate_input_digest),
             "candidate_output_digest": str(self.candidate_output_digest),
+            "candidate_receipt_id": self.candidate_receipt_id,
+            "candidate_receipt_persisted_at": canonical_timestamp(
+                self.candidate_receipt_persisted_at
+            ),
             "candidates": candidate_values,
             "cohort_size_limit": ZERO_DAY_COHORT_SIZE,
             "run_digest": str(self.run_digest),
             "run_id": self.run_id,
+            "run_persisted_at": canonical_timestamp(self.run_persisted_at),
             "schema_version": self.schema_version,
             "sealed_at": canonical_timestamp(self.sealed_at),
             "selection_rule_version": self.selection_rule_version,
             "source_registry_version": str(self.source_registry_version),
         }
+
+
+def _candidate_input_digest(
+    observations: tuple[BaselineObservationInput, ...],
+    *,
+    control_snapshot_id: str,
+) -> Digest:
+    observation_values: list[CanonicalValue] = [
+        item.to_canonical() for item in sorted(observations, key=lambda item: item.observation_id)
+    ]
+    material: dict[str, CanonicalValue] = {
+        "control_snapshot_id": control_snapshot_id,
+        "observations": observation_values,
+    }
+    return sha256_digest(canonical_json_bytes(material))
+
+
+def _require_candidate_receipt(
+    artifact: PefV1Artifact,
+    observations: tuple[BaselineObservationInput, ...],
+    binding: ZeroDayPefPersistenceBinding,
+) -> None:
+    receipt = binding.candidate_receipt
+    if receipt.status is not ProjectionStatus.COMPLETE:
+        raise ValueError("ZERO-DAY requires a COMPLETE persisted PEF_V1 candidate receipt")
+    if receipt.receipt_schema_version != PEF_RECEIPT_SCHEMA_VERSION:
+        raise ValueError("ZERO-DAY candidate receipt schema identity mismatch")
+    if receipt.projection_name != PEF_V1_PROJECTION_NAME:
+        raise ValueError("ZERO-DAY candidate receipt projection identity mismatch")
+    if receipt.projection_version != PEF_V1_PROJECTION_VERSION:
+        raise ValueError("ZERO-DAY candidate receipt version identity mismatch")
+    if receipt.schema_version != PEF_SCHEMA_VERSION:
+        raise ValueError("ZERO-DAY candidate receipt artifact schema mismatch")
+    if receipt.algorithm_version != PEF_ALGORITHM_VERSION:
+        raise ValueError("ZERO-DAY candidate receipt algorithm identity mismatch")
+    if receipt.ranking_policy_version != PEF_RANKING_POLICY_VERSION:
+        raise ValueError("ZERO-DAY candidate receipt ranking identity mismatch")
+    if receipt.configuration_digest != PEF_V1_CONFIGURATION_DIGEST:
+        raise ValueError("ZERO-DAY candidate receipt configuration identity mismatch")
+    if receipt.source_registry_version != artifact.source_registry_version:
+        raise ValueError("ZERO-DAY candidate receipt source registry mismatch")
+    if receipt.as_of != artifact.as_of:
+        raise ValueError("ZERO-DAY candidate receipt boundary mismatch")
+    if receipt.generated_at != artifact.generated_at:
+        raise ValueError("ZERO-DAY candidate receipt generation time mismatch")
+    if receipt.output_digest != artifact.output_digest:
+        raise ValueError("ZERO-DAY candidate receipt does not bind candidate output")
+    expected_input_digest = _candidate_input_digest(
+        observations,
+        control_snapshot_id=artifact.control_snapshot_id,
+    )
+    if receipt.input_digest != expected_input_digest:
+        raise ValueError("ZERO-DAY observations do not match persisted PEF_V1 input digest")
 
 
 def _require_pef_v1_pair(
@@ -168,8 +289,20 @@ def _require_pef_v1_pair(
         or run.configuration_digest != PEF_V1_CONFIGURATION_DIGEST
     ):
         raise ValueError("ZERO-DAY requires frozen PEF_V1 configuration identity")
+    if artifact.authority_state != PEF_AUTHORITY_STATE or run.authority_state != PEF_AUTHORITY_STATE:
+        raise ValueError("ZERO-DAY requires experimental-shadow PEF_V1 authority")
     if run.candidate_freeze_receipt_id is None:
         raise ValueError("ZERO-DAY forbids freeze-unbound runs")
+    if any(
+        state is not HealthValue.OK
+        for state in (
+            run.coverage_state,
+            run.freshness_state,
+            run.transport_state,
+            run.schema_state,
+        )
+    ):
+        raise ValueError("ZERO-DAY requires fully OK seal-time coverage and source health")
     if artifact.as_of != run.as_of:
         raise ValueError("ZERO-DAY candidate and control boundaries differ")
     if artifact.artifact_id != run.candidate_artifact_id:
@@ -197,29 +330,64 @@ def _require_pef_v1_pair(
     return {item.episode_id: item.rank for item in run.control_ranking}
 
 
+def _require_persisted_live_availability(
+    artifact: PefV1Artifact,
+    run: ShadowExperimentRun,
+    binding: ZeroDayPefPersistenceBinding,
+    *,
+    sealed_at: datetime,
+) -> None:
+    for generated_at, persisted_at, label in (
+        (artifact.generated_at, binding.artifact_persisted_at, "candidate artifact"),
+        (
+            binding.candidate_receipt.generated_at,
+            binding.candidate_receipt_persisted_at,
+            "candidate receipt",
+        ),
+        (run.generated_at, binding.run_persisted_at, "shadow run"),
+    ):
+        _require_aware(generated_at, f"{label} generated_at")
+        if persisted_at < generated_at:
+            raise ValueError(f"ZERO-DAY {label} persistence precedes generation")
+        if persisted_at > sealed_at:
+            raise ValueError(f"ZERO-DAY {label} was not persisted by sealed_at")
+
+
 def build_zero_day_seal(
     artifact: PefV1Artifact,
     run: ShadowExperimentRun,
     observations: Iterable[BaselineObservationInput],
+    persistence: ZeroDayPefPersistenceBinding,
     *,
     run_class: str,
     sealed_at: datetime,
 ) -> ZeroDaySeal:
-    """Derive one deterministic diagnostic cohort from an exact PEF_V1 pair.
+    """Derive one deterministic diagnostic cohort from an exact persisted PEF_V1 pair.
 
-    The candidate ordering is never re-ranked: the function walks the existing
-    PEF_V1 candidate ranking and takes the first five eligible unnoticed
-    primary-emission episodes. Missing source observations fail closed rather
-    than making an episode appear attention-free.
+    The candidate ordering is never re-ranked. The supplied observations must
+    reconstruct the exact persisted candidate-receipt input digest; source
+    persistence timestamps must prove that the pair was actually available by
+    ``sealed_at``; and any non-OK health state makes the boundary unavailable.
     """
     require_zero_day_boundary(run.as_of)
     _require_aware(sealed_at, "ZERO-DAY sealed_at")
-    control_ranks = _require_pef_v1_pair(artifact, run, run_class=run_class)
+    if sealed_at < run.as_of:
+        raise ValueError("ZERO-DAY cannot be sealed before its source boundary")
+    if sealed_at > run.as_of + timedelta(seconds=ZERO_DAY_MAX_SEAL_DELAY_SECONDS):
+        raise ValueError("ZERO-DAY seal missed its 30-minute live sealing window")
 
+    control_ranks = _require_pef_v1_pair(artifact, run, run_class=run_class)
     observation_items = tuple(observations)
     by_id = {item.observation_id: item for item in observation_items}
     if len(by_id) != len(observation_items):
         raise ValueError("ZERO-DAY observation inputs contain duplicate ids")
+    _require_candidate_receipt(artifact, observation_items, persistence)
+    _require_persisted_live_availability(
+        artifact,
+        run,
+        persistence,
+        sealed_at=sealed_at,
+    )
 
     selected: list[ZeroDayCandidate] = []
     for candidate in sorted(artifact.episodes, key=lambda item: item.rank):
@@ -272,8 +440,13 @@ def build_zero_day_seal(
         sealed_at=sealed_at,
         run_id=run.run_id,
         run_digest=run.run_digest,
+        run_persisted_at=persistence.run_persisted_at,
         candidate_artifact_id=artifact.artifact_id,
         candidate_output_digest=artifact.output_digest,
+        candidate_artifact_persisted_at=persistence.artifact_persisted_at,
+        candidate_receipt_id=persistence.candidate_receipt.receipt_id,
+        candidate_input_digest=persistence.candidate_receipt.input_digest,
+        candidate_receipt_persisted_at=persistence.candidate_receipt_persisted_at,
         candidate_freeze_receipt_id=freeze_receipt_id,
         source_registry_version=artifact.source_registry_version,
         candidates=tuple(selected),
@@ -282,6 +455,13 @@ def build_zero_day_seal(
 
 @dataclass(frozen=True, slots=True)
 class ZeroDayFollowOnEvidence:
+    """Unverified follow-on evidence placeholder.
+
+    V0 deliberately cannot turn this object into HIT/MISS authority. A later
+    adapter/projection must supply an auditable episode-membership and coverage
+    binding before positive or negative grading can be enabled.
+    """
+
     episode_id: str
     observation_id: str
     source_id: str
@@ -315,8 +495,7 @@ class ZeroDayFollowOnEvidence:
 
 class ZeroDayMemberStatus(StrEnum):
     PENDING = "PENDING"
-    HIT = "HIT"
-    MISS = "MISS"
+    UNVERIFIED = "UNVERIFIED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,7 +525,7 @@ class ZeroDayMemberGrade:
 
 class ZeroDayGradeStatus(StrEnum):
     PENDING = "PENDING"
-    COMPLETE = "COMPLETE"
+    UNVERIFIED = "UNVERIFIED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,69 +570,50 @@ def build_zero_day_grade(
     horizon_seconds: int,
     graded_at: datetime,
 ) -> ZeroDayGrade:
-    """Grade one fixed ZERO-DAY horizon without changing the sealed denominator."""
+    """Retain the sealed denominator while grading authority remains unavailable.
+
+    V0 intentionally rejects caller-supplied follow-on evidence because there
+    is not yet a separately auditable membership/coverage projection that can
+    prove it belongs to the sealed episode. Before the cutoff the grade remains
+    PENDING; at/after the cutoff it becomes explicitly UNVERIFIED, never HIT or
+    MISS.
+    """
     if horizon_seconds not in ZERO_DAY_GRADE_HORIZONS_SECONDS:
         raise ValueError("ZERO-DAY grade horizon is not frozen by V0")
     _require_aware(graded_at, "ZERO-DAY graded_at")
     if graded_at < seal.as_of:
         raise ValueError("ZERO-DAY cannot grade before the seal boundary")
 
-    cutoff = seal.as_of + timedelta(seconds=horizon_seconds)
-    selected_ids = {item.episode_id for item in seal.candidates}
     evidence_items = tuple(follow_on_evidence)
-    seen_observation_ids: set[str] = set()
-    by_episode: dict[str, list[ZeroDayFollowOnEvidence]] = {
-        episode_id: [] for episode_id in selected_ids
-    }
-    for item in evidence_items:
-        if item.observation_id in seen_observation_ids:
-            raise ValueError("ZERO-DAY follow-on evidence contains duplicate observation ids")
-        seen_observation_ids.add(item.observation_id)
-        if item.episode_id not in selected_ids:
-            continue
-        if item.observed_at <= seal.as_of:
-            raise ValueError("ZERO-DAY follow-on evidence is not strictly after the seal")
-        if item.observed_at > graded_at:
-            raise ValueError("ZERO-DAY grade input contains evidence not yet known at graded_at")
-        if item.observed_at <= cutoff:
-            by_episode[item.episode_id].append(item)
+    if evidence_items:
+        raise ValueError(
+            "ZERO-DAY follow-on membership authority is unavailable; evidence remains ungraded"
+        )
 
+    cutoff = seal.as_of + timedelta(seconds=horizon_seconds)
     complete = graded_at >= cutoff
-    member_grades: list[ZeroDayMemberGrade] = []
-    for candidate in seal.candidates:
-        evidence = tuple(
-            sorted(
-                by_episode[candidate.episode_id],
-                key=lambda item: (item.observed_at, item.observation_id),
-            )
+    member_status = (
+        ZeroDayMemberStatus.UNVERIFIED if complete else ZeroDayMemberStatus.PENDING
+    )
+    members = tuple(
+        ZeroDayMemberGrade(
+            position=candidate.position,
+            episode_id=candidate.episode_id,
+            status=member_status,
+            first_follow_on_observed_at=None,
+            lead_seconds=None,
+            evidence=(),
         )
-        first = None if not evidence else evidence[0].observed_at
-        lead_seconds = None if first is None else int((first - seal.as_of).total_seconds())
-        if not complete:
-            member_status = ZeroDayMemberStatus.PENDING
-        elif evidence:
-            member_status = ZeroDayMemberStatus.HIT
-        else:
-            member_status = ZeroDayMemberStatus.MISS
-        member_grades.append(
-            ZeroDayMemberGrade(
-                position=candidate.position,
-                episode_id=candidate.episode_id,
-                status=member_status,
-                first_follow_on_observed_at=first,
-                lead_seconds=lead_seconds,
-                evidence=evidence,
-            )
-        )
-
+        for candidate in seal.candidates
+    )
     return ZeroDayGrade(
         seal_id=seal.seal_id,
         seal_digest=seal.seal_digest,
         horizon_seconds=horizon_seconds,
         cutoff=cutoff,
         graded_at=graded_at,
-        status=ZeroDayGradeStatus.COMPLETE if complete else ZeroDayGradeStatus.PENDING,
-        members=tuple(member_grades),
+        status=ZeroDayGradeStatus.UNVERIFIED if complete else ZeroDayGradeStatus.PENDING,
+        members=members,
     )
 
 
@@ -472,6 +632,7 @@ __all__ = [
     "ZeroDayGradeStatus",
     "ZeroDayMemberGrade",
     "ZeroDayMemberStatus",
+    "ZeroDayPefPersistenceBinding",
     "ZeroDaySeal",
     "build_zero_day_grade",
     "build_zero_day_seal",
