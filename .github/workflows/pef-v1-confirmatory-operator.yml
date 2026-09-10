@@ -16,12 +16,12 @@ jobs:
   run-current-boundary:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
     steps:
       - name: Credential gate
         id: credential-gate
         shell: bash
+        env:
+          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
         run: |
           set -euo pipefail
           if [[ -z "${FRONTIER_DATABASE_URL_DIRECT:-}" ]]; then
@@ -30,14 +30,31 @@ jobs:
             exit 0
           fi
           python - <<'PY'
-          from urllib.parse import urlsplit
+          from urllib.parse import parse_qs, urlsplit
           import os
+
           url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
-          host = (urlsplit(url).hostname or "").lower()
-          if not host:
-              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT has no hostname")
+          parsed = urlsplit(url)
+          host = (parsed.hostname or "").lower()
+          if parsed.scheme not in {"postgres", "postgresql"}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must be a Postgres URI")
+          if host != "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon direct host")
           if "-pooler" in host:
               raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use the direct Neon endpoint")
+          if parsed.username != "frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use canonical frontier role")
+          if parsed.path != "/frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical frontier database")
+          if parsed.port not in {None, 5432}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use PostgreSQL port 5432")
+          if parsed.password is None:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must contain a database password")
+          query = parse_qs(parsed.query)
+          if query.get("sslmode") != ["require"]:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must require TLS")
+          if query.get("channel_binding") != ["require"]:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must require channel binding")
           PY
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
@@ -72,10 +89,10 @@ jobs:
       - name: Run current PEF_V1 boundary only
         if: steps.credential-gate.outputs.enabled == 'true'
         env:
+          FRONTIER_DATABASE_URL: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
           FRONTIER_WORKER_ID: github-actions-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           uv run python -m frontier.cli.pef_v1_confirmatory \
-            --database-url "$FRONTIER_DATABASE_URL_DIRECT" \
             --root . \
             --worker-id "$FRONTIER_WORKER_ID"
