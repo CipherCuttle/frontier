@@ -5,7 +5,6 @@ import type {
   EpisodeResponse,
   FrontierPublicReadTransport,
   ObservationEvidenceResponse,
-  ObservationResponse,
   ViewResponse,
 } from "../../../clients/typescript/src/generated/public_read_v0";
 import { DiscoverApp } from "./DiscoverApp";
@@ -121,6 +120,18 @@ const radar: ViewResponse = {
   view_policy_version: "baseline-read-views-v0",
 };
 
+function evidenceResponse(
+  item: EpisodeResponse,
+  observations: ObservationEvidenceResponse[],
+): EpisodeEvidenceResponse {
+  return {
+    episode: item,
+    generated_at: radar.generated_at,
+    observations,
+    snapshot,
+  };
+}
+
 class DiscoveryTransport implements FrontierPublicReadTransport {
   readonly calls: Array<{ path: string; query: Record<string, unknown> }> = [];
 
@@ -130,34 +141,18 @@ class DiscoveryTransport implements FrontierPublicReadTransport {
   ): Promise<T> {
     this.calls.push({ path, query });
     if (path === "/v0/radar") return radar as T;
-    if (path === "/v0/observations/obs_agent") {
-      return {
-        generated_at: radar.generated_at,
-        observation: agentObservation,
-        snapshot,
-      } satisfies ObservationResponse as T;
-    }
-    if (path === "/v0/observations/obs_security") {
-      return {
-        generated_at: radar.generated_at,
-        observation: securityObservation,
-        snapshot,
-      } satisfies ObservationResponse as T;
-    }
     if (path === "/v0/episodes/episode_agent") {
-      return {
-        episode: agentEpisode,
-        generated_at: radar.generated_at,
-        observations: [agentObservation],
-        snapshot,
-      } satisfies EpisodeEvidenceResponse as T;
+      return evidenceResponse(agentEpisode, [agentObservation]) as T;
+    }
+    if (path === "/v0/episodes/episode_security") {
+      return evidenceResponse(securityEpisode, [securityObservation]) as T;
     }
     throw new Error(`unexpected request ${path}`);
   }
 }
 
 describe("DISCOVER default surface", () => {
-  it("loads baseline RADAR, hydrates human titles at the exact snapshot, and searches them", async () => {
+  it("hydrates all feed previews from exact-snapshot episode evidence and searches evidence text", async () => {
     const transport = new DiscoveryTransport();
     render(<DiscoverApp transport={transport} />);
 
@@ -166,15 +161,22 @@ describe("DISCOVER default surface", () => {
 
     const radarCall = transport.calls.find((call) => call.path === "/v0/radar");
     expect(radarCall?.query.limit).toBe(100);
-    const observationCalls = transport.calls.filter((call) => call.path.startsWith("/v0/observations/"));
-    expect(observationCalls).toHaveLength(2);
-    for (const call of observationCalls) expect(call.query.snapshot_id).toBe(snapshot.snapshot_id);
+    const episodeCalls = transport.calls.filter((call) => call.path.startsWith("/v0/episodes/"));
+    expect(episodeCalls).toHaveLength(2);
+    for (const call of episodeCalls) expect(call.query.snapshot_id).toBe(snapshot.snapshot_id);
+
+    const agentCard = document.querySelector('[data-episode-id="episode_agent"]');
+    expect(agentCard?.querySelector(".discover-episode-id")?.textContent).toContain("episode_agent");
+    expect(agentCard?.querySelector(".discover-episode-id")?.textContent).not.toContain("hyper-agent");
+    expect(
+      screen.getAllByText(/TITLES BELOW ARE EVIDENCE CONTENT, NOT EPISODE NAMES/).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByPlaceholderText("models, agents, CVEs, packages, repos…"), {
       target: { value: "edge appliance" },
     });
-    expect(screen.queryByText("hyper-agent 0.2.0")).toBeNull();
-    expect(screen.getByText("Freshly exploited edge appliance bug")).toBeTruthy();
+    expect(document.querySelector('[data-episode-id="episode_agent"]')).toBeNull();
+    expect(document.querySelector('[data-episode-id="episode_security"]')).toBeTruthy();
   });
 
   it("filters by clickable lane without reranking the default baseline sequence", async () => {
@@ -190,22 +192,26 @@ describe("DISCOVER default surface", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Rising/i }));
     await waitFor(() => expect(document.querySelectorAll(".discover-card")).toHaveLength(1));
-    expect(screen.getByText("hyper-agent 0.2.0")).toBeTruthy();
-    expect(screen.queryByText("Freshly exploited edge appliance bug")).toBeNull();
+    expect(document.querySelector('[data-episode-id="episode_agent"]')).toBeTruthy();
+    expect(document.querySelector('[data-episode-id="episode_security"]')).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Security/i }));
-    expect(screen.getByText("Freshly exploited edge appliance bug")).toBeTruthy();
+    expect(document.querySelector('[data-episode-id="episode_security"]')).toBeTruthy();
   });
 
-  it("opens exact-snapshot episode evidence from a feed card", async () => {
+  it("opens the inspector from cached evidence without issuing a stale-prone second request", async () => {
     const transport = new DiscoveryTransport();
     render(<DiscoverApp transport={transport} />);
     await screen.findByText("hyper-agent 0.2.0");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "evidence →" })[0]!);
+    const before = transport.calls.filter((call) => call.path === "/v0/episodes/episode_agent").length;
+    expect(before).toBe(1);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "inspect exact evidence →" })[0]!);
     await screen.findByText("POINT-IN-TIME EVIDENCE");
-    const episodeCall = transport.calls.find((call) => call.path === "/v0/episodes/episode_agent");
-    expect(episodeCall?.query.snapshot_id).toBe(snapshot.snapshot_id);
-    expect(screen.getByText(/Source count is evidence diversity/)).toBeTruthy();
+
+    const after = transport.calls.filter((call) => call.path === "/v0/episodes/episode_agent").length;
+    expect(after).toBe(1);
+    expect(screen.getByText(/Evidence titles are source content, not episode\/entity identity/)).toBeTruthy();
   });
 });
