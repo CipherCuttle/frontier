@@ -304,9 +304,7 @@ def test_seal_binds_exact_persisted_pef_input_not_only_observation_ids() -> None
     artifact, run, observations = _pair()
     persistence = _persistence(artifact, observations)
     substituted = tuple(
-        _observation("b", roles=("PRIMARY_EMISSION",))
-        if item.observation_id == "obs_b"
-        else item
+        _observation("b", roles=("PRIMARY_EMISSION",)) if item.observation_id == "obs_b" else item
         for item in observations
     )
 
