@@ -516,7 +516,7 @@ class PostgresZeroDayAdapter:
             clock_row = cur.fetchone()
             if clock_row is None or not isinstance(clock_row[0], datetime):
                 raise RuntimeError("ZERO-DAY could not obtain the PostgreSQL clock")
-            sealed_at = cast(datetime, clock_row[0])
+            sealed_at = clock_row[0]
             if sealed_at.tzinfo is None or sealed_at.utcoffset() is None:
                 raise RuntimeError("ZERO-DAY PostgreSQL clock is not timezone-aware")
             if sealed_at < as_of:
