@@ -8,21 +8,19 @@ import {
 } from "react";
 import {
   getEpisode,
-  getObservation,
   getRadar,
   type EpisodeEvidenceResponse,
-  type EpisodeResponse,
   type FrontierPublicReadTransport,
-  type ObservationEvidenceResponse,
   type ViewResponse,
 } from "../../../clients/typescript/src/generated/public_read_v0";
 import {
-  buildDiscoveryCard,
+  buildDiscoveryEvidenceItem,
+  buildDiscoveryGroup,
   DISCOVERY_LANES,
-  filterDiscoveryCards,
+  filterDiscoveryGroups,
   formatDiscoveryAge,
   matchesDiscoveryLane,
-  type DiscoveryCard,
+  type DiscoveryGroup,
   type DiscoveryLane,
 } from "./discover";
 import { TerminalApp } from "./TerminalApp";
@@ -36,8 +34,10 @@ const DISCOVERY_LIMIT = 100;
 const HYDRATION_BATCH_SIZE = 8;
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement &&
-    (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+  );
 }
 
 function shortId(value: string, width = 12): string {
@@ -65,27 +65,14 @@ function roleLabel(role: string): string {
   return role.toLocaleLowerCase().replaceAll("_", " ");
 }
 
-function payloadTitle(observation: ObservationEvidenceResponse): string {
-  const title = observation.payload.title;
-  if (typeof title === "string" && title.trim()) return title;
-  const name = observation.payload.name;
-  if (typeof name === "string" && name.trim()) return name;
-  return observation.source_item_key;
-}
-
-function payloadUrl(observation: ObservationEvidenceResponse): string | null {
-  const value = observation.payload.canonical_url;
-  return typeof value === "string" && value.trim() ? value : null;
-}
-
-function DiscoveryCardView({
-  card,
+function DiscoveryGroupView({
+  group,
   onInspect,
 }: {
-  card: DiscoveryCard;
-  onInspect: (episodeId: string) => void;
+  group: DiscoveryGroup;
+  onInspect: (evidence: EpisodeEvidenceResponse) => void;
 }) {
-  const episode = card.episode;
+  const episode = group.episode;
   const rising = episode.velocity_6h_delta > 0;
   const live = episode.mentions_1h > 0;
   return (
@@ -97,32 +84,68 @@ function DiscoveryCardView({
       <div className="discover-card-main">
         <header className="discover-card-header">
           <div className="discover-source-line">
-            <span className="discover-source">{sourceLabel(card.sourceId)}</span>
+            <span className="discover-source">EPISODE</span>
             <span>{formatDiscoveryAge(episode.age_seconds)} old</span>
             {live ? <span className="discover-signal live">LIVE {episode.mentions_1h}/h</span> : null}
             {rising ? <span className="discover-signal rising">RISING +{episode.velocity_6h_delta}</span> : null}
           </div>
-          <h2>
-            {card.url ? (
-              <a href={card.url} target="_blank" rel="noreferrer">{card.title}</a>
-            ) : (
-              <button type="button" className="discover-title-button" onClick={() => onInspect(episode.episode_id)}>
-                {card.title}
-              </button>
-            )}
-          </h2>
-          {card.excerpt ? <p className="discover-excerpt">{card.excerpt}</p> : null}
+          <h2 className="discover-episode-id">{shortId(episode.episode_id, 28)}</h2>
         </header>
+
+        <section className="discover-evidence-preview" aria-label="Bound evidence preview">
+          <header>
+            <span>BOUND EVIDENCE · TITLES BELOW ARE EVIDENCE CONTENT, NOT EPISODE NAMES</span>
+            <strong>{group.evidence.length}/{episode.evidence_count_total}</strong>
+          </header>
+          {group.evidenceResponse === null ? (
+            <p className="discover-preview-unavailable">
+              Evidence is still loading or unavailable for this snapshot. This is not a claim of real-world absence.
+            </p>
+          ) : null}
+          {group.evidence.map((item) => (
+            <article className="discover-preview-item" key={item.observation.observation_id}>
+              <div className="discover-evidence-meta">
+                <span>EVIDENCE ITEM</span>
+                <span>{sourceLabel(item.observation.source_id)}</span>
+                <span>{item.observation.kind}</span>
+                <span>{item.observation.observed_at}</span>
+              </div>
+              <h3>
+                {item.url ? (
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    {item.title}
+                  </a>
+                ) : (
+                  item.title
+                )}
+              </h3>
+              {item.excerpt ? <p>{item.excerpt}</p> : null}
+            </article>
+          ))}
+        </section>
+
         <footer className="discover-card-footer">
           <div className="discover-tags">
             {episode.signal_roles.map((role) => (
-              <span className="discover-tag" key={role}>{roleLabel(role)}</span>
+              <span className="discover-tag" key={role}>
+                {roleLabel(role)}
+              </span>
             ))}
-            {episode.source_count > 1 ? <span className="discover-tag">{episode.source_count} sources</span> : null}
+            {episode.source_count > 1 ? (
+              <span className="discover-tag">{episode.source_count} sources</span>
+            ) : null}
           </div>
           <div className="discover-actions">
             <span>{episode.evidence_count_total} evidence</span>
-            <button type="button" onClick={() => onInspect(episode.episode_id)}>evidence →</button>
+            <button
+              type="button"
+              disabled={group.evidenceResponse === null}
+              onClick={() => {
+                if (group.evidenceResponse !== null) onInspect(group.evidenceResponse);
+              }}
+            >
+              inspect exact evidence →
+            </button>
           </div>
         </footer>
       </div>
@@ -132,13 +155,9 @@ function DiscoveryCardView({
 
 function EvidenceDrawer({
   evidence,
-  loading,
-  error,
   onClose,
 }: {
-  evidence: EpisodeEvidenceResponse | null;
-  loading: boolean;
-  error: string | null;
+  evidence: EpisodeEvidenceResponse;
   onClose: () => void;
 }) {
   return (
@@ -146,41 +165,46 @@ function EvidenceDrawer({
       <header className="discover-drawer-header">
         <div>
           <span className="discover-kicker">POINT-IN-TIME EVIDENCE</span>
-          <strong>{evidence ? `#${evidence.episode.rank} · ${shortId(evidence.episode.episode_id, 20)}` : "Loading…"}</strong>
+          <strong>
+            #{evidence.episode.rank} · {shortId(evidence.episode.episode_id, 20)}
+          </strong>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close evidence inspector">×</button>
+        <button type="button" onClick={onClose} aria-label="Close evidence inspector">
+          ×
+        </button>
       </header>
-      {loading ? <p className="discover-drawer-state">Loading exact-snapshot evidence…</p> : null}
-      {error ? <p className="discover-drawer-state error" role="alert">{error}</p> : null}
-      {evidence ? (
-        <div className="discover-evidence-list">
-          <div className="discover-binding">
-            <span>as_of {evidence.snapshot.as_of}</span>
-            <code>{shortId(evidence.snapshot.snapshot_id, 22)}</code>
-          </div>
-          {evidence.observations.map((observation) => {
-            const url = payloadUrl(observation);
-            return (
-              <article className="discover-evidence" key={observation.observation_id}>
-                <div className="discover-evidence-meta">
-                  <span>{sourceLabel(observation.source_id)}</span>
-                  <span>{observation.kind}</span>
-                  <span>{observation.observed_at}</span>
-                </div>
-                <h3>
-                  {url ? (
-                    <a href={url} target="_blank" rel="noreferrer">{payloadTitle(observation)}</a>
-                  ) : payloadTitle(observation)}
-                </h3>
-                <code>{shortId(observation.observation_id, 24)}</code>
-              </article>
-            );
-          })}
-          <p className="discover-epistemic-note">
-            Source count is evidence diversity, not independent factual confirmation. Missing evidence is not observed absence.
-          </p>
+      <div className="discover-evidence-list">
+        <div className="discover-binding">
+          <span>as_of {evidence.snapshot.as_of}</span>
+          <code>{shortId(evidence.snapshot.snapshot_id, 22)}</code>
         </div>
-      ) : null}
+        {evidence.observations.map((observation) => {
+          const item = buildDiscoveryEvidenceItem(observation);
+          return (
+            <article className="discover-evidence" key={observation.observation_id}>
+              <div className="discover-evidence-meta">
+                <span>{sourceLabel(observation.source_id)}</span>
+                <span>{observation.kind}</span>
+                <span>{observation.observed_at}</span>
+              </div>
+              <h3>
+                {item.url ? (
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    {item.title}
+                  </a>
+                ) : (
+                  item.title
+                )}
+              </h3>
+              <code>{shortId(observation.observation_id, 24)}</code>
+            </article>
+          );
+        })}
+        <p className="discover-epistemic-note">
+          Evidence titles are source content, not episode/entity identity. Source count is evidence diversity,
+          not independent factual confirmation. Missing evidence is not observed absence.
+        </p>
+      </div>
     </aside>
   );
 }
@@ -190,26 +214,31 @@ export function DiscoverApp({ transport }: DiscoverAppProps) {
   const requestRef = useRef(0);
   const [operatorMode, setOperatorMode] = useState(false);
   const [view, setView] = useState<ViewResponse | null>(null);
-  const [observations, setObservations] = useState<ReadonlyMap<string, ObservationEvidenceResponse | null>>(new Map());
+  const [episodeEvidence, setEpisodeEvidence] = useState<
+    ReadonlyMap<string, EpisodeEvidenceResponse | null>
+  >(new Map());
   const [lane, setLane] = useState<DiscoveryLane>("ALL");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [hydratedCount, setHydratedCount] = useState(0);
   const [hydrationFailures, setHydrationFailures] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [evidence, setEvidence] = useState<EpisodeEvidenceResponse | null>(null);
-  const [evidenceLoading, setEvidenceLoading] = useState(false);
-  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const [selectedEvidence, setSelectedEvidence] = useState<EpisodeEvidenceResponse | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    setSelectedEvidence(null);
+  }, []);
 
   const loadDiscovery = useCallback(async () => {
     const requestId = ++requestRef.current;
     setLoading(true);
     setError(null);
-    setObservations(new Map());
+    setEpisodeEvidence(new Map());
     setHydratedCount(0);
     setHydrationFailures(0);
-    setEvidence(null);
+    setSelectedEvidence(null);
     setDrawerOpen(false);
     try {
       const response = await getRadar(transport, { limit: DISCOVERY_LIMIT, offset: 0 });
@@ -221,30 +250,37 @@ export function DiscoverApp({ transport }: DiscoverAppProps) {
       for (let offset = 0; offset < response.items.length; offset += HYDRATION_BATCH_SIZE) {
         const batch = response.items.slice(offset, offset + HYDRATION_BATCH_SIZE);
         const results = await Promise.all(
-          batch.map(async (episode): Promise<[string, ObservationEvidenceResponse | null, boolean]> => {
-            const observationId = episode.observation_ids[0];
-            if (!observationId) return [episode.episode_id, null, true];
-            try {
-              const observationResponse = await getObservation(transport, observationId, {
-                snapshot_id: snapshotId,
-              });
-              if (observationResponse.snapshot.snapshot_id !== snapshotId) {
+          batch.map(
+            async (
+              episode,
+            ): Promise<[string, EpisodeEvidenceResponse | null, boolean]> => {
+              try {
+                const evidence = await getEpisode(transport, episode.episode_id, {
+                  snapshot_id: snapshotId,
+                });
+                if (
+                  evidence.snapshot.snapshot_id !== snapshotId ||
+                  evidence.episode.episode_id !== episode.episode_id
+                ) {
+                  return [episode.episode_id, null, true];
+                }
+                return [episode.episode_id, evidence, false];
+              } catch {
                 return [episode.episode_id, null, true];
               }
-              return [episode.episode_id, observationResponse.observation, false];
-            } catch {
-              return [episode.episode_id, null, true];
-            }
-          }),
+            },
+          ),
         );
         if (requestRef.current !== requestId) return;
-        setObservations((current) => {
+        setEpisodeEvidence((current) => {
           const next = new Map(current);
-          for (const [episodeId, observation] of results) next.set(episodeId, observation);
+          for (const [episodeId, evidence] of results) next.set(episodeId, evidence);
           return next;
         });
         setHydratedCount((current) => current + results.length);
-        setHydrationFailures((current) => current + results.filter(([, , failed]) => failed).length);
+        setHydrationFailures(
+          (current) => current + results.filter(([, , failed]) => failed).length,
+        );
       }
     } catch (caught) {
       if (requestRef.current !== requestId) return;
@@ -274,50 +310,33 @@ export function DiscoverApp({ transport }: DiscoverAppProps) {
         event.preventDefault();
         searchRef.current?.focus();
       }
-      if (event.key === "Escape" && drawerOpen) setDrawerOpen(false);
+      if (event.key === "Escape" && drawerOpen) closeDrawer();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [drawerOpen, operatorMode, query]);
+  }, [closeDrawer, drawerOpen, operatorMode, query]);
 
-  const cards = useMemo(() => {
+  const groups = useMemo(() => {
     return (view?.items ?? []).map((episode) =>
-      buildDiscoveryCard(episode, observations.get(episode.episode_id) ?? null),
+      buildDiscoveryGroup(episode, episodeEvidence.get(episode.episode_id) ?? null),
     );
-  }, [observations, view]);
+  }, [episodeEvidence, view]);
 
-  const visibleCards = useMemo(
-    () => filterDiscoveryCards(cards, lane, query),
-    [cards, lane, query],
+  const visibleGroups = useMemo(
+    () => filterDiscoveryGroups(groups, lane, query),
+    [groups, lane, query],
   );
 
   const laneCounts = useMemo(() => {
     const counts = new Map<DiscoveryLane, number>();
     for (const definition of DISCOVERY_LANES) {
-      counts.set(definition.id, cards.filter((card) => matchesDiscoveryLane(card, definition.id)).length);
+      counts.set(
+        definition.id,
+        groups.filter((group) => matchesDiscoveryLane(group, definition.id)).length,
+      );
     }
     return counts;
-  }, [cards]);
-
-  const inspectEpisode = useCallback(async (episodeId: string) => {
-    const snapshotId = view?.snapshot.snapshot_id;
-    if (!snapshotId) return;
-    setDrawerOpen(true);
-    setEvidence(null);
-    setEvidenceError(null);
-    setEvidenceLoading(true);
-    try {
-      const response = await getEpisode(transport, episodeId, { snapshot_id: snapshotId });
-      if (response.snapshot.snapshot_id !== snapshotId) {
-        throw new Error("Evidence response snapshot binding changed; response discarded.");
-      }
-      setEvidence(response);
-    } catch (caught) {
-      setEvidenceError(caught instanceof Error ? caught.message : "Evidence request failed.");
-    } finally {
-      setEvidenceLoading(false);
-    }
-  }, [transport, view]);
+  }, [groups]);
 
   const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
@@ -329,7 +348,11 @@ export function DiscoverApp({ transport }: DiscoverAppProps) {
   if (operatorMode) {
     return (
       <div className="discover-operator-mode">
-        <button className="discover-return" type="button" onClick={() => setOperatorMode(false)}>
+        <button
+          className="discover-return"
+          type="button"
+          onClick={() => setOperatorMode(false)}
+        >
           ← discover feed
         </button>
         <TerminalApp transport={transport} />
@@ -357,20 +380,40 @@ export function DiscoverApp({ transport }: DiscoverAppProps) {
               placeholder="models, agents, CVEs, packages, repos…"
               autoComplete="off"
             />
-            {query ? <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button> : null}
+            {query ? (
+              <button type="button" onClick={() => setQuery("")} aria-label="Clear search">
+                ×
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="discover-header-actions">
-          <button type="button" onClick={() => void loadDiscovery()}>refresh</button>
-          <button type="button" onClick={() => setOperatorMode(true)}>operator terminal ↗</button>
+          <button type="button" onClick={() => void loadDiscovery()}>
+            refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              closeDrawer();
+              setOperatorMode(true);
+            }}
+          >
+            operator terminal ↗
+          </button>
         </div>
       </header>
 
       <div className="discover-status-strip">
         <span className="discover-status-live">DEFAULT FEED</span>
-        <span>baseline rank preserved · filters never rerank</span>
-        <span>as_of <code>{view?.snapshot.as_of ?? "UNBOUND"}</code></span>
-        <span>hydrated {hydratedCount}/{view?.items.length ?? 0}{hydrationFailures ? ` · ${hydrationFailures} unavailable` : ""}</span>
+        <span>baseline episode rank preserved · filters never rerank</span>
+        <span>evidence titles are not episode names</span>
+        <span>
+          as_of <code>{view?.snapshot.as_of ?? "UNBOUND"}</code>
+        </span>
+        <span>
+          evidence {hydratedCount}/{view?.items.length ?? 0}
+          {hydrationFailures ? ` · ${hydrationFailures} unavailable` : ""}
+        </span>
       </div>
 
       <nav className="discover-lanes" aria-label="Discovery filters">
@@ -393,27 +436,46 @@ export function DiscoverApp({ transport }: DiscoverAppProps) {
         <section className="discover-feed" aria-labelledby="discover-feed-title">
           <div className="discover-feed-heading">
             <div>
-              <span className="discover-kicker">{lane === "ALL" ? "DEFAULT / OPEN SOMETHING INTERESTING" : `${lane} / FILTERED`}</span>
-              <h1 id="discover-feed-title">{query ? `Search: “${query}”` : "What’s happening before it gets boring?"}</h1>
+              <span className="discover-kicker">
+                {lane === "ALL"
+                  ? "DEFAULT / OPEN SOMETHING INTERESTING"
+                  : `${lane} / FILTERED`}
+              </span>
+              <h1 id="discover-feed-title">
+                {query ? `Search: “${query}”` : "What’s happening before it gets boring?"}
+              </h1>
             </div>
             <div className="discover-result-count">
-              <strong>{visibleCards.length}</strong>
-              <span>of {view?.items.length ?? 0}</span>
+              <strong>{visibleGroups.length}</strong>
+              <span>of {view?.items.length ?? 0} episodes</span>
             </div>
           </div>
 
-          {error ? <div className="discover-state error" role="alert">{error}</div> : null}
+          {error ? (
+            <div className="discover-state error" role="alert">
+              {error}
+            </div>
+          ) : null}
           {loading ? <div className="discover-state">Loading latest baseline snapshot…</div> : null}
-          {!loading && !error && visibleCards.length === 0 ? (
+          {!loading && !error && visibleGroups.length === 0 ? (
             <div className="discover-state">
               <strong>No matching evidence in this bounded snapshot.</strong>
-              <span>Try another lane or clear the search. This is not a claim of real-world absence.</span>
+              <span>
+                Try another lane or clear the search. This is not a claim of real-world absence.
+              </span>
             </div>
           ) : null}
 
           <div className="discover-card-list">
-            {visibleCards.map((card) => (
-              <DiscoveryCardView card={card} key={card.episode.episode_id} onInspect={(episodeId) => void inspectEpisode(episodeId)} />
+            {visibleGroups.map((group) => (
+              <DiscoveryGroupView
+                group={group}
+                key={group.episode.episode_id}
+                onInspect={(evidence) => {
+                  setSelectedEvidence(evidence);
+                  setDrawerOpen(true);
+                }}
+              />
             ))}
           </div>
         </section>
@@ -422,29 +484,40 @@ export function DiscoverApp({ transport }: DiscoverAppProps) {
           <section>
             <span className="discover-kicker">HOW TO USE IT</span>
             <h2>Find a thread. Follow the evidence.</h2>
-            <p>Click a lane to narrow the feed, search titles/sources/metadata, open the source, or inspect the exact evidence FRONTIER knew at this snapshot.</p>
+            <p>
+              Click a lane, search the exact evidence content, open a source item, or inspect every
+              observation bound to an episode at this snapshot.
+            </p>
           </section>
           <section>
             <span className="discover-kicker">SEMANTIC GUARD</span>
-            <p>This surface does not invent a new “coolness” score. It preserves the server’s naive baseline order and only filters it for presentation.</p>
-            <p>PEF and ZERO-DAY remain experimental/diagnostic and do not silently influence this feed.</p>
+            <p>
+              Episode identity and baseline rank stay server-authoritative. Human-readable titles are
+              shown only as explicitly labelled evidence content nested under that episode.
+            </p>
+            <p>
+              PEF and ZERO-DAY remain experimental/diagnostic and do not silently influence this feed.
+            </p>
           </section>
           <section className="discover-health-mini">
-            <span>transport <strong>{view?.transport_state ?? "—"}</strong></span>
-            <span>freshness <strong>{view?.freshness_state ?? "—"}</strong></span>
-            <span>coverage <strong>{view?.coverage_state ?? "—"}</strong></span>
-            <span>schema <strong>{view?.schema_state ?? "—"}</strong></span>
+            <span>
+              transport <strong>{view?.transport_state ?? "—"}</strong>
+            </span>
+            <span>
+              freshness <strong>{view?.freshness_state ?? "—"}</strong>
+            </span>
+            <span>
+              coverage <strong>{view?.coverage_state ?? "—"}</strong>
+            </span>
+            <span>
+              schema <strong>{view?.schema_state ?? "—"}</strong>
+            </span>
           </section>
         </aside>
       </main>
 
-      {drawerOpen ? (
-        <EvidenceDrawer
-          evidence={evidence}
-          loading={evidenceLoading}
-          error={evidenceError}
-          onClose={() => setDrawerOpen(false)}
-        />
+      {drawerOpen && selectedEvidence ? (
+        <EvidenceDrawer evidence={selectedEvidence} onClose={closeDrawer} />
       ) : null}
     </div>
   );
