@@ -191,6 +191,19 @@ def test_seal_rejects_manual_non_six_hour_boundary() -> None:
         )
 
 
+def test_seal_rejects_retrospective_creation_after_live_window() -> None:
+    artifact, run, observations = _pair()
+
+    with pytest.raises(ValueError, match="30-minute live sealing window"):
+        build_zero_day_seal(
+            artifact,
+            run,
+            observations,
+            run_class="CONFIRMATORY",
+            sealed_at=AS_OF + timedelta(minutes=31),
+        )
+
+
 def test_seal_fails_closed_when_attention_state_inputs_are_incomplete() -> None:
     artifact, run, observations = _pair()
 
