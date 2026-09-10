@@ -11,6 +11,7 @@ from .advanced_intelligence import (
     PEF_RANKING_POLICY_VERSION,
     PEF_RECEIPT_SCHEMA_VERSION,
     PEF_SCHEMA_VERSION,
+    SHADOW_SCHEMA_VERSION,
     PefArtifactStatus,
     ShadowExperimentRun,
     ShadowRunStatus,
@@ -284,6 +285,17 @@ def _require_pef_v1_pair(
         raise ValueError("ZERO-DAY requires PEF_V1 experiment identity")
     if artifact.candidate_id != PEF_V1_CANDIDATE_ID or run.candidate_id != PEF_V1_CANDIDATE_ID:
         raise ValueError("ZERO-DAY requires PEF_V1 candidate identity")
+    if (
+        artifact.schema_version != PEF_SCHEMA_VERSION
+        or artifact.algorithm_version != PEF_ALGORITHM_VERSION
+        or artifact.ranking_policy_version != PEF_RANKING_POLICY_VERSION
+    ):
+        raise ValueError("ZERO-DAY requires frozen PEF_V1 artifact version identity")
+    if (
+        run.schema_version != SHADOW_SCHEMA_VERSION
+        or run.algorithm_version != PEF_ALGORITHM_VERSION
+    ):
+        raise ValueError("ZERO-DAY requires frozen PEF_V1 shadow-run version identity")
     if (
         artifact.configuration_digest != PEF_V1_CONFIGURATION_DIGEST
         or run.configuration_digest != PEF_V1_CONFIGURATION_DIGEST
