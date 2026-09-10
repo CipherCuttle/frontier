@@ -1,4 +1,5 @@
 import type {
+  EpisodeEvidenceResponse,
   EpisodeResponse,
   ObservationEvidenceResponse,
 } from "../../../clients/typescript/src/generated/public_read_v0";
@@ -13,15 +14,17 @@ export type DiscoveryLane =
   | "SECURITY"
   | "BUZZ";
 
-export interface DiscoveryCard {
-  episode: EpisodeResponse;
-  observation: ObservationEvidenceResponse | null;
+export interface DiscoveryEvidenceItem {
+  observation: ObservationEvidenceResponse;
   title: string;
   excerpt: string | null;
   url: string | null;
-  sourceId: string;
-  kind: string;
-  sourceItemKey: string;
+}
+
+export interface DiscoveryGroup {
+  episode: EpisodeResponse;
+  evidenceResponse: EpisodeEvidenceResponse | null;
+  evidence: readonly DiscoveryEvidenceItem[];
 }
 
 export const DISCOVERY_LANES: readonly {
@@ -56,27 +59,20 @@ function metadataString(payload: Record<string, unknown>, key: string): string |
   return stringValue((metadata as Record<string, unknown>)[key]);
 }
 
-function firstSource(episode: EpisodeResponse): string {
-  return episode.source_ids[0] ?? "unknown-source";
+function safeHttpUrl(value: unknown): string | null {
+  const raw = stringValue(value);
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
-export function buildDiscoveryCard(
-  episode: EpisodeResponse,
-  observation: ObservationEvidenceResponse | null,
-): DiscoveryCard {
-  if (observation === null) {
-    return {
-      episode,
-      observation,
-      title: episode.episode_id,
-      excerpt: null,
-      url: null,
-      sourceId: firstSource(episode),
-      kind: "UNKNOWN",
-      sourceItemKey: episode.episode_id,
-    };
-  }
-
+export function buildDiscoveryEvidenceItem(
+  observation: ObservationEvidenceResponse,
+): DiscoveryEvidenceItem {
   const payload = observation.payload;
   const name = stringValue(payload.name);
   const version = stringValue(payload.version);
@@ -86,17 +82,29 @@ export function buildDiscoveryCard(
     stringValue(payload.metric_name) ??
     metadataString(payload, "feed_title") ??
     observation.source_item_key;
-  const excerpt = stringValue(payload.excerpt) ?? metadataString(payload, "description");
 
   return {
-    episode,
     observation,
     title,
-    excerpt,
-    url: stringValue(payload.canonical_url),
-    sourceId: observation.source_id,
-    kind: observation.kind,
-    sourceItemKey: observation.source_item_key,
+    excerpt: stringValue(payload.excerpt) ?? metadataString(payload, "description"),
+    url: safeHttpUrl(payload.canonical_url),
+  };
+}
+
+export function buildDiscoveryGroup(
+  episode: EpisodeResponse,
+  evidenceResponse: EpisodeEvidenceResponse | null,
+): DiscoveryGroup {
+  if (evidenceResponse === null) {
+    return { episode, evidenceResponse: null, evidence: [] };
+  }
+  if (evidenceResponse.episode.episode_id !== episode.episode_id) {
+    throw new Error("DISCOVER evidence response episode identity mismatch");
+  }
+  return {
+    episode,
+    evidenceResponse,
+    evidence: evidenceResponse.observations.map(buildDiscoveryEvidenceItem),
   };
 }
 
@@ -104,8 +112,8 @@ function hasSource(episode: EpisodeResponse, sources: ReadonlySet<string>): bool
   return episode.source_ids.some((source) => sources.has(source));
 }
 
-export function matchesDiscoveryLane(card: DiscoveryCard, lane: DiscoveryLane): boolean {
-  const episode = card.episode;
+export function matchesDiscoveryLane(group: DiscoveryGroup, lane: DiscoveryLane): boolean {
+  const episode = group.episode;
   if (lane === "ALL") return true;
   if (lane === "LIVE") return episode.mentions_1h > 0;
   if (lane === "RISING") return episode.velocity_6h_delta > 0;
@@ -116,8 +124,8 @@ export function matchesDiscoveryLane(card: DiscoveryCard, lane: DiscoveryLane): 
   return hasSource(episode, BUZZ_SOURCES);
 }
 
-export function discoverySearchText(card: DiscoveryCard): string {
-  const payload = card.observation?.payload ?? {};
+function evidenceSearchText(item: DiscoveryEvidenceItem): string[] {
+  const payload = item.observation.payload;
   const metadata = payload.source_metadata;
   const metadataValues =
     metadata && typeof metadata === "object" && !Array.isArray(metadata)
@@ -125,32 +133,37 @@ export function discoverySearchText(card: DiscoveryCard): string {
           (value): value is string => typeof value === "string",
         )
       : [];
-
   return [
-    card.title,
-    card.excerpt ?? "",
-    card.url ?? "",
-    card.sourceId,
-    card.kind,
-    card.sourceItemKey,
-    card.episode.episode_id,
-    ...card.episode.source_ids,
-    ...card.episode.signal_roles,
+    item.title,
+    item.excerpt ?? "",
+    item.url ?? "",
+    item.observation.source_id,
+    item.observation.kind,
+    item.observation.source_item_key,
     ...metadataValues,
+  ];
+}
+
+export function discoverySearchText(group: DiscoveryGroup): string {
+  return [
+    group.episode.episode_id,
+    ...group.episode.source_ids,
+    ...group.episode.signal_roles,
+    ...group.evidence.flatMap(evidenceSearchText),
   ]
     .join(" ")
     .toLocaleLowerCase();
 }
 
-export function filterDiscoveryCards(
-  cards: readonly DiscoveryCard[],
+export function filterDiscoveryGroups(
+  groups: readonly DiscoveryGroup[],
   lane: DiscoveryLane,
   rawQuery: string,
-): DiscoveryCard[] {
+): DiscoveryGroup[] {
   const query = rawQuery.trim().toLocaleLowerCase();
-  return cards.filter((card) => {
-    if (!matchesDiscoveryLane(card, lane)) return false;
-    return !query || discoverySearchText(card).includes(query);
+  return groups.filter((group) => {
+    if (!matchesDiscoveryLane(group, lane)) return false;
+    return !query || discoverySearchText(group).includes(query);
   });
 }
 
