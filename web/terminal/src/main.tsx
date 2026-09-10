@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserPublicReadTransport } from "./api";
-import { TerminalApp } from "./TerminalApp";
+import { DiscoverApp } from "./DiscoverApp";
 import "./styles.css";
 
 const root = document.getElementById("root");
@@ -11,6 +11,6 @@ const transport = new BrowserPublicReadTransport(import.meta.env.VITE_FRONTIER_A
 
 createRoot(root).render(
   <StrictMode>
-    <TerminalApp transport={transport} />
+    <DiscoverApp transport={transport} />
   </StrictMode>,
 );
