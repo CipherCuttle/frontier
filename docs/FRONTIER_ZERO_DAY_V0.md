@@ -49,6 +49,8 @@ Equivalently, an eligible `as_of` is an exact six-hour Unix-epoch multiple.
 
 A seal uses only the PEF_V1 confirmatory run at that exact boundary. If that run is absent, failed, delayed past persistence, or otherwise unavailable, the ZERO-DAY boundary is **MISSING**. It is never replaced by a nearby or later boundary and is never backfilled.
 
+A valid live seal must be created no earlier than its source boundary and no later than **30 minutes** after that boundary. A boundary whose seal is not durably derivable inside this window is **MISSING**. This latency bound prevents historical reconstruction from masquerading as a live sealed forecast.
+
 This cadence is a diagnostic cadence only. It does not alter PEF_V1's five-minute confirmatory schedule.
 
 ## Cohort selection
