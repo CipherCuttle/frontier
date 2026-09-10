@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserPublicReadTransport } from "./api";
 import { DiscoverApp } from "./DiscoverApp";
 import "./styles.css";
+import "./discover-evidence.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("terminal root element is missing");
