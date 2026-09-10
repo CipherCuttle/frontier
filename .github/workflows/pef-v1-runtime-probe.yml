@@ -1,0 +1,23 @@
+name: pef-v1-runtime-probe
+
+on:
+  push:
+    branches:
+      - ops/pef-v1-runtime-probe
+
+permissions:
+  contents: read
+
+jobs:
+  direct-neon-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe direct Neon endpoint without stored credentials
+        env:
+          PGCONNECT_TIMEOUT: "10"
+        run: |
+          set -euo pipefail
+          psql "postgresql://frontier@ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech/frontier?sslmode=require" \
+            -v ON_ERROR_STOP=1 \
+            -Atqc "select current_database(), current_user, now();"
