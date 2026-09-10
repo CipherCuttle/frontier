@@ -261,9 +261,7 @@ def _run_from_canonical(raw: object) -> ShadowExperimentRun:
     return run
 
 
-def _load_candidate_receipt(
-    cur: CursorT, receipt_id: str
-) -> tuple[ProjectionReceipt, datetime]:
+def _load_candidate_receipt(cur: CursorT, receipt_id: str) -> tuple[ProjectionReceipt, datetime]:
     cur.execute(
         """
         SELECT receipt_id, receipt_schema_version, projection_name,
