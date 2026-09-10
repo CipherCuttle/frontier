@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -40,6 +41,63 @@ pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL n
 REGISTRY = Digest("sha256:" + "9" * 64)
 SOURCE_ID = "fixture.zero-day.primary"
 ConnectionT = psycopg.Connection[tuple[object, ...]]
+CursorT = psycopg.Cursor[tuple[object, ...]]
+
+
+class _ClockedCursor:
+    """Test-only cursor shim for the single trusted database-clock query."""
+
+    def __init__(self, inner: CursorT, clock: datetime) -> None:
+        self._inner = inner
+        self._clock = clock
+        self._clock_pending = False
+
+    def __enter__(self) -> _ClockedCursor:
+        self._inner.__enter__()
+        return self
+
+    def __exit__(self, *args: Any) -> Any:
+        return self._inner.__exit__(*args)
+
+    def execute(self, query: str, *args: Any, **kwargs: Any) -> _ClockedCursor:
+        if query.strip() == "SELECT clock_timestamp()":
+            self._clock_pending = True
+            return self
+        self._clock_pending = False
+        self._inner.execute(query, *args, **kwargs)
+        return self
+
+    def fetchone(self) -> tuple[object, ...] | None:
+        if self._clock_pending:
+            self._clock_pending = False
+            return (self._clock,)
+        return self._inner.fetchone()
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        return self._inner.fetchall()
+
+
+class _ClockedConnection:
+    """Keep all PostgreSQL behavior real while making CI wall-clock independent."""
+
+    def __init__(self, inner: ConnectionT, clock: datetime) -> None:
+        self._inner = inner
+        self._clock = clock
+
+    @property
+    def info(self):
+        return self._inner.info
+
+    def transaction(self):
+        return self._inner.transaction()
+
+    def cursor(self) -> _ClockedCursor:
+        return _ClockedCursor(self._inner.cursor(), self._clock)
+
+
+def _adapter_at(conn: ConnectionT, clock: datetime) -> PostgresZeroDayAdapter:
+    test_connection = cast(ConnectionT, _ClockedConnection(conn, clock))
+    return PostgresZeroDayAdapter(test_connection)
 
 
 def _next_zero_day_boundary(after: datetime) -> datetime:
@@ -347,14 +405,13 @@ def test_zero_day_adapter_reconstructs_exact_persisted_v1_boundary_and_fails_on_
             persisted_at=persisted_at,
         )
         before = _diagnostic_counts(conn)
-        adapter = PostgresZeroDayAdapter(conn)
-        seal = adapter.build_seal_for_boundary(
-            as_of=boundary,
-            sealed_at=boundary + timedelta(minutes=1),
+        seal = _adapter_at(conn, boundary + timedelta(minutes=1)).build_seal_for_boundary(
+            as_of=boundary
         )
         after = _diagnostic_counts(conn)
 
         assert seal is not None
+        assert seal.sealed_at == boundary + timedelta(minutes=1)
         assert seal.run_id == evidence.run.run_id
         assert seal.candidate_artifact_id == evidence.candidate_artifact.artifact_id
         assert seal.candidate_receipt_id == evidence.candidate_receipt.receipt_id
@@ -362,10 +419,16 @@ def test_zero_day_adapter_reconstructs_exact_persisted_v1_boundary_and_fails_on_
         assert seal.run_persisted_at == persisted_at
         assert before == after
 
-        missing = adapter.build_seal_for_boundary(
-            as_of=boundary + timedelta(hours=6),
-            sealed_at=boundary + timedelta(hours=6, minutes=1),
+        expired = _adapter_at(conn, boundary + timedelta(minutes=31)).build_seal_for_boundary(
+            as_of=boundary
         )
+        assert expired is None
+        assert _diagnostic_counts(conn) == before
+
+        missing_boundary = boundary + timedelta(hours=6)
+        missing = _adapter_at(
+            conn, missing_boundary + timedelta(minutes=1)
+        ).build_seal_for_boundary(as_of=missing_boundary)
         assert missing is None
 
         _append_document(
@@ -374,7 +437,6 @@ def test_zero_day_adapter_reconstructs_exact_persisted_v1_boundary_and_fails_on_
             key="zero-day-late-historical-input",
         )
         with pytest.raises(ValueError, match="persisted PEF_V1 input digest"):
-            adapter.build_seal_for_boundary(
-                as_of=boundary,
-                sealed_at=boundary + timedelta(minutes=2),
+            _adapter_at(conn, boundary + timedelta(minutes=2)).build_seal_for_boundary(
+                as_of=boundary
             )
