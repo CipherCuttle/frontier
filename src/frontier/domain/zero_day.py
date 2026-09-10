@@ -291,7 +291,10 @@ def _require_pef_v1_pair(
         or artifact.ranking_policy_version != PEF_RANKING_POLICY_VERSION
     ):
         raise ValueError("ZERO-DAY requires frozen PEF_V1 artifact version identity")
-    if run.schema_version != SHADOW_SCHEMA_VERSION or run.algorithm_version != PEF_ALGORITHM_VERSION:
+    if (
+        run.schema_version != SHADOW_SCHEMA_VERSION
+        or run.algorithm_version != PEF_ALGORITHM_VERSION
+    ):
         raise ValueError("ZERO-DAY requires frozen PEF_V1 shadow-run version identity")
     if (
         artifact.configuration_digest != PEF_V1_CONFIGURATION_DIGEST
