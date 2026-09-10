@@ -17,11 +17,18 @@ from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligence
 from frontier.adapters.postgres.zero_day import PostgresZeroDayAdapter
 from frontier.application.candidate_freeze_v1 import freeze_candidate_v1
 from frontier.application.freeze_publication import CandidateFreezePublication
-from frontier.application.pef_v1_confirmatory import build_pef_v1_confirmatory_evidence
+from frontier.application.pef_v1_confirmatory import (
+    PefV1ConfirmatoryEvidence,
+    build_pef_v1_confirmatory_evidence,
+)
 from frontier.domain.collection import CollectionReason, CollectionRun, CollectionRunStatus
 from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.health import HealthValue
-from frontier.domain.intelligence import BaselineHealthInput, BaselineObservationInput, BaselineSnapshot
+from frontier.domain.intelligence import (
+    BaselineHealthInput,
+    BaselineObservationInput,
+    BaselineSnapshot,
+)
 from frontier.domain.observation import DocumentPayload, ObservationCandidate, ObservationKind
 from frontier.domain.pef_v1 import PEF_V1_EXPERIMENT_ID, PEF_V1_PROJECTION_VERSION
 from frontier.domain.receipt import ProjectionReceipt
@@ -151,9 +158,7 @@ class _EvidenceInputs:
     ) -> None:
         self._observations = tuple(repository.list_baseline_observations_as_of(as_of))
         self._relations = tuple(repository.list_grouping_relations_as_of(as_of))
-        self._source_ids = tuple(
-            sorted({item.grouping.source_id for item in self._observations})
-        )
+        self._source_ids = tuple(sorted({item.grouping.source_id for item in self._observations}))
         self._health = tuple(
             BaselineHealthInput(
                 source_id=source_id,
@@ -191,7 +196,7 @@ class _EvidenceInputs:
 def _persist_zero_day_source_rows(
     conn: ConnectionT,
     *,
-    evidence,
+    evidence: PefV1ConfirmatoryEvidence,
     persisted_at: datetime,
 ) -> None:
     receipt = evidence.candidate_receipt
@@ -303,7 +308,9 @@ def _diagnostic_counts(conn: ConnectionT) -> tuple[int, int, int]:
     return int(row[0]), int(row[1]), int(row[2])
 
 
-def test_zero_day_adapter_reconstructs_exact_persisted_v1_boundary_and_fails_on_late_input() -> None:
+def test_zero_day_adapter_reconstructs_exact_persisted_v1_boundary_and_fails_on_late_input() -> (
+    None
+):
     assert DB_URL is not None
     with psycopg.connect(DB_URL, autocommit=True) as conn:
         store = PostgresEvidenceStore(conn)
