@@ -289,7 +289,10 @@ def _require_pef_v1_pair(
         or run.configuration_digest != PEF_V1_CONFIGURATION_DIGEST
     ):
         raise ValueError("ZERO-DAY requires frozen PEF_V1 configuration identity")
-    if artifact.authority_state != PEF_AUTHORITY_STATE or run.authority_state != PEF_AUTHORITY_STATE:
+    if (
+        artifact.authority_state != PEF_AUTHORITY_STATE
+        or run.authority_state != PEF_AUTHORITY_STATE
+    ):
         raise ValueError("ZERO-DAY requires experimental-shadow PEF_V1 authority")
     if run.candidate_freeze_receipt_id is None:
         raise ValueError("ZERO-DAY forbids freeze-unbound runs")
@@ -592,9 +595,7 @@ def build_zero_day_grade(
 
     cutoff = seal.as_of + timedelta(seconds=horizon_seconds)
     complete = graded_at >= cutoff
-    member_status = (
-        ZeroDayMemberStatus.UNVERIFIED if complete else ZeroDayMemberStatus.PENDING
-    )
+    member_status = ZeroDayMemberStatus.UNVERIFIED if complete else ZeroDayMemberStatus.PENDING
     members = tuple(
         ZeroDayMemberGrade(
             position=candidate.position,
