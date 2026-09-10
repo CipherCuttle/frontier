@@ -147,13 +147,22 @@ def test_seal_uses_candidate_order_and_excludes_attention_and_control_losses() -
 
 def test_seal_identity_is_deterministic() -> None:
     artifact, run, observations = _pair()
-    kwargs = {
-        "run_class": "CONFIRMATORY",
-        "sealed_at": AS_OF + timedelta(minutes=1),
-    }
+    sealed_at = AS_OF + timedelta(minutes=1)
 
-    first = build_zero_day_seal(artifact, run, observations, **kwargs)
-    second = build_zero_day_seal(artifact, run, reversed(observations), **kwargs)
+    first = build_zero_day_seal(
+        artifact,
+        run,
+        observations,
+        run_class="CONFIRMATORY",
+        sealed_at=sealed_at,
+    )
+    second = build_zero_day_seal(
+        artifact,
+        run,
+        reversed(observations),
+        run_class="CONFIRMATORY",
+        sealed_at=sealed_at,
+    )
 
     assert first.to_canonical() == second.to_canonical()
     assert first.seal_id == second.seal_id
