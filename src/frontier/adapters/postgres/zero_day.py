@@ -9,11 +9,6 @@ from psycopg.pq import TransactionStatus
 from frontier.application.freeze_publication import require_confirmatory_boundary
 from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
-    PEF_AUTHORITY_STATE,
-    PEF_RANKING_POLICY_VERSION,
-    PEF_RECEIPT_SCHEMA_VERSION,
-    PEF_SCHEMA_VERSION,
-    SHADOW_SCHEMA_VERSION,
     PefArtifactStatus,
     PefEpisodeRanking,
     ShadowControlArmRanking,
@@ -27,7 +22,6 @@ from frontier.domain.pef_v1 import (
     PEF_V1_CANDIDATE_ID,
     PEF_V1_CONFIGURATION_DIGEST,
     PEF_V1_EXPERIMENT_ID,
-    PEF_V1_PROJECTION_NAME,
     PEF_V1_PROJECTION_VERSION,
     PefV1Artifact,
 )
@@ -122,9 +116,7 @@ def _episode_ranking(raw: object) -> PefEpisodeRanking:
         return PefEpisodeRanking(
             rank=_int(document["rank"], "candidate rank"),
             episode_id=_str(document["episode_id"], "candidate episode id"),
-            observation_ids=_string_tuple(
-                document["observation_ids"], "candidate observation ids"
-            ),
+            observation_ids=_string_tuple(document["observation_ids"], "candidate observation ids"),
             has_any_prospective_evidence=_bool(
                 document["has_any_prospective_evidence"],
                 "candidate prospective-evidence flag",
@@ -152,9 +144,7 @@ def _episode_ranking(raw: object) -> PefEpisodeRanking:
             mentions_1h=_int(document["mentions_1h"], "candidate mentions_1h"),
             mentions_6h=_int(document["mentions_6h"], "candidate mentions_6h"),
             mentions_24h=_int(document["mentions_24h"], "candidate mentions_24h"),
-            velocity_6h_delta=_int(
-                document["velocity_6h_delta"], "candidate velocity_6h_delta"
-            ),
+            velocity_6h_delta=_int(document["velocity_6h_delta"], "candidate velocity_6h_delta"),
             acceleration_6h=_int(document["acceleration_6h"], "candidate acceleration_6h"),
         )
     except (KeyError, TypeError, ValueError) as error:
@@ -172,9 +162,7 @@ def _artifact_from_canonical(raw: object, *, generated_at: datetime) -> PefV1Art
             control_snapshot_id=_str(
                 document["control_snapshot_id"], "candidate control snapshot id"
             ),
-            control_receipt_id=_str(
-                document["control_receipt_id"], "candidate control receipt id"
-            ),
+            control_receipt_id=_str(document["control_receipt_id"], "candidate control receipt id"),
             source_registry_version=_digest(
                 document["source_registry_version"], "candidate source registry"
             ),
@@ -187,9 +175,7 @@ def _artifact_from_canonical(raw: object, *, generated_at: datetime) -> PefV1Art
             experiment_id=_str(document["experiment_id"], "candidate experiment id"),
             candidate_id=_str(document["candidate_id"], "candidate id"),
             schema_version=_str(document["schema_version"], "candidate schema version"),
-            algorithm_version=_str(
-                document["algorithm_version"], "candidate algorithm version"
-            ),
+            algorithm_version=_str(document["algorithm_version"], "candidate algorithm version"),
             ranking_policy_version=_str(
                 document["ranking_policy_version"], "candidate ranking policy"
             ),
@@ -231,12 +217,8 @@ def _run_from_canonical(raw: object) -> ShadowExperimentRun:
         run = ShadowExperimentRun(
             as_of=_timestamp(document["as_of"], "run as_of"),
             generated_at=_timestamp(document["generated_at"], "run generated_at"),
-            control_snapshot_id=_str(
-                document["control_snapshot_id"], "run control snapshot id"
-            ),
-            control_receipt_id=_str(
-                document["control_receipt_id"], "run control receipt id"
-            ),
+            control_snapshot_id=_str(document["control_snapshot_id"], "run control snapshot id"),
+            control_receipt_id=_str(document["control_receipt_id"], "run control receipt id"),
             coverage_state=HealthValue(
                 _str(document["control_coverage_state"], "run coverage state")
             ),
@@ -246,9 +228,7 @@ def _run_from_canonical(raw: object) -> ShadowExperimentRun:
             transport_state=HealthValue(
                 _str(document["control_transport_state"], "run transport state")
             ),
-            schema_state=HealthValue(
-                _str(document["control_schema_state"], "run schema state")
-            ),
+            schema_state=HealthValue(_str(document["control_schema_state"], "run schema state")),
             status=ShadowRunStatus(_str(document["status"], "run status")),
             episode_universe_digest=_digest(
                 document["episode_universe_digest"], "run episode universe"
@@ -267,9 +247,7 @@ def _run_from_canonical(raw: object) -> ShadowExperimentRun:
             candidate_id=_str(document["candidate_id"], "run candidate id"),
             schema_version=_str(document["schema_version"], "run schema version"),
             algorithm_version=_str(document["algorithm_version"], "run algorithm version"),
-            configuration_digest=_digest(
-                document["configuration_digest"], "run configuration"
-            ),
+            configuration_digest=_digest(document["configuration_digest"], "run configuration"),
             authority_state=_str(document["authority_state"], "run authority state"),
             candidate_freeze_receipt_id=_optional_str(
                 document.get("candidate_freeze_receipt_id"),
@@ -283,7 +261,9 @@ def _run_from_canonical(raw: object) -> ShadowExperimentRun:
     return run
 
 
-def _load_candidate_receipt(cur: CursorT, receipt_id: str) -> tuple[ProjectionReceipt, datetime]:
+def _load_candidate_receipt(
+    cur: CursorT, receipt_id: str
+) -> tuple[ProjectionReceipt, datetime]:
     cur.execute(
         """
         SELECT receipt_id, receipt_schema_version, projection_name,
@@ -365,16 +345,12 @@ def _load_candidate_artifact(
         raise RuntimeError("ZERO-DAY candidate artifact content id mismatch")
     if receipt.output_digest != artifact.output_digest:
         raise RuntimeError("ZERO-DAY candidate receipt does not bind artifact output")
-    return (
-        artifact,
-        receipt_id,
-        cast(datetime, row[15]),
-        receipt,
-        receipt_persisted_at,
-    )
+    return artifact, receipt_id, cast(datetime, row[15]), receipt, receipt_persisted_at
 
 
-def _load_exact_run(cur: CursorT, as_of: datetime) -> tuple[ShadowExperimentRun, str, datetime] | None:
+def _load_exact_run(
+    cur: CursorT, as_of: datetime
+) -> tuple[ShadowExperimentRun, str, datetime] | None:
     cur.execute(
         """
         SELECT run_id, experiment_id, candidate_id, schema_version,
@@ -453,6 +429,7 @@ def _validate_freeze_authority(cur: CursorT, receipt_id: str, *, as_of: datetime
         "FROZEN",
     ):
         raise RuntimeError("ZERO-DAY bound candidate freeze identity is invalid")
+
     receipt_json = _document(row[12], "freeze receipt JSON")
     expected_receipt_digest = sha256_digest(canonical_json_bytes(receipt_json))
     if cast(str, row[9]) != str(expected_receipt_digest):
@@ -475,6 +452,7 @@ def _validate_freeze_authority(cur: CursorT, receipt_id: str, *, as_of: datetime
             raise RuntimeError("ZERO-DAY bound freeze receipt canonical identity mismatch")
     if receipt_json.get("frozen_at") != canonical_timestamp(cast(datetime, row[10])):
         raise RuntimeError("ZERO-DAY bound freeze receipt frozen_at mismatch")
+
     durable_freeze_at = cast(datetime | None, row[11])
     if durable_freeze_at is None:
         raise RuntimeError("ZERO-DAY bound candidate freeze is not durable")
@@ -484,6 +462,7 @@ def _validate_freeze_authority(cur: CursorT, receipt_id: str, *, as_of: datetime
         raise RuntimeError("ZERO-DAY freeze publication does not bind receipt digest")
     if cast(str, row[14]) != cast(str, row[7]) or cast(str, row[15]) != cast(str, row[8]):
         raise RuntimeError("ZERO-DAY freeze publication does not bind implementation identity")
+
     publication_at = cast(datetime, row[16])
     if publication_at < durable_freeze_at or publication_at < cast(datetime, row[10]):
         raise RuntimeError("ZERO-DAY freeze publication predates durable freeze authority")
