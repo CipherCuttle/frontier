@@ -1,15 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Iterable
 
-from .advanced_intelligence import (
-    PefArtifactStatus,
-    ShadowExperimentRun,
-    ShadowRunStatus,
-)
+from .advanced_intelligence import PefArtifactStatus, ShadowExperimentRun, ShadowRunStatus
 from .canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
 from .digests import Digest, sha256_digest, sha256_hex
 from .intelligence import BaselineObservationInput
@@ -162,7 +158,10 @@ def _require_pef_v1_pair(
         raise ValueError("ZERO-DAY requires a CONFIRMATORY PEF_V1 run")
     if artifact.status is not PefArtifactStatus.RAN or run.status is not ShadowRunStatus.RAN:
         raise ValueError("ZERO-DAY requires complete RAN candidate and paired run artifacts")
-    if artifact.experiment_id != PEF_V1_EXPERIMENT_ID or run.experiment_id != PEF_V1_EXPERIMENT_ID:
+    if (
+        artifact.experiment_id != PEF_V1_EXPERIMENT_ID
+        or run.experiment_id != PEF_V1_EXPERIMENT_ID
+    ):
         raise ValueError("ZERO-DAY requires PEF_V1 experiment identity")
     if artifact.candidate_id != PEF_V1_CANDIDATE_ID or run.candidate_id != PEF_V1_CANDIDATE_ID:
         raise ValueError("ZERO-DAY requires PEF_V1 candidate identity")
@@ -215,7 +214,6 @@ def build_zero_day_seal(
     primary-emission episodes. Missing source observations fail closed rather
     than making an episode appear attention-free.
     """
-
     require_zero_day_boundary(run.as_of)
     _require_aware(sealed_at, "ZERO-DAY sealed_at")
     control_ranks = _require_pef_v1_pair(artifact, run, run_class=run_class)
@@ -247,7 +245,10 @@ def build_zero_day_seal(
         roles = {role for member in members for role in member.grouping.signal_roles}
         if roles & ZERO_DAY_FOLLOW_ON_ROLES:
             continue
-        if candidate.prospective_last_observed_at is None or candidate.prospective_age_seconds is None:
+        if (
+            candidate.prospective_last_observed_at is None
+            or candidate.prospective_age_seconds is None
+        ):
             raise ValueError("ZERO-DAY primary-emission candidate lacks frozen freshness fields")
 
         selected.append(
@@ -265,6 +266,9 @@ def build_zero_day_seal(
         if len(selected) == ZERO_DAY_COHORT_SIZE:
             break
 
+    freeze_receipt_id = run.candidate_freeze_receipt_id
+    if freeze_receipt_id is None:
+        raise ValueError("ZERO-DAY forbids freeze-unbound runs")
     return ZeroDaySeal(
         as_of=artifact.as_of,
         sealed_at=sealed_at,
@@ -272,7 +276,7 @@ def build_zero_day_seal(
         run_digest=run.run_digest,
         candidate_artifact_id=artifact.artifact_id,
         candidate_output_digest=artifact.output_digest,
-        candidate_freeze_receipt_id=run.candidate_freeze_receipt_id,
+        candidate_freeze_receipt_id=freeze_receipt_id,
         source_registry_version=artifact.source_registry_version,
         candidates=tuple(selected),
     )
@@ -390,7 +394,6 @@ def build_zero_day_grade(
     graded_at: datetime,
 ) -> ZeroDayGrade:
     """Grade one fixed ZERO-DAY horizon without changing the sealed denominator."""
-
     if horizon_seconds not in ZERO_DAY_GRADE_HORIZONS_SECONDS:
         raise ValueError("ZERO-DAY grade horizon is not frozen by V0")
     _require_aware(graded_at, "ZERO-DAY graded_at")
