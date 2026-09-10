@@ -1,0 +1,81 @@
+name: pef-v1-confirmatory-operator
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pef-v1-confirmatory-operator
+  cancel-in-progress: false
+
+jobs:
+  run-current-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+    steps:
+      - name: Credential gate
+        id: credential-gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${FRONTIER_DATABASE_URL_DIRECT:-}" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PEF_V1 operator disabled: FRONTIER_DATABASE_URL_DIRECT is not configured."
+            exit 0
+          fi
+          python - <<'PY'
+          from urllib.parse import urlsplit
+          import os
+          url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
+          host = (urlsplit(url).hostname or "").lower()
+          if not host:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT has no hostname")
+          if "-pooler" in host:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use the direct Neon endpoint")
+          PY
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout canonical main
+        if: steps.credential-gate.outputs.enabled == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        if: steps.credential-gate.outputs.enabled == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        if: steps.credential-gate.outputs.enabled == 'true'
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+
+      - name: Verify frozen environment
+        if: steps.credential-gate.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv lock --check
+          uv sync --all-extras --frozen
+
+      - name: Run current PEF_V1 boundary only
+        if: steps.credential-gate.outputs.enabled == 'true'
+        env:
+          FRONTIER_WORKER_ID: github-actions-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          uv run python -m frontier.cli.pef_v1_confirmatory \
+            --database-url "$FRONTIER_DATABASE_URL_DIRECT" \
+            --root . \
+            --worker-id "$FRONTIER_WORKER_ID"
