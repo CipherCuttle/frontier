@@ -1,0 +1,104 @@
+name: pef-v1-confirmatory-operator
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pef-v1-confirmatory-operator
+  cancel-in-progress: false
+
+jobs:
+  run-current-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Credential gate
+        id: credential-gate
+        shell: bash
+        env:
+          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FRONTIER_DATABASE_URL_DIRECT:-}" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PEF_V1 operator disabled: FRONTIER_DATABASE_URL_DIRECT is not configured."
+            exit 0
+          fi
+          python - <<'PY'
+          from urllib.parse import parse_qsl, urlsplit
+          import os
+
+          url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
+          parsed = urlsplit(url)
+          host = (parsed.hostname or "").lower()
+          if parsed.scheme not in {"postgres", "postgresql"}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must be a Postgres URI")
+          if parsed.fragment:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must not contain a fragment")
+          if host != "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon direct host")
+          if "-pooler" in host:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use the direct Neon endpoint")
+          if parsed.username != "frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use canonical frontier role")
+          if parsed.path != "/frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical frontier database")
+          if parsed.port not in {None, 5432}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use PostgreSQL port 5432")
+          if parsed.password is None:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must contain a database password")
+          try:
+              query = sorted(parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True))
+          except ValueError as error:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT query is malformed") from error
+          expected_query = [("channel_binding", "require"), ("sslmode", "require")]
+          if query != expected_query:
+              raise SystemExit(
+                  "FRONTIER_DATABASE_URL_DIRECT permits only "
+                  "channel_binding=require and sslmode=require query parameters"
+              )
+          PY
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout canonical main
+        if: steps.credential-gate.outputs.enabled == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        if: steps.credential-gate.outputs.enabled == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        if: steps.credential-gate.outputs.enabled == 'true'
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+
+      - name: Verify frozen environment
+        if: steps.credential-gate.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv lock --check
+          uv sync --all-extras --frozen
+
+      - name: Run current PEF_V1 boundary only
+        if: steps.credential-gate.outputs.enabled == 'true'
+        env:
+          FRONTIER_DATABASE_URL: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+          FRONTIER_WORKER_ID: github-actions-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          uv run python -m frontier.cli.pef_v1_confirmatory \
+            --root . \
+            --worker-id "$FRONTIER_WORKER_ID"
