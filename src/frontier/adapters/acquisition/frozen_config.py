@@ -20,7 +20,7 @@ def _git_blob(root: Path, *, ref: str, path: str) -> bytes:
             check=True,
             timeout=30,
         )
-    except OSError, subprocess.SubprocessError as error:
+    except (OSError, subprocess.SubprocessError) as error:
         raise ValueError(f"frozen source registry blob unavailable: {path}") from error
     return result.stdout
 
