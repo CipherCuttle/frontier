@@ -28,6 +28,7 @@ def test_serving_freshness_live_allows_one_snapshot_boundary_and_two_worker_cade
     status = classify_serving_freshness(
         now=NOW,
         latest_baseline_as_of=BOUNDARY - timedelta(seconds=LIVE_MAX_SNAPSHOT_LAG_SECONDS),
+        latest_baseline_freshness="OK",
         latest_worker_beat_at=NOW - timedelta(seconds=LIVE_MAX_HEARTBEAT_AGE_SECONDS),
     )
 
@@ -35,10 +36,47 @@ def test_serving_freshness_live_allows_one_snapshot_boundary_and_two_worker_cade
     assert status.reasons == ()
 
 
+def test_canonical_degraded_freshness_caps_timely_serving_at_lagging() -> None:
+    status = classify_serving_freshness(
+        now=NOW,
+        latest_baseline_as_of=BOUNDARY,
+        latest_baseline_freshness="DEGRADED",
+        latest_worker_beat_at=NOW,
+    )
+
+    assert status.state is ServingFreshnessState.LAGGING
+    assert status.reasons == ("BASELINE_FRESHNESS_DEGRADED",)
+
+
+@pytest.mark.parametrize(
+    ("freshness", "reason"),
+    [
+        ("FAILED", "BASELINE_FRESHNESS_FAILED"),
+        ("UNKNOWN", "BASELINE_FRESHNESS_UNKNOWN"),
+        (None, "BASELINE_FRESHNESS_MISSING"),
+        ("FRESH", "BASELINE_FRESHNESS_INVALID"),
+    ],
+)
+def test_non_usable_canonical_freshness_fails_closed(
+    freshness: str | None,
+    reason: str,
+) -> None:
+    status = classify_serving_freshness(
+        now=NOW,
+        latest_baseline_as_of=BOUNDARY,
+        latest_baseline_freshness=freshness,
+        latest_worker_beat_at=NOW,
+    )
+
+    assert status.state is ServingFreshnessState.STALE
+    assert status.reasons == (reason,)
+
+
 def test_serving_freshness_lagging_identifies_each_lagging_dimension() -> None:
     status = classify_serving_freshness(
         now=NOW,
         latest_baseline_as_of=BOUNDARY - timedelta(seconds=LIVE_MAX_SNAPSHOT_LAG_SECONDS + 300),
+        latest_baseline_freshness="OK",
         latest_worker_beat_at=NOW - timedelta(seconds=LIVE_MAX_HEARTBEAT_AGE_SECONDS + 1),
     )
 
@@ -51,6 +89,7 @@ def test_serving_freshness_stale_after_bounded_lag_window() -> None:
         now=NOW,
         latest_baseline_as_of=BOUNDARY
         - timedelta(seconds=LAGGING_MAX_SNAPSHOT_LAG_SECONDS + 300),
+        latest_baseline_freshness="OK",
         latest_worker_beat_at=NOW - timedelta(seconds=LAGGING_MAX_HEARTBEAT_AGE_SECONDS + 1),
     )
 
@@ -62,6 +101,7 @@ def test_serving_freshness_fails_closed_when_evidence_is_missing() -> None:
     status = classify_serving_freshness(
         now=NOW,
         latest_baseline_as_of=None,
+        latest_baseline_freshness=None,
         latest_worker_beat_at=None,
     )
 
@@ -73,6 +113,7 @@ def test_serving_freshness_fails_closed_on_future_or_misaligned_evidence() -> No
     status = classify_serving_freshness(
         now=NOW,
         latest_baseline_as_of=BOUNDARY + timedelta(seconds=1),
+        latest_baseline_freshness="OK",
         latest_worker_beat_at=NOW + timedelta(seconds=1),
     )
 
@@ -90,5 +131,6 @@ def test_serving_freshness_rejects_naive_clocks() -> None:
         classify_serving_freshness(
             now=naive,
             latest_baseline_as_of=BOUNDARY,
+            latest_baseline_freshness="OK",
             latest_worker_beat_at=NOW,
         )
