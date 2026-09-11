@@ -87,8 +87,7 @@ def test_serving_freshness_lagging_identifies_each_lagging_dimension() -> None:
 def test_serving_freshness_stale_after_bounded_lag_window() -> None:
     status = classify_serving_freshness(
         now=NOW,
-        latest_baseline_as_of=BOUNDARY
-        - timedelta(seconds=LAGGING_MAX_SNAPSHOT_LAG_SECONDS + 300),
+        latest_baseline_as_of=BOUNDARY - timedelta(seconds=LAGGING_MAX_SNAPSHOT_LAG_SECONDS + 300),
         latest_baseline_freshness="OK",
         latest_worker_beat_at=NOW - timedelta(seconds=LAGGING_MAX_HEARTBEAT_AGE_SECONDS + 1),
     )
