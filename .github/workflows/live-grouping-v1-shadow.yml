@@ -1,0 +1,143 @@
+name: live-grouping-v1-shadow
+
+on:
+  push:
+    branches:
+      - ops/live-grouping-v1-shadow-r3
+    paths:
+      - ".github/workflows/live-grouping-v1-shadow.yml"
+      - "scripts/ops/verify_live_grouping_v1.py"
+      - "scripts/ops/verify_live_baseline_v1_equivalence.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-grouping-v1-shadow
+  cancel-in-progress: false
+
+jobs:
+  read-only-live-equivalence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate canonical database credential
+        shell: bash
+        env:
+          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FRONTIER_DATABASE_URL_DIRECT:-}" ]]; then
+            echo "::error::FRONTIER_DATABASE_URL_DIRECT is not configured."
+            exit 1
+          fi
+          python - <<'PY'
+          from urllib.parse import parse_qsl, urlsplit
+          import os
+
+          url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
+          parsed = urlsplit(url)
+          host = (parsed.hostname or "").lower()
+          canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+          canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
+          if parsed.scheme not in {"postgres", "postgresql"}:
+              raise SystemExit("canonical database secret must be a Postgres URI")
+          if parsed.fragment:
+              raise SystemExit("canonical database secret must not contain a fragment")
+          if host not in {canonical_direct, canonical_pooler}:
+              raise SystemExit("canonical database secret must target Neon main")
+          if parsed.username != "frontier" or parsed.path != "/frontier":
+              raise SystemExit("canonical database secret identity mismatch")
+          if parsed.port not in {None, 5432} or parsed.password is None:
+              raise SystemExit("canonical database secret connection metadata mismatch")
+          query = sorted(parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True))
+          if query != [("channel_binding", "require"), ("sslmode", "require")]:
+              raise SystemExit("canonical database secret query mismatch")
+          PY
+
+      - name: Checkout triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+
+      - name: Verify frozen environment
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv lock --check
+          uv sync --all-extras --frozen
+
+      - name: Prove V1 membership and baseline-output equivalence on production
+        shell: bash
+        env:
+          CANONICAL_DATABASE_SECRET: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+        run: |
+          set -euo pipefail
+          direct_url="$(python - <<'PY'
+          from urllib.parse import urlsplit, urlunsplit
+          import os
+
+          url = os.environ["CANONICAL_DATABASE_SECRET"]
+          parsed = urlsplit(url)
+          canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+          canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
+          if (parsed.hostname or "").lower() != canonical_pooler:
+              print(url)
+          else:
+              userinfo, _ = parsed.netloc.rsplit("@", 1)
+              port_suffix = f":{parsed.port}" if parsed.port is not None else ""
+              print(urlunsplit((
+                  parsed.scheme,
+                  f"{userinfo}@{canonical_direct}{port_suffix}",
+                  parsed.path,
+                  parsed.query,
+                  "",
+              )))
+          PY
+          )"
+          echo "::add-mask::$direct_url"
+          export FRONTIER_DATABASE_URL_DIRECT="$direct_url"
+
+          grouping_result="$(uv run python scripts/ops/verify_live_grouping_v1.py)"
+          printf '%s\n' "$grouping_result"
+          baseline_result="$(uv run python scripts/ops/verify_live_baseline_v1_equivalence.py)"
+          printf '%s\n' "$baseline_result"
+
+          GROUPING_RESULT="$grouping_result" BASELINE_RESULT="$baseline_result" python - <<'PY'
+          import json
+          import os
+
+          grouping = json.loads([line for line in os.environ["GROUPING_RESULT"].splitlines() if line.strip()][0])
+          baseline = json.loads([line for line in os.environ["BASELINE_RESULT"].splitlines() if line.strip()][0])
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Live grouping V1 shadow proof\n\n")
+              summary.write(f"- as_of: `{grouping['as_of']}`\n")
+              summary.write(f"- eligible observations: `{grouping['eligible_observation_count']}`\n")
+              summary.write(f"- exhaustive V0 pair count: `{grouping['exhaustive_pair_count']}`\n")
+              summary.write(f"- V1 candidate pairs: `{grouping['candidate_pair_count']}`\n")
+              summary.write(f"- candidate ratio: `{grouping['candidate_ratio_vs_exhaustive']:.6f}`\n")
+              summary.write(f"- grouping elapsed: `{grouping['elapsed_seconds']:.3f}s`\n")
+              summary.write(f"- membership equal: `{grouping['membership_equal']}`\n")
+              summary.write("\n## Frozen baseline output equivalence\n\n")
+              summary.write(f"- canonical snapshot equal: `{baseline['canonical_snapshot_equal']}`\n")
+              summary.write(f"- snapshot id equal: `{baseline['snapshot_id_equal']}`\n")
+              summary.write(f"- output digest equal: `{baseline['output_digest_equal']}`\n")
+              summary.write(f"- grouping elapsed: `{baseline['grouping_seconds']:.3f}s`\n")
+              summary.write(f"- baseline scoring elapsed: `{baseline['baseline_scoring_seconds']:.3f}s`\n")
+              summary.write(f"- total: `{baseline['total_seconds']:.3f}s`\n")
+              summary.write(f"- within 300s live envelope: `{baseline['within_300s_live_envelope']}`\n")
+              summary.write("- grouping-receipt equivalence claimed: `false`\n")
+              summary.write("\nRead-only proof only; no projection, receipt, baseline, acquisition, heartbeat, or PEF state was written.\n")
+          PY
