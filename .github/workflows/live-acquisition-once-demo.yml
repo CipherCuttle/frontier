@@ -6,6 +6,7 @@ on:
       - ops/live-operations-v1-serving-freshness-smoke-r2
     paths:
       - ".github/workflows/live-acquisition-once-demo.yml"
+      - "scripts/ops/live_acquisition_once_autocommit.py"
 
 permissions:
   contents: read
@@ -102,7 +103,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
           set +e
-          uv run python -m frontier.cli.live_acquisition --once --worker-id "$FRONTIER_WORKER_ID" \
+          uv run python scripts/ops/live_acquisition_once_autocommit.py --worker-id "$FRONTIER_WORKER_ID" \
             | tee /tmp/frontier-live-once.json
           worker_rc=${PIPESTATUS[0]}
           set -e
