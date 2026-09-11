@@ -17,16 +17,87 @@ from frontier.domain.candidate_freeze_v1 import CandidateFreezeReceiptV1
 _FREEZE_V1_RECEIPT_PUBLICATION_PATH_RE = re.compile(
     r"^experiments/advanced_intelligence/pef_v1/candidate_freeze_receipt_v[0-9]+\.json$"
 )
+_FROZEN_EXECUTION_PATHS = (
+    "src/frontier/application",
+    "src/frontier/domain",
+    "src/frontier/contracts",
+    "src/frontier/adapters/postgres",
+    "src/frontier/adapters/acquisition",
+    "src/frontier/cli",
+    "pyproject.toml",
+    "uv.lock",
+)
+_POST_FREEZE_APPROVED_EXECUTION_BLOBS = {
+    "src/frontier/application/candidate_freeze_v1.py": ("3b79f58d1d3ab04c9371fbb2822c0742f1303c5b"),
+    "src/frontier/adapters/acquisition/frozen_config.py": (
+        "8e948289e5e569ae84560238bfff087960daeedf"
+    ),
+    "src/frontier/cli/pef_v1_confirmatory.py": "d5dff73d758fc626271f93bd3948887a900677c7",
+}
+# This module is the compatibility checker itself. It may differ from the
+# original freeze only because production execution is separately pinned by
+# the CLI/workflow to one immutable reviewed operator commit. Descendant HEADs
+# never execute this allowlist in the confirmatory operator.
+_PINNED_OPERATOR_AUTHORITY_ALLOWLIST = frozenset(
+    {"src/frontier/application/freeze_publication_v1.py"}
+)
+
+
+def _git_command(args: list[str]) -> list[str]:
+    return ["git", "--no-replace-objects", *args]
 
 
 def _git_text(root: Path, args: list[str]) -> str:
     try:
         result = subprocess.run(
-            ["git", *args], cwd=root, capture_output=True, text=True, check=True, timeout=30
+            _git_command(args),
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise RuntimeError("PEF_V1 candidate freeze Git publication cannot be verified") from error
     return result.stdout.strip()
+
+
+def _git_path_exists(root: Path, ref_path: str) -> bool:
+    try:
+        result = subprocess.run(
+            _git_command(["cat-file", "-e", ref_path]),
+            cwd=root,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("PEF_V1 frozen execution compatibility cannot be verified") from error
+    if result.returncode not in (0, 1, 128):
+        raise RuntimeError("PEF_V1 frozen execution compatibility cannot be verified")
+    return result.returncode == 0
+
+
+def _added_python_path_shadows_frozen_module(
+    root: Path,
+    *,
+    implementation_commit: str,
+    path: str,
+) -> bool:
+    if not path.startswith("src/frontier/") or not path.endswith(".py"):
+        return False
+    if path.endswith("/__init__.py"):
+        package = path[: -len("/__init__.py")]
+        alternate = f"{package}.py"
+        if _git_path_exists(root, f"{implementation_commit}:{alternate}"):
+            return True
+        listed = _git_text(
+            root,
+            ["ls-tree", "-r", "--name-only", implementation_commit, "--", f"{package}/"],
+        )
+        return bool(listed)
+    alternate = f"{path[:-3]}/__init__.py"
+    return _git_path_exists(root, f"{implementation_commit}:{alternate}")
 
 
 def _git_json(root: Path, ref_path: str) -> object:
@@ -56,13 +127,168 @@ def _matching_receipt_path(root: Path, receipt: CandidateFreezeReceiptV1) -> Pat
     return root / matches[0]
 
 
+def _require_frozen_execution_compatibility(
+    root: Path,
+    receipt: CandidateFreezeReceiptV1,
+) -> None:
+    """Reject post-freeze changes that can alter confirmatory execution."""
+    implementation_commit = receipt.implementation_commit
+    assert implementation_commit is not None
+    try:
+        diff = subprocess.run(
+            _git_command(
+                [
+                    "diff",
+                    "--name-status",
+                    "-z",
+                    "--no-renames",
+                    implementation_commit,
+                    "HEAD",
+                    "--",
+                    *_FROZEN_EXECUTION_PATHS,
+                ]
+            ),
+            cwd=root,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("PEF_V1 frozen execution compatibility cannot be verified") from error
+
+    fields = diff.stdout.split(b"\0")
+    if fields and fields[-1] == b"":
+        fields.pop()
+    if len(fields) % 2 != 0:
+        raise RuntimeError("PEF_V1 frozen execution diff is malformed")
+
+    drift: list[str] = []
+    for index in range(0, len(fields), 2):
+        status = fields[index].decode("ascii")
+        path = fields[index + 1].decode("utf-8")
+        expected_blob = _POST_FREEZE_APPROVED_EXECUTION_BLOBS.get(path)
+        if expected_blob is not None:
+            if status == "D":
+                drift.append(f"{status}:{path}")
+                continue
+            try:
+                current_blob = _git_text(root, ["rev-parse", f"HEAD:{path}"])
+            except RuntimeError:
+                drift.append(f"{status}:{path}")
+                continue
+            if current_blob != expected_blob:
+                drift.append(f"{status}:{path}")
+            continue
+        if path in _PINNED_OPERATOR_AUTHORITY_ALLOWLIST:
+            continue
+        if status == "A":
+            if _added_python_path_shadows_frozen_module(
+                root,
+                implementation_commit=implementation_commit,
+                path=path,
+            ):
+                drift.append(f"{status}:{path}")
+            continue
+        drift.append(f"{status}:{path}")
+    if drift:
+        detail = ", ".join(sorted(drift))
+        raise RuntimeError(
+            f"runtime PEF_V1 execution semantics drifted from frozen implementation: {detail}"
+        )
+
+
+def _publication_from_runtime_ancestry(
+    root: Path,
+    receipt: CandidateFreezeReceiptV1,
+    *,
+    relative: str,
+) -> CandidateFreezePublication:
+    """Locate the immutable publication merge inside current runtime ancestry."""
+    implementation_commit = receipt.implementation_commit
+    implementation_tree_digest = receipt.implementation_tree_digest
+    assert implementation_commit is not None
+    assert implementation_tree_digest is not None
+
+    history = _git_text(root, ["rev-list", "--parents", "HEAD"])
+    candidates: list[CandidateFreezePublication] = []
+    for line in history.splitlines():
+        parts = line.split()
+        if len(parts) != 3 or parts[1] != implementation_commit:
+            continue
+        publication_commit = parts[0]
+        try:
+            raw = _git_json(root, f"{publication_commit}:{relative}")
+        except RuntimeError:
+            continue
+        if raw != receipt.to_canonical():
+            continue
+        try:
+            diff = subprocess.run(
+                _git_command(
+                    [
+                        "diff",
+                        "--name-status",
+                        "-z",
+                        "--no-renames",
+                        implementation_commit,
+                        publication_commit,
+                        "--",
+                    ]
+                ),
+                cwd=root,
+                capture_output=True,
+                check=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise RuntimeError(
+                "PEF_V1 candidate freeze Git publication cannot be verified"
+            ) from error
+        fields = diff.stdout.split(b"\0")
+        if fields and fields[-1] == b"":
+            fields.pop()
+        if len(fields) != 2:
+            continue
+        status = fields[0].decode("ascii")
+        changed = fields[1].decode("utf-8")
+        if (status, changed) != ("A", relative):
+            continue
+
+        committed_at = datetime.fromisoformat(
+            _git_text(root, ["show", "-s", "--format=%cI", publication_commit])
+        )
+        if committed_at.tzinfo is None or committed_at.utcoffset() is None:
+            raise RuntimeError("publication committer timestamp is not timezone-aware")
+        if committed_at < receipt.frozen_at:
+            raise RuntimeError(
+                "durable PEF_V1 freeze publication timestamp precedes receipt creation"
+            )
+        candidates.append(
+            CandidateFreezePublication(
+                freeze_receipt_id=receipt.receipt_id,
+                freeze_receipt_digest=receipt.receipt_digest,
+                implementation_commit=implementation_commit,
+                implementation_tree_digest=implementation_tree_digest,
+                publication_commit=publication_commit,
+                publication_committer_at=committed_at,
+            )
+        )
+
+    if len(candidates) != 1:
+        raise RuntimeError(
+            "exact canonical PEF_V1 freeze publication merge is not uniquely present "
+            "in runtime ancestry"
+        )
+    return candidates[0]
+
+
 def derive_freeze_publication_v1(
     root: Path,
     receipt: CandidateFreezeReceiptV1,
     *,
     receipt_path: Path | None = None,
 ) -> CandidateFreezePublication:
-    """Prove the exact one-file, two-parent durable publication shape for PEF_V1."""
+    """Prove immutable publication, ancestry, and frozen execution compatibility."""
     if receipt.status is not FreezeStatus.FROZEN:
         raise RuntimeError("PEF_V1 candidate freeze publication requires a FROZEN receipt")
     path = receipt_path or _matching_receipt_path(root, receipt)
@@ -87,67 +313,19 @@ def derive_freeze_publication_v1(
         raise RuntimeError("PEF_V1 freeze implementation tree does not match bound commit")
     try:
         ancestor = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", receipt.implementation_commit, "HEAD"],
+            _git_command(["merge-base", "--is-ancestor", receipt.implementation_commit, "HEAD"]),
             cwd=root,
             capture_output=True,
             check=False,
             timeout=30,
         )
-        if ancestor.returncode != 0:
-            raise RuntimeError("frozen PEF_V1 implementation is not an ancestor of runtime HEAD")
-        diff = subprocess.run(
-            [
-                "git",
-                "diff",
-                "--name-status",
-                "-z",
-                "--no-renames",
-                receipt.implementation_commit,
-                "HEAD",
-                "--",
-            ],
-            cwd=root,
-            capture_output=True,
-            check=True,
-            timeout=30,
-        )
     except (OSError, subprocess.SubprocessError) as error:
         raise RuntimeError("PEF_V1 candidate freeze Git publication cannot be verified") from error
-    fields = diff.stdout.split(b"\0")
-    if fields and fields[-1] == b"":
-        fields.pop()
-    if len(fields) != 2:
-        raise RuntimeError("runtime tree is not the exact one-file PEF_V1 freeze publication delta")
-    status = fields[0].decode("ascii")
-    changed = fields[1].decode("utf-8")
-    if (status, changed) != ("A", relative):
-        raise RuntimeError(
-            "runtime tree drifted outside the exact PEF_V1 freeze receipt publication"
-        )
+    if ancestor.returncode != 0:
+        raise RuntimeError("frozen PEF_V1 implementation is not an ancestor of runtime HEAD")
 
-    parts = _git_text(root, ["rev-list", "--parents", "-n", "1", "HEAD"]).split()
-    if len(parts) != 3:
-        raise RuntimeError(
-            "durable PEF_V1 freeze publication HEAD must be a two-parent merge commit"
-        )
-    publication_commit, first_parent, _ = parts
-    if first_parent != receipt.implementation_commit:
-        raise RuntimeError(
-            "durable PEF_V1 freeze publication first parent is not the frozen implementation"
-        )
-    committed_at = datetime.fromisoformat(_git_text(root, ["show", "-s", "--format=%cI", "HEAD"]))
-    if committed_at.tzinfo is None or committed_at.utcoffset() is None:
-        raise RuntimeError("publication committer timestamp is not timezone-aware")
-    if committed_at < receipt.frozen_at:
-        raise RuntimeError("durable PEF_V1 freeze publication timestamp precedes receipt creation")
-    return CandidateFreezePublication(
-        freeze_receipt_id=receipt.receipt_id,
-        freeze_receipt_digest=receipt.receipt_digest,
-        implementation_commit=receipt.implementation_commit,
-        implementation_tree_digest=receipt.implementation_tree_digest,
-        publication_commit=publication_commit,
-        publication_committer_at=committed_at,
-    )
+    _require_frozen_execution_compatibility(root, receipt)
+    return _publication_from_runtime_ancestry(root, receipt, relative=relative)
 
 
 def derive_github_main_freeze_publication_v1(

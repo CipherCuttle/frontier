@@ -71,6 +71,121 @@ def test_exact_v1_publication_merge_is_derived_from_git(tmp_path: Path) -> None:
     assert publication.publication_committer_at.tzinfo is not None
 
 
+def test_v1_publication_survives_later_runtime_commits(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    (tmp_path / "base.txt").write_text("base", encoding="utf-8")
+    _git(tmp_path, "add", "base.txt")
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+    publication_commit = _git(tmp_path, "rev-parse", "HEAD")
+
+    (tmp_path / "ops.txt").write_text("legitimate post-freeze ops\n", encoding="utf-8")
+    _git(tmp_path, "add", "ops.txt")
+    _git(tmp_path, "commit", "-m", "post-freeze operations")
+
+    publication = derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+    assert publication.publication_commit == publication_commit
+    assert publication.publication_commit != _git(tmp_path, "rev-parse", "HEAD")
+
+
+def test_v1_publication_rejects_post_freeze_execution_drift(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    semantic = tmp_path / "src/frontier/application/pef_v1_confirmatory.py"
+    semantic.parent.mkdir(parents=True)
+    semantic.write_text("frozen = True\n", encoding="utf-8")
+    _git(tmp_path, "add", str(semantic.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+
+    semantic.write_text("frozen = False\n", encoding="utf-8")
+    _git(tmp_path, "add", str(semantic.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "drift frozen semantics")
+
+    with pytest.raises(RuntimeError, match="execution semantics drifted"):
+        derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+
+
+def test_v1_publication_rejects_added_shadow_package(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    module = tmp_path / "src/frontier/application/pef_v1_confirmatory.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("frozen = True\n", encoding="utf-8")
+    _git(tmp_path, "add", str(module.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+
+    shadow = tmp_path / "src/frontier/application/pef_v1_confirmatory/__init__.py"
+    shadow.parent.mkdir(parents=True)
+    shadow.write_text("frozen = False\n", encoding="utf-8")
+    _git(tmp_path, "add", str(shadow.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "shadow frozen module")
+
+    with pytest.raises(RuntimeError, match="execution semantics drifted"):
+        derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+
+
+def test_v1_publication_rejects_registry_parser_drift(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    parser = tmp_path / "src/frontier/adapters/acquisition/json_values.py"
+    parser.parent.mkdir(parents=True)
+    parser.write_text("frozen = True\n", encoding="utf-8")
+    _git(tmp_path, "add", str(parser.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+
+    parser.write_text("frozen = False\n", encoding="utf-8")
+    _git(tmp_path, "add", str(parser.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "drift registry parser")
+
+    with pytest.raises(RuntimeError, match="execution semantics drifted"):
+        derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+
+
+def test_v1_publication_ignores_git_replacement_grafts(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    (tmp_path / "base.txt").write_text("base", encoding="utf-8")
+    _git(tmp_path, "add", "base.txt")
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+    publication_commit = _git(tmp_path, "rev-parse", "HEAD")
+    implementation_commit = receipt.implementation_commit
+    assert implementation_commit is not None
+
+    _git(tmp_path, "checkout", "--orphan", "attacker")
+    _git(tmp_path, "rm", "-rf", ".")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(canonical_json_text(receipt.to_canonical()) + "\n", encoding="utf-8")
+    (tmp_path / "attacker.txt").write_text("not descended from publication\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "unrelated runtime")
+    attacker_head = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "replace", "--graft", attacker_head, publication_commit)
+
+    spoofed = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", implementation_commit, "HEAD"],
+        cwd=tmp_path,
+        check=False,
+    )
+    assert spoofed.returncode == 0
+    with pytest.raises(RuntimeError, match="implementation is not an ancestor"):
+        derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+
+
 def test_v1_publication_rejects_non_v1_receipt_path(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-b", "main")
     _git(tmp_path, "config", "user.email", "frontier@example.test")
