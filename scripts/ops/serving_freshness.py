@@ -167,7 +167,14 @@ def read_serving_freshness(database_url: str) -> ServingFreshnessStatus:
             now = cast(datetime, now_row[0])
             _require_aware("database clock", now)
 
-            cur.execute("SELECT max(as_of) FROM baseline_intelligence_snapshots")
+            cur.execute(
+                """
+                SELECT max(b.as_of)
+                FROM baseline_intelligence_snapshots b
+                JOIN projection_receipts r ON r.receipt_id = b.receipt_id
+                WHERE r.status = 'COMPLETE'
+                """
+            )
             baseline_row = cur.fetchone()
             if baseline_row is None:
                 raise RuntimeError("baseline freshness query returned no row")
