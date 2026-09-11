@@ -130,10 +130,10 @@ def run_once(
             binding = PostgresPefV1FreezeBindingResolver(conn).latest_binding()
             if binding is None:
                 raise ValueError("PEF_V1 confirmatory operation has no persisted freeze binding")
-            registry = load_source_registry_from_git_ref(
-                root,
-                binding.receipt.implementation_commit,
-            )
+            implementation_commit = binding.receipt.implementation_commit
+            if implementation_commit is None:
+                raise ValueError("PEF_V1 freeze binding has no implementation commit")
+            registry = load_source_registry_from_git_ref(root, implementation_commit)
             repository = PostgresFrozenRegistryBaselineIntelligenceRepository(conn, registry)
             orchestrator = PefV1ConfirmatoryOrchestrator(
                 attempts=PostgresExperimentAttemptRepository(conn),
