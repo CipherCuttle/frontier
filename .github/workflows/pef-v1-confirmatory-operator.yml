@@ -29,7 +29,7 @@ jobs:
             exit 0
           fi
           python - <<'PY'
-          from urllib.parse import parse_qsl, urlsplit, urlunsplit
+          from urllib.parse import parse_qsl, urlsplit
           import os
 
           url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
@@ -61,23 +61,6 @@ jobs:
                   "FRONTIER_DATABASE_URL_DIRECT permits only "
                   "channel_binding=require and sslmode=require query parameters"
               )
-
-          normalized = url
-          if host == canonical_pooler:
-              userinfo, _hostport = parsed.netloc.rsplit("@", 1)
-              port_suffix = f":{parsed.port}" if parsed.port is not None else ""
-              normalized = urlunsplit(
-                  (
-                      parsed.scheme,
-                      f"{userinfo}@{canonical_direct}{port_suffix}",
-                      parsed.path,
-                      parsed.query,
-                      "",
-                  )
-              )
-          print(f"::add-mask::{normalized}")
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
-              env_file.write(f"FRONTIER_DATABASE_URL_CANONICAL={normalized}\n")
           PY
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
@@ -112,10 +95,34 @@ jobs:
       - name: Run current PEF_V1 boundary only
         if: steps.credential-gate.outputs.enabled == 'true'
         env:
-          FRONTIER_DATABASE_URL: ${{ env.FRONTIER_DATABASE_URL_CANONICAL }}
+          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
           FRONTIER_WORKER_ID: github-actions-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          uv run python -m frontier.cli.pef_v1_confirmatory \
+          FRONTIER_DATABASE_URL="$(python - <<'PY'
+          from urllib.parse import urlsplit, urlunsplit
+          import os
+
+          url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
+          parsed = urlsplit(url)
+          canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+          canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
+          if (parsed.hostname or "").lower() == canonical_pooler:
+              userinfo, _hostport = parsed.netloc.rsplit("@", 1)
+              port_suffix = f":{parsed.port}" if parsed.port is not None else ""
+              url = urlunsplit(
+                  (
+                      parsed.scheme,
+                      f"{userinfo}@{canonical_direct}{port_suffix}",
+                      parsed.path,
+                      parsed.query,
+                      "",
+                  )
+              )
+          print(url)
+          PY
+          )"
+          echo "::add-mask::$FRONTIER_DATABASE_URL"
+          FRONTIER_DATABASE_URL="$FRONTIER_DATABASE_URL" uv run python -m frontier.cli.pef_v1_confirmatory \
             --root . \
             --worker-id "$FRONTIER_WORKER_ID"
