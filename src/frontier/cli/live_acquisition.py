@@ -8,6 +8,7 @@ import signal
 import socket
 import sys
 import time
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -293,12 +294,10 @@ def run_live_acquisition(
             time.sleep(delay)
         finally:
             if lease is not None and lease_acquired and connection is not None:
-                try:
-                    lease.release(owner=worker_id)
-                except psycopg.Error, RuntimeError:
+                with suppress(psycopg.Error, RuntimeError):
                     # A dead connection already releases its session advisory
                     # lock; never mask the reconnect path with cleanup failure.
-                    pass
+                    lease.release(owner=worker_id)
             if connection is not None:
                 connection.close()
     return 0
