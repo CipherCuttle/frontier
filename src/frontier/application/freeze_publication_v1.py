@@ -99,7 +99,9 @@ def _publication_from_runtime_ancestry(
                 timeout=30,
             )
         except (OSError, subprocess.SubprocessError) as error:
-            raise RuntimeError("PEF_V1 candidate freeze Git publication cannot be verified") from error
+            raise RuntimeError(
+                "PEF_V1 candidate freeze Git publication cannot be verified"
+            ) from error
         fields = diff.stdout.split(b"\0")
         if fields and fields[-1] == b"":
             fields.pop()
@@ -116,7 +118,9 @@ def _publication_from_runtime_ancestry(
         if committed_at.tzinfo is None or committed_at.utcoffset() is None:
             raise RuntimeError("publication committer timestamp is not timezone-aware")
         if committed_at < receipt.frozen_at:
-            raise RuntimeError("durable PEF_V1 freeze publication timestamp precedes receipt creation")
+            raise RuntimeError(
+                "durable PEF_V1 freeze publication timestamp precedes receipt creation"
+            )
         candidates.append(
             CandidateFreezePublication(
                 freeze_receipt_id=receipt.receipt_id,
