@@ -36,6 +36,7 @@ def test_serving_freshness_probe_is_read_only_and_preserves_existing_evidence() 
     assert _liveness_row_counts(DB_URL) == before
 
 
+# Regression: an unrelated worker must never satisfy acquisition serving liveness.
 def test_serving_freshness_ignores_non_acquisition_worker_heartbeats() -> None:
     assert DB_URL is not None
     worker_id = "serving-freshness-decoy-non-acquisition"
