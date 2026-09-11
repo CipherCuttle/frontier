@@ -24,9 +24,7 @@ def test_serving_freshness_probe_is_read_only_and_fails_closed_without_liveness_
     assert status.reasons == ("NO_BASELINE_SNAPSHOT", "NO_WORKER_HEARTBEAT")
 
     with psycopg.connect(DB_URL, autocommit=True) as connection:
-        row = connection.execute(
-            "SELECT count(*) FROM baseline_intelligence_snapshots"
-        ).fetchone()
+        row = connection.execute("SELECT count(*) FROM baseline_intelligence_snapshots").fetchone()
         assert row is not None
         assert int(row[0]) == 0
         heartbeat_row = connection.execute("SELECT count(*) FROM worker_heartbeats").fetchone()
