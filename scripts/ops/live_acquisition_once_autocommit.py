@@ -32,7 +32,7 @@ from frontier.adapters.postgres.readiness import verify_database_readiness
 from frontier.adapters.postgres.worker_ops import PostgresWorkerLease
 from frontier.cli.live_acquisition import (
     ShutdownRequest,
-    _run_connected,
+    _run_connected,  # pyright: ignore[reportPrivateUsage]  # frozen runtime delegation
     require_direct_session_database_url,
 )
 
