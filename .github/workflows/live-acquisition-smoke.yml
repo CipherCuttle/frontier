@@ -1,0 +1,228 @@
+name: live-acquisition-smoke
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/live-acquisition-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-acquisition-smoke
+  cancel-in-progress: false
+
+jobs:
+  run-once:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate canonical database credential
+        shell: bash
+        env:
+          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FRONTIER_DATABASE_URL_DIRECT:-}" ]]; then
+            echo "::error::FRONTIER_DATABASE_URL_DIRECT is not configured."
+            exit 1
+          fi
+          python - <<'PY'
+          from urllib.parse import parse_qsl, urlsplit
+          import os
+
+          url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
+          parsed = urlsplit(url)
+          host = (parsed.hostname or "").lower()
+          if parsed.scheme not in {"postgres", "postgresql"}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must be a Postgres URI")
+          if parsed.fragment:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must not contain a fragment")
+          if host != "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon direct host")
+          if "-pooler" in host:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use the direct Neon endpoint")
+          if parsed.username != "frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use canonical frontier role")
+          if parsed.path != "/frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical frontier database")
+          if parsed.port not in {None, 5432}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use PostgreSQL port 5432")
+          if parsed.password is None:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must contain a database password")
+          try:
+              query = sorted(parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True))
+          except ValueError as error:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT query is malformed") from error
+          expected_query = [("channel_binding", "require"), ("sslmode", "require")]
+          if query != expected_query:
+              raise SystemExit(
+                  "FRONTIER_DATABASE_URL_DIRECT permits only "
+                  "channel_binding=require and sslmode=require query parameters"
+              )
+          PY
+
+      - name: Checkout triggering canonical commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+
+      - name: Verify frozen environment and registry identity
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv lock --check
+          uv sync --all-extras --frozen
+          uv run python - <<'PY'
+          from pathlib import Path
+          from frontier.adapters.acquisition.config import load_source_registry
+
+          expected = "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee"
+          actual = str(load_source_registry(Path(".")).source_registry_version)
+          if actual != expected:
+              raise SystemExit(f"frozen source registry drift: expected {expected}, found {actual}")
+          PY
+
+      - name: Force and verify repaired live sources
+        env:
+          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+          FRONTIER_SMOKE_ID: github-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import asyncio
+          import json
+          import os
+          from dataclasses import replace
+          from pathlib import Path
+
+          import psycopg
+
+          from frontier.adapters.acquisition.config import load_fetch_policy, load_source_registry
+          from frontier.adapters.acquisition.fetcher import SecureHttpFetcher
+          from frontier.adapters.acquisition.live_compat import LiveSourceCompatibilityFetcher
+          from frontier.adapters.postgres.live_operations import PostgresLiveAcquisitionStore
+          from frontier.adapters.postgres.readiness import verify_database_readiness
+          from frontier.adapters.postgres.worker_ops import PostgresWorkerLease
+          from frontier.application.acquisition import AcquisitionService
+          from frontier.application.acquisition_state import SourceFetchState
+          from frontier.domain.collection import CollectionReason, CollectionRunStatus
+
+          REQUIRED = ("cisa.kev", "hf.models")
+          SUCCESS = {CollectionRunStatus.SUCCESS, CollectionRunStatus.PARTIAL}
+          smoke_id = os.environ["FRONTIER_SMOKE_ID"]
+
+
+          class ForcedSmokeStore(PostgresLiveAcquisitionStore):
+              """Ignore only persisted retry timing for the two explicit smoke sources."""
+
+              def get_source_fetch_state(self, source_id: str) -> SourceFetchState | None:
+                  state = super().get_source_fetch_state(source_id)
+                  if source_id in REQUIRED and state is not None and state.next_retry_at is not None:
+                      return replace(state, next_retry_at=None)
+                  return state
+
+
+          async def run_smoke() -> dict[str, object]:
+              registry = load_source_registry(Path("."))
+              policy = load_fetch_policy(Path("."))
+              evidence: dict[str, object] = {}
+
+              with psycopg.connect(os.environ["FRONTIER_DATABASE_URL_DIRECT"]) as connection:
+                  verify_database_readiness(connection)
+                  lease = PostgresWorkerLease(connection)
+                  if not lease.acquire(owner=smoke_id):
+                      raise SystemExit("smoke refused: live acquisition singleton lease is held")
+                  try:
+                      store = ForcedSmokeStore(connection)
+                      service = AcquisitionService(
+                          registry=registry,
+                          policy=policy,
+                          fetcher=LiveSourceCompatibilityFetcher(SecureHttpFetcher(policy)),
+                          repository=store,
+                      )
+                      for source_id in REQUIRED:
+                          result = await service.acquire(
+                              source_id,
+                              reason=CollectionReason.SCHEDULED,
+                              trigger_id=smoke_id,
+                          )
+                          if result.status not in SUCCESS:
+                              raise SystemExit(
+                                  f"{source_id}: forced smoke failed "
+                                  f"status={result.status.value} failure_code={result.failure_code}"
+                              )
+
+                          run = connection.execute(
+                              """
+                              SELECT status, failure_code, trigger_id, started_at, completed_at
+                              FROM collection_runs
+                              WHERE run_id = %s
+                              """,
+                              (result.run_id,),
+                          ).fetchone()
+                          if run is None:
+                              raise SystemExit(f"{source_id}: exact smoke run was not persisted")
+                          status, failure_code, trigger_id, started_at, completed_at = run
+                          if status not in {"SUCCESS", "PARTIAL"}:
+                              raise SystemExit(
+                                  f"{source_id}: persisted smoke status={status} "
+                                  f"failure_code={failure_code}"
+                              )
+                          if trigger_id != smoke_id:
+                              raise SystemExit(
+                                  f"{source_id}: persisted run is not bound to this smoke invocation"
+                              )
+
+                          state = connection.execute(
+                              """
+                              SELECT last_success_at, consecutive_failures, next_retry_at
+                              FROM source_fetch_state
+                              WHERE source_id = %s
+                              """,
+                              (source_id,),
+                          ).fetchone()
+                          if state is None:
+                              raise SystemExit(f"{source_id}: source_fetch_state missing after smoke")
+                          last_success_at, consecutive_failures, next_retry_at = state
+                          if last_success_at is None:
+                              raise SystemExit(f"{source_id}: success timestamp missing after smoke")
+                          if consecutive_failures != 0:
+                              raise SystemExit(
+                                  f"{source_id}: consecutive_failures did not reset: "
+                                  f"{consecutive_failures}"
+                              )
+                          evidence[source_id] = {
+                              "run_id": str(result.run_id),
+                              "status": status,
+                              "failure_code": failure_code,
+                              "trigger_id": trigger_id,
+                              "started_at": started_at.isoformat(),
+                              "completed_at": completed_at.isoformat() if completed_at else None,
+                              "last_success_at": last_success_at.isoformat(),
+                              "next_retry_at": next_retry_at.isoformat() if next_retry_at else None,
+                          }
+                  finally:
+                      lease.release(owner=smoke_id)
+
+              return evidence
+
+
+          print(json.dumps(asyncio.run(run_smoke()), sort_keys=True))
+          PY
