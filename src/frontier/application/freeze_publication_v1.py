@@ -244,9 +244,7 @@ def derive_freeze_publication_v1(
         raise RuntimeError("PEF_V1 freeze implementation tree does not match bound commit")
     try:
         ancestor = subprocess.run(
-            _git_command(
-                ["merge-base", "--is-ancestor", receipt.implementation_commit, "HEAD"]
-            ),
+            _git_command(["merge-base", "--is-ancestor", receipt.implementation_commit, "HEAD"]),
             cwd=root,
             capture_output=True,
             check=False,
