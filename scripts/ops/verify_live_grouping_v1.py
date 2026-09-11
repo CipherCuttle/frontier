@@ -111,9 +111,7 @@ def main() -> int:
     membership_equal = v0_partition == v1_partition
     exhaustive_pair_count = len(inputs) * (len(inputs) - 1) // 2
     candidate_ratio = (
-        projection.candidate_pair_count / exhaustive_pair_count
-        if exhaustive_pair_count
-        else 0.0
+        projection.candidate_pair_count / exhaustive_pair_count if exhaustive_pair_count else 0.0
     )
 
     result = {
