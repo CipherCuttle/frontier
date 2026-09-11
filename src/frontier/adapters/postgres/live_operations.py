@@ -64,7 +64,7 @@ def database_clock(connection: psycopg.Connection[tuple[object, ...]]) -> dateti
         row = cur.fetchone()
     if row is None or not isinstance(row[0], datetime):
         raise RuntimeError("database clock unavailable")
-    value = cast(datetime, row[0])
+    value = row[0]
     if value.tzinfo is None or value.utcoffset() is None:
         raise RuntimeError("database clock must be timezone-aware")
     return value
