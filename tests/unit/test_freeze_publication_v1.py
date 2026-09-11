@@ -71,6 +71,26 @@ def test_exact_v1_publication_merge_is_derived_from_git(tmp_path: Path) -> None:
     assert publication.publication_committer_at.tzinfo is not None
 
 
+def test_v1_publication_survives_later_runtime_commits(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    (tmp_path / "base.txt").write_text("base", encoding="utf-8")
+    _git(tmp_path, "add", "base.txt")
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+    publication_commit = _git(tmp_path, "rev-parse", "HEAD")
+
+    (tmp_path / "ops.txt").write_text("legitimate post-freeze ops\n", encoding="utf-8")
+    _git(tmp_path, "add", "ops.txt")
+    _git(tmp_path, "commit", "-m", "post-freeze operations")
+
+    publication = derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+    assert publication.publication_commit == publication_commit
+    assert publication.publication_commit != _git(tmp_path, "rev-parse", "HEAD")
+
+
 def test_v1_publication_rejects_non_v1_receipt_path(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-b", "main")
     _git(tmp_path, "config", "user.email", "frontier@example.test")
