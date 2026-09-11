@@ -29,8 +29,12 @@ _FROZEN_EXECUTION_PATHS = (
     "uv.lock",
 )
 _POST_FREEZE_APPROVED_EXECUTION_BLOBS = {
-    "src/frontier/application/candidate_freeze_v1.py": "3b79f58d1d3ab04c9371fbb2822c0742f1303c5b",
-    "src/frontier/adapters/acquisition/frozen_config.py": "8e948289e5e569ae84560238bfff087960daeedf",
+    "src/frontier/application/candidate_freeze_v1.py": (
+        "3b79f58d1d3ab04c9371fbb2822c0742f1303c5b"
+    ),
+    "src/frontier/adapters/acquisition/frozen_config.py": (
+        "8e948289e5e569ae84560238bfff087960daeedf"
+    ),
     "src/frontier/cli/pef_v1_confirmatory.py": "538d3874021bff1e688b6fb3020ed18c1d73bb99",
 }
 _POST_FREEZE_AUTHORITY_ONLY_ALLOWLIST = frozenset(
