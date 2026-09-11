@@ -1,0 +1,117 @@
+name: serving-freshness-smoke
+
+on:
+  push:
+    branches:
+      - ops/live-operations-v1-serving-freshness-smoke-r2
+    paths:
+      - ".github/workflows/serving-freshness-smoke.yml"
+      - "scripts/ops/serving_freshness.py"
+      - "tests/unit/test_serving_freshness.py"
+      - "tests/integration/test_serving_freshness_postgres.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: serving-freshness-smoke-r2
+  cancel-in-progress: false
+
+jobs:
+  read-production-freshness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Validate canonical database credential
+        shell: bash
+        env:
+          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FRONTIER_DATABASE_URL_DIRECT:-}" ]]; then
+            echo "::error::FRONTIER_DATABASE_URL_DIRECT is not configured."
+            exit 1
+          fi
+          python - <<'PY'
+          from urllib.parse import parse_qsl, urlsplit
+          import os
+
+          url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
+          parsed = urlsplit(url)
+          host = (parsed.hostname or "").lower()
+          canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+          canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
+          if parsed.scheme not in {"postgres", "postgresql"}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must be a Postgres URI")
+          if parsed.fragment:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must not contain a fragment")
+          if host not in {canonical_direct, canonical_pooler}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon main")
+          if parsed.username != "frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use canonical frontier role")
+          if parsed.path != "/frontier":
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical frontier database")
+          if parsed.port not in {None, 5432}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use PostgreSQL port 5432")
+          if parsed.password is None:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must contain a database password")
+          try:
+              query = sorted(parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True))
+          except ValueError as error:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT query is malformed") from error
+          expected_query = [("channel_binding", "require"), ("sslmode", "require")]
+          if query != expected_query:
+              raise SystemExit(
+                  "FRONTIER_DATABASE_URL_DIRECT permits only "
+                  "channel_binding=require and sslmode=require query parameters"
+              )
+          PY
+
+      - name: Checkout triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+
+      - name: Verify frozen environment
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv lock --check
+          uv sync --all-extras --frozen
+
+      - name: Read production serving freshness
+        shell: bash
+        env:
+          FRONTIER_DATABASE_URL: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+        run: |
+          set -euo pipefail
+          result="$(uv run python scripts/ops/serving_freshness.py)"
+          printf '%s\n' "$result"
+          RESULT="$result" python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["RESULT"])
+          state = payload["state"]
+          reasons = payload.get("reasons", [])
+          latest_baseline = payload.get("latest_baseline_as_of")
+          latest_heartbeat = payload.get("latest_worker_beat_at")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"## Production serving freshness: `{state}`\n\n")
+              summary.write(f"- latest baseline: `{latest_baseline}`\n")
+              summary.write(f"- latest acquisition heartbeat: `{latest_heartbeat}`\n")
+              summary.write(f"- reasons: `{', '.join(reasons) if reasons else 'none'}`\n")
+              summary.write("\nThis smoke is read-only and does not mutate acquisition, ranking, or PEF state.\n")
+          PY
