@@ -186,7 +186,7 @@ def read_serving_freshness(database_url: str) -> ServingFreshnessStatus:
         now_row = cur.fetchone()
         if now_row is None or not isinstance(now_row[0], datetime):
             raise RuntimeError("database clock unavailable")
-        now = cast(datetime, now_row[0])
+        now = now_row[0]
         _require_aware("database clock", now)
 
         cur.execute(
