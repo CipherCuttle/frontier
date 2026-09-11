@@ -22,20 +22,25 @@ _FROZEN_EXECUTION_PATHS = (
     "src/frontier/domain",
     "src/frontier/contracts",
     "src/frontier/adapters/postgres",
-    "src/frontier/adapters/acquisition/config.py",
-    "src/frontier/adapters/acquisition/frozen_config.py",
-    "src/frontier/cli/pef_v1_confirmatory.py",
+    "src/frontier/adapters/acquisition",
+    "src/frontier/cli",
     "pyproject.toml",
     "uv.lock",
 )
 _POST_FREEZE_APPROVED_EXECUTION_BLOBS = {
-    "src/frontier/application/candidate_freeze_v1.py": ("3b79f58d1d3ab04c9371fbb2822c0742f1303c5b"),
+    "src/frontier/application/candidate_freeze_v1.py": (
+        "3b79f58d1d3ab04c9371fbb2822c0742f1303c5b"
+    ),
     "src/frontier/adapters/acquisition/frozen_config.py": (
         "8e948289e5e569ae84560238bfff087960daeedf"
     ),
-    "src/frontier/cli/pef_v1_confirmatory.py": "538d3874021bff1e688b6fb3020ed18c1d73bb99",
+    "src/frontier/cli/pef_v1_confirmatory.py": "a1018b4ea5fc3a384a331b522ef1ae044eed45a4",
 }
-_POST_FREEZE_AUTHORITY_ONLY_ALLOWLIST = frozenset(
+# This module is the compatibility checker itself. It may differ from the
+# original freeze only because production execution is separately pinned by
+# the CLI/workflow to one immutable reviewed operator commit. Descendant HEADs
+# never execute this allowlist in the confirmatory operator.
+_PINNED_OPERATOR_AUTHORITY_ALLOWLIST = frozenset(
     {"src/frontier/application/freeze_publication_v1.py"}
 )
 
@@ -90,7 +95,7 @@ def _require_frozen_execution_compatibility(
     root: Path,
     receipt: CandidateFreezeReceiptV1,
 ) -> None:
-    """Reject descendant edits to code/dependencies that determine confirmatory evidence."""
+    """Reject descendant edits/additions that can determine confirmatory evidence."""
     implementation_commit = receipt.implementation_commit
     assert implementation_commit is not None
     try:
@@ -138,10 +143,10 @@ def _require_frozen_execution_compatibility(
             if current_blob != expected_blob:
                 drift.append(f"{status}:{path}")
             continue
-        if status == "A":
+        if path in _PINNED_OPERATOR_AUTHORITY_ALLOWLIST:
             continue
-        if path in _POST_FREEZE_AUTHORITY_ONLY_ALLOWLIST:
-            continue
+        # Unreviewed additions are drift too: a new package can shadow a
+        # frozen sibling module on Python's import path.
         drift.append(f"{status}:{path}")
     if drift:
         detail = ", ".join(sorted(drift))
