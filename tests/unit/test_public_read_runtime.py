@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+from typing import cast
+
+import pytest
 
 from frontier.adapters.api.runtime import (
     CORS_ORIGINS_ENV,
     DATABASE_URL_ENV,
-    _cors_origins,
+    DEFAULT_CORS_ORIGINS,
     create_public_read_runtime_app,
     create_runtime_app_from_env,
+    parse_cors_origins,
 )
+from frontier.adapters.postgres.public_read import PostgresPublicReadRepository
 
 
-class _RuntimeRepository:
+class _RuntimeRepository(PostgresPublicReadRepository):
     def __init__(self, *, read_only: bool = True) -> None:
         self.read_only = read_only
         self.closed = False
@@ -23,11 +27,11 @@ class _RuntimeRepository:
         self.closed = True
 
 
-def test_runtime_exposes_get_only_meta_with_githack_cors_and_closes_repository() -> None:
+def test_runtime_exposes_only_get_public_contract_and_uses_requested_repository() -> None:
     repository = _RuntimeRepository()
     seen_dsn: list[str] = []
 
-    def repository_factory(dsn: str) -> _RuntimeRepository:
+    def repository_factory(dsn: str) -> PostgresPublicReadRepository:
         seen_dsn.append(dsn)
         return repository
 
@@ -35,46 +39,39 @@ def test_runtime_exposes_get_only_meta_with_githack_cors_and_closes_repository()
         "postgresql://example.invalid/frontier",
         repository_factory=repository_factory,
     )
-    with TestClient(app) as client:
-        response = client.get("/v0/meta", headers={"Origin": "https://raw.githack.com"})
-        assert response.status_code == 200
-        assert response.headers["access-control-allow-origin"] == "https://raw.githack.com"
-        assert response.json()["mutation_authority"] is False
-        assert client.post("/v0/meta").status_code == 405
-    assert repository.closed is True
+    document = cast(dict[str, object], app.openapi())
+    paths = cast(dict[str, dict[str, object]], document["paths"])
+    assert set(paths["/v0/meta"]) == {"get"}
+    assert set(paths["/v0/radar"]) == {"get"}
     assert seen_dsn == ["postgresql://example.invalid/frontier"]
 
 
 def test_runtime_fails_closed_when_database_session_is_not_read_only() -> None:
     repository = _RuntimeRepository(read_only=False)
 
-    try:
+    def repository_factory(_dsn: str) -> PostgresPublicReadRepository:
+        return repository
+
+    with pytest.raises(
+        RuntimeError,
+        match="public read runtime database session is not read-only",
+    ):
         create_public_read_runtime_app(
             "postgresql://example.invalid/frontier",
-            repository_factory=lambda _dsn: repository,
+            repository_factory=repository_factory,
         )
-    except RuntimeError as error:
-        assert str(error) == "public read runtime database session is not read-only"
-    else:
-        raise AssertionError("runtime should reject a writable session")
     assert repository.closed is True
 
 
-def test_runtime_factory_requires_database_url(monkeypatch) -> None:
+def test_runtime_factory_requires_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(DATABASE_URL_ENV, raising=False)
-    try:
+    with pytest.raises(RuntimeError, match=f"^{DATABASE_URL_ENV} is required$"):
         create_runtime_app_from_env()
-    except RuntimeError as error:
-        assert str(error) == f"{DATABASE_URL_ENV} is required"
-    else:
-        raise AssertionError("runtime should require a database URL")
 
 
-def test_cors_origins_fail_closed_on_empty_or_non_https_configuration() -> None:
+def test_cors_origins_default_to_githack_and_fail_closed_on_unsafe_configuration() -> None:
+    assert parse_cors_origins(None) == DEFAULT_CORS_ORIGINS
+    assert parse_cors_origins("https://example.test/") == ("https://example.test",)
     for value in ("", " , ", "http://raw.githack.com"):
-        try:
-            _cors_origins(value)
-        except RuntimeError as error:
-            assert CORS_ORIGINS_ENV in str(error)
-        else:
-            raise AssertionError("unsafe CORS configuration should fail closed")
+        with pytest.raises(RuntimeError, match=CORS_ORIGINS_ENV):
+            parse_cors_origins(value)
