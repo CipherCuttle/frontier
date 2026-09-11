@@ -39,9 +39,7 @@ def resolve_failure_retry_at(
     """Combine the circuit floor with any stronger fetcher Retry-After delay."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
-    circuit_retry_at = now + timedelta(
-        seconds=failure_backoff_seconds(consecutive_failures_before)
-    )
+    circuit_retry_at = now + timedelta(seconds=failure_backoff_seconds(consecutive_failures_before))
     if proposed_retry_at is None:
         return circuit_retry_at
     if proposed_retry_at.tzinfo is None or proposed_retry_at.utcoffset() is None:
