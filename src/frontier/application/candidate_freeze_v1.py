@@ -25,10 +25,14 @@ from frontier.domain.pef_v1 import PEF_V1_CANDIDATE_ID, PEF_V1_EXPERIMENT_ID
 _COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
 
 
+def _git_command(args: list[str]) -> list[str]:
+    return ["git", "--no-replace-objects", *args]
+
+
 def _git_blob(root: Path, *, ref: str, path: str) -> bytes | None:
     try:
         result = subprocess.run(
-            ["git", "show", f"{ref}:{path}"],
+            _git_command(["show", f"{ref}:{path}"]),
             cwd=root,
             capture_output=True,
             check=True,
@@ -81,7 +85,7 @@ def _registry_entry_digests(
 def _git_identity(root: Path, *, ref: str = "HEAD") -> tuple[str | None, str | None]:
     try:
         commit = subprocess.run(
-            ["git", "rev-parse", ref],
+            _git_command(["rev-parse", ref]),
             cwd=root,
             capture_output=True,
             text=True,
@@ -89,7 +93,7 @@ def _git_identity(root: Path, *, ref: str = "HEAD") -> tuple[str | None, str | N
             timeout=30,
         )
         tree = subprocess.run(
-            ["git", "rev-parse", f"{ref}^{{tree}}"],
+            _git_command(["rev-parse", f"{ref}^{{tree}}"]),
             cwd=root,
             capture_output=True,
             text=True,
