@@ -74,7 +74,7 @@ def _is_json_object(body: bytes | None) -> bool:
         return False
     try:
         value = json.loads(body)
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except UnicodeDecodeError, json.JSONDecodeError:
         return False
     return isinstance(value, dict)
 
