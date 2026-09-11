@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
-
-import pytest
 
 from frontier.adapters.acquisition.live_compat import (
     CISA_MIRROR_URL,
@@ -96,12 +95,11 @@ class _RecordingFetcher:
         return self.result
 
 
-@pytest.mark.asyncio
-async def test_live_compatibility_fetcher_sends_hf_repaired_wire_url() -> None:
+def test_live_compatibility_fetcher_sends_hf_repaired_wire_url() -> None:
     inner = _RecordingFetcher(_success(url=HF_LIVE_URL, content_type="application/json", body=b"[]"))
     fetcher = LiveSourceCompatibilityFetcher(inner)
 
-    result = await fetcher.fetch(_request(source_id="hf.models", url=HF_FROZEN_URL))
+    result = asyncio.run(fetcher.fetch(_request(source_id="hf.models", url=HF_FROZEN_URL)))
 
     assert result.outcome is FetchOutcome.SUCCESS
     assert [request.url for request in inner.requests] == [HF_LIVE_URL]
