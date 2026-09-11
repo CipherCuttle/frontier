@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Validate canonical database credential
+      - name: Validate and canonicalize database credential
         shell: bash
         env:
           FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
@@ -30,20 +30,20 @@ jobs:
             exit 1
           fi
           python - <<'PY'
-          from urllib.parse import parse_qsl, urlsplit
+          from urllib.parse import parse_qsl, urlsplit, urlunsplit
           import os
 
           url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
           parsed = urlsplit(url)
           host = (parsed.hostname or "").lower()
+          canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+          canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
           if parsed.scheme not in {"postgres", "postgresql"}:
               raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must be a Postgres URI")
           if parsed.fragment:
               raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must not contain a fragment")
-          if host != "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech":
-              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon direct host")
-          if "-pooler" in host:
-              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use the direct Neon endpoint")
+          if host not in {canonical_direct, canonical_pooler}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon main")
           if parsed.username != "frontier":
               raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use canonical frontier role")
           if parsed.path != "/frontier":
@@ -62,6 +62,23 @@ jobs:
                   "FRONTIER_DATABASE_URL_DIRECT permits only "
                   "channel_binding=require and sslmode=require query parameters"
               )
+
+          normalized = url
+          if host == canonical_pooler:
+              userinfo, _hostport = parsed.netloc.rsplit("@", 1)
+              port_suffix = f":{parsed.port}" if parsed.port is not None else ""
+              normalized = urlunsplit(
+                  (
+                      parsed.scheme,
+                      f"{userinfo}@{canonical_direct}{port_suffix}",
+                      parsed.path,
+                      parsed.query,
+                      "",
+                  )
+              )
+          print(f"::add-mask::{normalized}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"FRONTIER_DATABASE_URL_CANONICAL={normalized}\n")
           PY
 
       - name: Checkout triggering canonical commit
@@ -99,7 +116,7 @@ jobs:
 
       - name: Force and verify repaired live sources
         env:
-          FRONTIER_DATABASE_URL_DIRECT: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+          FRONTIER_DATABASE_URL_DIRECT: ${{ env.FRONTIER_DATABASE_URL_CANONICAL }}
           FRONTIER_SMOKE_ID: github-smoke-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
