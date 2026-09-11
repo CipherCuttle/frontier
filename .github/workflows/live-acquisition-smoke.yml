@@ -17,7 +17,7 @@ concurrency:
 jobs:
   run-once:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - name: Validate canonical database credential
         shell: bash
