@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/live-grouping-v1-shadow.yml"
       - "scripts/ops/verify_live_grouping_v1.py"
+      - "scripts/ops/verify_live_baseline_v1_equivalence.py"
 
 permissions:
   contents: read
@@ -78,7 +79,7 @@ jobs:
           uv lock --check
           uv sync --all-extras --frozen
 
-      - name: Prove V1 membership equivalence on latest production baseline
+      - name: Prove V1 membership and baseline-output equivalence on production
         shell: bash
         env:
           CANONICAL_DATABASE_SECRET: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
@@ -108,23 +109,35 @@ jobs:
           )"
           echo "::add-mask::$direct_url"
           export FRONTIER_DATABASE_URL_DIRECT="$direct_url"
-          result="$(uv run python scripts/ops/verify_live_grouping_v1.py)"
-          printf '%s\n' "$result"
-          RESULT="$result" python - <<'PY'
+
+          grouping_result="$(uv run python scripts/ops/verify_live_grouping_v1.py)"
+          printf '%s\n' "$grouping_result"
+          baseline_result="$(uv run python scripts/ops/verify_live_baseline_v1_equivalence.py)"
+          printf '%s\n' "$baseline_result"
+
+          GROUPING_RESULT="$grouping_result" BASELINE_RESULT="$baseline_result" python - <<'PY'
           import json
           import os
 
-          lines = [line for line in os.environ["RESULT"].splitlines() if line.strip()]
-          payload = json.loads(lines[0])
+          grouping = json.loads([line for line in os.environ["GROUPING_RESULT"].splitlines() if line.strip()][0])
+          baseline = json.loads([line for line in os.environ["BASELINE_RESULT"].splitlines() if line.strip()][0])
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write("## Live grouping V1 shadow proof\n\n")
-              summary.write(f"- as_of: `{payload['as_of']}`\n")
-              summary.write(f"- eligible observations: `{payload['eligible_observation_count']}`\n")
-              summary.write(f"- exhaustive V0 pair count: `{payload['exhaustive_pair_count']}`\n")
-              summary.write(f"- V1 candidate pairs: `{payload['candidate_pair_count']}`\n")
-              summary.write(f"- candidate ratio: `{payload['candidate_ratio_vs_exhaustive']:.6f}`\n")
-              summary.write(f"- elapsed: `{payload['elapsed_seconds']:.3f}s`\n")
-              summary.write(f"- membership equal: `{payload['membership_equal']}`\n")
-              summary.write(f"- within 300s live envelope: `{payload['within_300s_live_envelope']}`\n")
-              summary.write("\nRead-only proof only; no projection, receipt, baseline, or PEF state was written.\n")
+              summary.write(f"- as_of: `{grouping['as_of']}`\n")
+              summary.write(f"- eligible observations: `{grouping['eligible_observation_count']}`\n")
+              summary.write(f"- exhaustive V0 pair count: `{grouping['exhaustive_pair_count']}`\n")
+              summary.write(f"- V1 candidate pairs: `{grouping['candidate_pair_count']}`\n")
+              summary.write(f"- candidate ratio: `{grouping['candidate_ratio_vs_exhaustive']:.6f}`\n")
+              summary.write(f"- grouping elapsed: `{grouping['elapsed_seconds']:.3f}s`\n")
+              summary.write(f"- membership equal: `{grouping['membership_equal']}`\n")
+              summary.write("\n## Frozen baseline output equivalence\n\n")
+              summary.write(f"- canonical snapshot equal: `{baseline['canonical_snapshot_equal']}`\n")
+              summary.write(f"- snapshot id equal: `{baseline['snapshot_id_equal']}`\n")
+              summary.write(f"- output digest equal: `{baseline['output_digest_equal']}`\n")
+              summary.write(f"- grouping elapsed: `{baseline['grouping_seconds']:.3f}s`\n")
+              summary.write(f"- baseline scoring elapsed: `{baseline['baseline_scoring_seconds']:.3f}s`\n")
+              summary.write(f"- total: `{baseline['total_seconds']:.3f}s`\n")
+              summary.write(f"- within 300s live envelope: `{baseline['within_300s_live_envelope']}`\n")
+              summary.write("- grouping-receipt equivalence claimed: `false`\n")
+              summary.write("\nRead-only proof only; no projection, receipt, baseline, acquisition, heartbeat, or PEF state was written.\n")
           PY
