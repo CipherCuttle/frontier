@@ -96,7 +96,9 @@ class _RecordingFetcher:
 
 
 def test_live_compatibility_fetcher_sends_hf_repaired_wire_url() -> None:
-    inner = _RecordingFetcher(_success(url=HF_LIVE_URL, content_type="application/json", body=b"[]"))
+    inner = _RecordingFetcher(
+        _success(url=HF_LIVE_URL, content_type="application/json", body=b"[]")
+    )
     fetcher = LiveSourceCompatibilityFetcher(inner)
 
     result = asyncio.run(fetcher.fetch(_request(source_id="hf.models", url=HF_FROZEN_URL)))
