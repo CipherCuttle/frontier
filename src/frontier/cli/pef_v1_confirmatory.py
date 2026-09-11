@@ -75,9 +75,7 @@ def require_pinned_operator_commit(root: Path) -> str:
     """Require the scheduler to execute one immutable reviewed operator commit."""
     expected = os.getenv(_OPERATOR_COMMIT_ENV)
     if expected is None or _COMMIT_HASH_RE.fullmatch(expected) is None:
-        raise ValueError(
-            f"PEF_V1 confirmatory operation requires {_OPERATOR_COMMIT_ENV}"
-        )
+        raise ValueError(f"PEF_V1 confirmatory operation requires {_OPERATOR_COMMIT_ENV}")
     try:
         result = subprocess.run(
             ["git", "--no-replace-objects", "rev-parse", "HEAD"],
