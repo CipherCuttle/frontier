@@ -13,8 +13,8 @@ from frontier.adapters.postgres.live_operations import (
 from frontier.adapters.postgres.readiness import DatabaseReadinessError
 from frontier.application.worker import PollCycleResult
 from frontier.cli.live_acquisition import (
-    _cycle_has_failure,
-    _is_transient_database_error,
+    cycle_has_failure,
+    is_transient_database_error,
     require_direct_session_database_url,
 )
 
@@ -90,9 +90,9 @@ def test_wrapped_operational_readiness_error_is_transient() -> None:
             "connection dropped"
         )
     except DatabaseReadinessError as error:
-        assert _is_transient_database_error(error) is True
+        assert is_transient_database_error(error) is True
 
-    assert _is_transient_database_error(DatabaseReadinessError("schema mismatch")) is False
+    assert is_transient_database_error(DatabaseReadinessError("schema mismatch")) is False
 
 
 def test_once_failure_guard_includes_isolated_source_errors() -> None:
@@ -112,5 +112,5 @@ def test_once_failure_guard_includes_isolated_source_errors() -> None:
         schedules=(),
         errors=(("hf.models", "ValueError: broken source"),),
     )
-    assert _cycle_has_failure(clean) is False
-    assert _cycle_has_failure(isolated) is True
+    assert cycle_has_failure(clean) is False
+    assert cycle_has_failure(isolated) is True
