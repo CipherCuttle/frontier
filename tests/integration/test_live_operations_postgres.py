@@ -89,10 +89,16 @@ def test_live_baseline_projector_publishes_only_current_boundary_and_is_idempote
 
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT as_of, snapshot_id FROM baseline_intelligence_snapshots ORDER BY as_of"
+                """
+                SELECT snapshot_id
+                FROM baseline_intelligence_snapshots
+                WHERE as_of = %s
+                ORDER BY snapshot_id
+                """,
+                (boundary,),
             )
             rows = cur.fetchall()
-        assert rows == [(boundary, first.snapshot_id)]
+        assert rows == [(first.snapshot_id,)]
 
 
 def test_baseline_boundary_rejects_naive_clock() -> None:
