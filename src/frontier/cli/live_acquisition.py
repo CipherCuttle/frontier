@@ -18,6 +18,7 @@ from psycopg.conninfo import conninfo_to_dict
 
 from frontier.adapters.acquisition.config import load_fetch_policy, load_source_registry
 from frontier.adapters.acquisition.fetcher import SecureHttpFetcher
+from frontier.adapters.acquisition.live_compat import LiveSourceCompatibilityFetcher
 from frontier.adapters.postgres.live_operations import (
     LiveBaselineProjection,
     PostgresLiveAcquisitionStore,
@@ -181,7 +182,7 @@ async def _run_connected(
     service = AcquisitionService(
         registry=registry,
         policy=policy,
-        fetcher=SecureHttpFetcher(policy),
+        fetcher=LiveSourceCompatibilityFetcher(SecureHttpFetcher(policy)),
         repository=store,
     )
     worker = AcquisitionWorker(
