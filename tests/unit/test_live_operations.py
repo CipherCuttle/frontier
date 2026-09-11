@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import psycopg
 import pytest
 
 from frontier.adapters.postgres.live_operations import (
@@ -9,7 +10,13 @@ from frontier.adapters.postgres.live_operations import (
     failure_backoff_seconds,
     resolve_failure_retry_at,
 )
-from frontier.cli.live_acquisition import require_direct_session_database_url
+from frontier.adapters.postgres.readiness import DatabaseReadinessError
+from frontier.application.worker import PollCycleResult
+from frontier.cli.live_acquisition import (
+    _cycle_has_failure,
+    _is_transient_database_error,
+    require_direct_session_database_url,
+)
 
 
 @pytest.mark.parametrize(
@@ -75,3 +82,35 @@ def test_live_runtime_rejects_multi_host_connection_info() -> None:
         require_direct_session_database_url(
             "host=one.example,two.example dbname=frontier user=frontier password=secret"
         )
+
+
+def test_wrapped_operational_readiness_error_is_transient() -> None:
+    try:
+        raise DatabaseReadinessError("readiness query failed") from psycopg.OperationalError(
+            "connection dropped"
+        )
+    except DatabaseReadinessError as error:
+        assert _is_transient_database_error(error) is True
+
+    assert _is_transient_database_error(DatabaseReadinessError("schema mismatch")) is False
+
+
+def test_once_failure_guard_includes_isolated_source_errors() -> None:
+    now = datetime(2026, 9, 11, 2, 0, tzinfo=UTC)
+    clean = PollCycleResult(
+        started_at=now,
+        completed_at=now,
+        acquired=(),
+        skipped_not_due=(),
+        schedules=(),
+    )
+    isolated = PollCycleResult(
+        started_at=now,
+        completed_at=now,
+        acquired=(),
+        skipped_not_due=(),
+        schedules=(),
+        errors=(("hf.models", "ValueError: broken source"),),
+    )
+    assert _cycle_has_failure(clean) is False
+    assert _cycle_has_failure(isolated) is True
