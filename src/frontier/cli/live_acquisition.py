@@ -42,7 +42,9 @@ def require_direct_session_database_url(database_url: str) -> str:
     try:
         params = conninfo_to_dict(database_url)
     except psycopg.ProgrammingError as error:
-        raise ValueError("live acquisition database URL is not valid Postgres connection info") from error
+        raise ValueError(
+            "live acquisition database URL is not valid Postgres connection info"
+        ) from error
     host_value = params.get("host")
     if not isinstance(host_value, str) or not host_value or "," in host_value:
         raise ValueError("live acquisition requires one explicit direct database host")
@@ -139,9 +141,7 @@ def _cycle_payload(
             for result in cycle.acquired
         ],
         "skipped_not_due": list(cycle.skipped_not_due),
-        "errors": [
-            {"source_id": source_id, "error": error} for source_id, error in cycle.errors
-        ],
+        "errors": [{"source_id": source_id, "error": error} for source_id, error in cycle.errors],
         "experiment": None,
     }
 
@@ -295,7 +295,7 @@ def run_live_acquisition(
             if lease is not None and lease_acquired and connection is not None:
                 try:
                     lease.release(owner=worker_id)
-                except (psycopg.Error, RuntimeError):
+                except psycopg.Error, RuntimeError:
                     # A dead connection already releases its session advisory
                     # lock; never mask the reconnect path with cleanup failure.
                     pass
