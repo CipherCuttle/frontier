@@ -23,9 +23,16 @@ _FROZEN_EXECUTION_PATHS = (
     "src/frontier/contracts",
     "src/frontier/adapters/postgres",
     "src/frontier/adapters/acquisition/config.py",
+    "src/frontier/adapters/acquisition/frozen_config.py",
+    "src/frontier/cli/pef_v1_confirmatory.py",
     "pyproject.toml",
     "uv.lock",
 )
+_POST_FREEZE_APPROVED_EXECUTION_BLOBS = {
+    "src/frontier/application/candidate_freeze_v1.py": "3b79f58d1d3ab04c9371fbb2822c0742f1303c5b",
+    "src/frontier/adapters/acquisition/frozen_config.py": "8e948289e5e569ae84560238bfff087960daeedf",
+    "src/frontier/cli/pef_v1_confirmatory.py": "538d3874021bff1e688b6fb3020ed18c1d73bb99",
+}
 _POST_FREEZE_AUTHORITY_ONLY_ALLOWLIST = frozenset(
     {"src/frontier/application/freeze_publication_v1.py"}
 )
@@ -116,6 +123,19 @@ def _require_frozen_execution_compatibility(
     for index in range(0, len(fields), 2):
         status = fields[index].decode("ascii")
         path = fields[index + 1].decode("utf-8")
+        expected_blob = _POST_FREEZE_APPROVED_EXECUTION_BLOBS.get(path)
+        if expected_blob is not None:
+            if status == "D":
+                drift.append(f"{status}:{path}")
+                continue
+            try:
+                current_blob = _git_text(root, ["rev-parse", f"HEAD:{path}"])
+            except RuntimeError:
+                drift.append(f"{status}:{path}")
+                continue
+            if current_blob != expected_blob:
+                drift.append(f"{status}:{path}")
+            continue
         if status == "A":
             continue
         if path in _POST_FREEZE_AUTHORITY_ONLY_ALLOWLIST:
