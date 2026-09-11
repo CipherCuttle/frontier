@@ -8,14 +8,28 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
+
+if TYPE_CHECKING:
+    from frontier.application.pef_v1_confirmatory import PefV1FreezeBinding
 
 _OPERATOR_LEASE_NAME = "frontier-pef-v1-confirmatory-lease"
 _OPERATOR_LEASE_KEY = int.from_bytes(
     hashlib.sha256(_OPERATOR_LEASE_NAME.encode()).digest()[:8], "big"
 ) & ((1 << 63) - 1)
+
+
+class _PinnedFreezeBindingResolver:
+    """Return one immutable binding for the full confirmatory execution."""
+
+    def __init__(self, binding: PefV1FreezeBinding) -> None:
+        self._binding = binding
+
+    def latest_binding(self) -> PefV1FreezeBinding:
+        return self._binding
 
 
 def require_direct_session_database_url(database_url: str) -> str:
@@ -84,7 +98,7 @@ def run_once(
     # Project/runtime imports are intentionally delayed until the Git worktree
     # is proven clean. Dirty candidate code or registry-loader code therefore
     # cannot execute before the confirmatory contamination gate.
-    from frontier.adapters.acquisition.config import load_source_registry
+    from frontier.adapters.acquisition.frozen_config import load_source_registry_from_git_ref
     from frontier.adapters.postgres.experiment_attempts import PostgresExperimentAttemptRepository
     from frontier.adapters.postgres.frozen_registry_intelligence import (
         PostgresFrozenRegistryBaselineIntelligenceRepository,
@@ -97,7 +111,6 @@ def run_once(
     from frontier.application.experiment_orchestration import ExperimentCycleAction
     from frontier.application.pef_v1_confirmatory import PefV1ConfirmatoryOrchestrator
 
-    registry = load_source_registry(root)
     at = now or datetime.now(UTC)
     with psycopg.connect(database_url) as conn:
         verify_database_readiness(conn)
@@ -114,12 +127,19 @@ def run_once(
             )
             return 3
         try:
+            binding = PostgresPefV1FreezeBindingResolver(conn).latest_binding()
+            if binding is None:
+                raise ValueError("PEF_V1 confirmatory operation has no persisted freeze binding")
+            implementation_commit = binding.receipt.implementation_commit
+            if implementation_commit is None:
+                raise ValueError("PEF_V1 freeze binding has no implementation commit")
+            registry = load_source_registry_from_git_ref(root, implementation_commit)
             repository = PostgresFrozenRegistryBaselineIntelligenceRepository(conn, registry)
             orchestrator = PefV1ConfirmatoryOrchestrator(
                 attempts=PostgresExperimentAttemptRepository(conn),
                 baseline_repository=repository,
                 persistence=PostgresPefV1ConfirmatoryPersistence(conn),
-                freeze_binding=PostgresPefV1FreezeBindingResolver(conn),
+                freeze_binding=_PinnedFreezeBindingResolver(binding),
                 source_registry_version=registry.source_registry_version,
                 repository_root=root,
                 canonical_context=True,
