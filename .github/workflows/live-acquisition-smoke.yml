@@ -36,14 +36,14 @@ jobs:
           url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
           parsed = urlsplit(url)
           host = (parsed.hostname or "").lower()
+          canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+          canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
           if parsed.scheme not in {"postgres", "postgresql"}:
               raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must be a Postgres URI")
           if parsed.fragment:
               raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must not contain a fragment")
-          if host != "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech":
-              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon direct host")
-          if "-pooler" in host:
-              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use the direct Neon endpoint")
+          if host not in {canonical_direct, canonical_pooler}:
+              raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must target canonical Neon main")
           if parsed.username != "frontier":
               raise SystemExit("FRONTIER_DATABASE_URL_DIRECT must use canonical frontier role")
           if parsed.path != "/frontier":
@@ -111,6 +111,7 @@ jobs:
           import os
           from dataclasses import replace
           from pathlib import Path
+          from urllib.parse import urlsplit, urlunsplit
 
           import psycopg
 
@@ -129,6 +130,26 @@ jobs:
           smoke_id = os.environ["FRONTIER_SMOKE_ID"]
 
 
+          def canonical_database_url() -> str:
+              url = os.environ["FRONTIER_DATABASE_URL_DIRECT"]
+              parsed = urlsplit(url)
+              canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+              canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
+              if (parsed.hostname or "").lower() != canonical_pooler:
+                  return url
+              userinfo, _hostport = parsed.netloc.rsplit("@", 1)
+              port_suffix = f":{parsed.port}" if parsed.port is not None else ""
+              return urlunsplit(
+                  (
+                      parsed.scheme,
+                      f"{userinfo}@{canonical_direct}{port_suffix}",
+                      parsed.path,
+                      parsed.query,
+                      "",
+                  )
+              )
+
+
           class ForcedSmokeStore(PostgresLiveAcquisitionStore):
               """Ignore only persisted retry timing for the two explicit smoke sources."""
 
@@ -143,8 +164,10 @@ jobs:
               registry = load_source_registry(Path("."))
               policy = load_fetch_policy(Path("."))
               evidence: dict[str, object] = {}
+              database_url = canonical_database_url()
+              print(f"::add-mask::{database_url}")
 
-              with psycopg.connect(os.environ["FRONTIER_DATABASE_URL_DIRECT"]) as connection:
+              with psycopg.connect(database_url) as connection:
                   verify_database_readiness(connection)
                   lease = PostgresWorkerLease(connection)
                   if not lease.acquire(owner=smoke_id):
