@@ -14,7 +14,7 @@ _REGISTRY_PATH = "sources/registry/registry_v0.json"
 def _git_blob(root: Path, *, ref: str, path: str) -> bytes:
     try:
         result = subprocess.run(
-            ["git", "show", f"{ref}:{path}"],
+            ["git", "--no-replace-objects", "show", f"{ref}:{path}"],
             cwd=root,
             capture_output=True,
             check=True,
