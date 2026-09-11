@@ -24,7 +24,9 @@ def _init_registry_repo(tmp_path: Path) -> tuple[Path, str]:
     )
     subprocess.run(["git", "config", "user.name", "Frontier Test"], cwd=repo, check=True)
     subprocess.run(["git", "add", "sources"], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-m", "freeze registry"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "freeze registry"], cwd=repo, check=True, capture_output=True
+    )
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=repo,
