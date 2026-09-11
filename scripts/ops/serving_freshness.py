@@ -172,43 +172,45 @@ def classify_serving_freshness(
 
 def read_serving_freshness(database_url: str) -> ServingFreshnessStatus:
     """Read canonical liveness evidence through a forced read-only session."""
-    with psycopg.connect(database_url, autocommit=True) as connection:
-        with connection.cursor() as cur:
-            cur.execute("SET default_transaction_read_only = on")
-            cur.execute("SHOW transaction_read_only")
-            read_only_row = cur.fetchone()
-            if read_only_row is None or cast(str, read_only_row[0]) != "on":
-                raise RuntimeError("serving freshness database session is not read-only")
+    with (
+        psycopg.connect(database_url, autocommit=True) as connection,
+        connection.cursor() as cur,
+    ):
+        cur.execute("SET default_transaction_read_only = on")
+        cur.execute("SHOW transaction_read_only")
+        read_only_row = cur.fetchone()
+        if read_only_row is None or cast(str, read_only_row[0]) != "on":
+            raise RuntimeError("serving freshness database session is not read-only")
 
-            cur.execute("SELECT clock_timestamp()")
-            now_row = cur.fetchone()
-            if now_row is None or not isinstance(now_row[0], datetime):
-                raise RuntimeError("database clock unavailable")
-            now = cast(datetime, now_row[0])
-            _require_aware("database clock", now)
+        cur.execute("SELECT clock_timestamp()")
+        now_row = cur.fetchone()
+        if now_row is None or not isinstance(now_row[0], datetime):
+            raise RuntimeError("database clock unavailable")
+        now = cast(datetime, now_row[0])
+        _require_aware("database clock", now)
 
-            cur.execute(
-                """
-                SELECT b.as_of, b.snapshot_json ->> 'freshness_state'
-                FROM baseline_intelligence_snapshots b
-                JOIN projection_receipts r ON r.receipt_id = b.receipt_id
-                WHERE r.status = 'COMPLETE'
-                  AND r.projection_name = 'baseline-intelligence'
-                ORDER BY b.as_of DESC, b.snapshot_id DESC
-                LIMIT 1
-                """
-            )
-            baseline_row = cur.fetchone()
-            latest_baseline = None if baseline_row is None else cast(datetime, baseline_row[0])
-            latest_baseline_freshness = (
-                None if baseline_row is None else cast(str | None, baseline_row[1])
-            )
+        cur.execute(
+            """
+            SELECT b.as_of, b.snapshot_json ->> 'freshness_state'
+            FROM baseline_intelligence_snapshots b
+            JOIN projection_receipts r ON r.receipt_id = b.receipt_id
+            WHERE r.status = 'COMPLETE'
+              AND r.projection_name = 'baseline-intelligence'
+            ORDER BY b.as_of DESC, b.snapshot_id DESC
+            LIMIT 1
+            """
+        )
+        baseline_row = cur.fetchone()
+        latest_baseline = None if baseline_row is None else cast(datetime, baseline_row[0])
+        latest_baseline_freshness = (
+            None if baseline_row is None else cast(str | None, baseline_row[1])
+        )
 
-            cur.execute("SELECT max(beat_at) FROM worker_heartbeats")
-            heartbeat_row = cur.fetchone()
-            if heartbeat_row is None:
-                raise RuntimeError("worker heartbeat query returned no row")
-            latest_heartbeat = cast(datetime | None, heartbeat_row[0])
+        cur.execute("SELECT max(beat_at) FROM worker_heartbeats")
+        heartbeat_row = cur.fetchone()
+        if heartbeat_row is None:
+            raise RuntimeError("worker heartbeat query returned no row")
+        latest_heartbeat = cast(datetime | None, heartbeat_row[0])
 
     return classify_serving_freshness(
         now=now,
