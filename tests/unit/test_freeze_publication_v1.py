@@ -121,6 +121,8 @@ def test_v1_publication_ignores_git_replacement_grafts(tmp_path: Path) -> None:
     receipt = _frozen_receipt(tmp_path)
     path = _publish_receipt_merge(tmp_path, receipt)
     publication_commit = _git(tmp_path, "rev-parse", "HEAD")
+    implementation_commit = receipt.implementation_commit
+    assert implementation_commit is not None
 
     _git(tmp_path, "checkout", "--orphan", "attacker")
     _git(tmp_path, "rm", "-rf", ".")
@@ -133,7 +135,7 @@ def test_v1_publication_ignores_git_replacement_grafts(tmp_path: Path) -> None:
     _git(tmp_path, "replace", "--graft", attacker_head, publication_commit)
 
     spoofed = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", receipt.implementation_commit, "HEAD"],
+        ["git", "merge-base", "--is-ancestor", implementation_commit, "HEAD"],
         cwd=tmp_path,
         check=False,
     )
