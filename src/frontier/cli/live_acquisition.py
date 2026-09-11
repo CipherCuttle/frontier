@@ -8,6 +8,7 @@ import signal
 import socket
 import sys
 import time
+from collections.abc import Callable
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +24,10 @@ from frontier.adapters.postgres.live_operations import (
     PostgresLiveBaselineProjector,
     database_clock,
 )
-from frontier.adapters.postgres.readiness import verify_database_readiness
+from frontier.adapters.postgres.readiness import (
+    DatabaseReadinessError,
+    verify_database_readiness,
+)
 from frontier.adapters.postgres.worker_ops import (
     PostgresWorkerHeartbeatStore,
     PostgresWorkerLease,
@@ -55,6 +59,20 @@ def require_direct_session_database_url(database_url: str) -> str:
             "live acquisition forbids transaction-pooler hosts; use a direct/session endpoint"
         )
     return normalized
+
+
+def _is_transient_database_error(error: BaseException) -> bool:
+    if isinstance(error, psycopg.OperationalError):
+        return True
+    return isinstance(error, DatabaseReadinessError) and isinstance(
+        error.__cause__, psycopg.OperationalError
+    )
+
+
+def _cycle_has_failure(cycle: PollCycleResult) -> bool:
+    return bool(cycle.errors) or any(
+        result.status is CollectionRunStatus.FAILED for result in cycle.acquired
+    )
 
 
 class ShutdownRequest:
@@ -155,6 +173,7 @@ async def _run_connected(
     idle_seconds: float,
     once: bool,
     shutdown: ShutdownRequest,
+    on_successful_cycle: Callable[[], None],
 ) -> int:
     policy = load_fetch_policy(config_root)
     registry = load_source_registry(config_root)
@@ -194,6 +213,7 @@ async def _run_connected(
             beat_at=now,
             metrics=_heartbeat_metrics(cycle, projection, probe),
         )
+        on_successful_cycle()
         print(
             json.dumps(
                 _cycle_payload(cycle, projection, worker_id=worker_id),
@@ -203,11 +223,7 @@ async def _run_connected(
         )
 
         if once:
-            return (
-                2
-                if any(result.status is CollectionRunStatus.FAILED for result in cycle.acquired)
-                else 0
-            )
+            return 2 if _cycle_has_failure(cycle) else 0
 
         remaining = worker.seconds_until_next_cycle()
         while remaining > 0 and not shutdown.stop:
@@ -232,6 +248,10 @@ def run_live_acquisition(
     shutdown = ShutdownRequest()
     _install_signal_handlers(shutdown)
     reconnect_failures = 0
+
+    def reset_reconnect_failures() -> None:
+        nonlocal reconnect_failures
+        reconnect_failures = 0
 
     while not shutdown.stop:
         connection: psycopg.Connection[tuple[object, ...]] | None = None
@@ -260,10 +280,13 @@ def run_live_acquisition(
                     idle_seconds=idle_seconds,
                     once=once,
                     shutdown=shutdown,
+                    on_successful_cycle=reset_reconnect_failures,
                 )
             )
             return result
-        except psycopg.OperationalError as error:
+        except (psycopg.OperationalError, DatabaseReadinessError) as error:
+            if not _is_transient_database_error(error):
+                raise ValueError(str(error)) from error
             reconnect_failures += 1
             if once or reconnect_failures > _MAX_RECONNECT_FAILURES:
                 print(
