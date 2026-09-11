@@ -38,11 +38,14 @@ def test_failure_backoff_rejects_negative_state() -> None:
 def test_retry_after_wins_when_later_than_circuit_floor() -> None:
     now = datetime(2026, 9, 11, 2, 0, tzinfo=UTC)
     provider_retry = now + timedelta(hours=2)
-    assert resolve_failure_retry_at(
-        now=now,
-        consecutive_failures_before=0,
-        proposed_retry_at=provider_retry,
-    ) == provider_retry
+    assert (
+        resolve_failure_retry_at(
+            now=now,
+            consecutive_failures_before=0,
+            proposed_retry_at=provider_retry,
+        )
+        == provider_retry
+    )
 
 
 def test_circuit_floor_wins_when_provider_retry_is_too_early() -> None:
