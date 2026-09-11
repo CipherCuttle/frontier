@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      FRONTIER_PEF_V1_OPERATOR_COMMIT: 24446ebdd637617b9f603b936fc7dc1fd150368a
+      FRONTIER_PEF_V1_OPERATOR_COMMIT: f9f9d5443b5f7dd8b695929a02cfd760c261e3b3
     steps:
       - name: Credential gate
         id: credential-gate
@@ -70,7 +70,7 @@ jobs:
         if: steps.credential-gate.outputs.enabled == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: 24446ebdd637617b9f603b936fc7dc1fd150368a
+          ref: f9f9d5443b5f7dd8b695929a02cfd760c261e3b3
           fetch-depth: 0
 
       - name: Set up Python
