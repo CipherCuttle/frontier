@@ -16,6 +16,7 @@ LIVE_MAX_SNAPSHOT_LAG_SECONDS = BASELINE_CADENCE_SECONDS
 LIVE_MAX_HEARTBEAT_AGE_SECONDS = BASELINE_CADENCE_SECONDS * 2
 LAGGING_MAX_SNAPSHOT_LAG_SECONDS = BASELINE_CADENCE_SECONDS * 6
 LAGGING_MAX_HEARTBEAT_AGE_SECONDS = BASELINE_CADENCE_SECONDS * 6
+_CANONICAL_FRESHNESS_STATES = frozenset({"OK", "DEGRADED", "FAILED", "UNKNOWN"})
 
 
 class ServingFreshnessState(StrEnum):
@@ -30,6 +31,7 @@ class ServingFreshnessStatus:
     now: datetime
     current_boundary: datetime
     latest_baseline_as_of: datetime | None
+    latest_baseline_freshness: str | None
     latest_worker_beat_at: datetime | None
     snapshot_lag_seconds: float | None
     heartbeat_age_seconds: float | None
@@ -42,6 +44,7 @@ class ServingFreshnessStatus:
             "now": _iso(self.now),
             "current_boundary": _iso(self.current_boundary),
             "latest_baseline_as_of": _iso(self.latest_baseline_as_of),
+            "latest_baseline_freshness": self.latest_baseline_freshness,
             "latest_worker_beat_at": _iso(self.latest_worker_beat_at),
             "snapshot_lag_seconds": self.snapshot_lag_seconds,
             "heartbeat_age_seconds": self.heartbeat_age_seconds,
@@ -73,13 +76,15 @@ def classify_serving_freshness(
     *,
     now: datetime,
     latest_baseline_as_of: datetime | None,
+    latest_baseline_freshness: str | None,
     latest_worker_beat_at: datetime | None,
 ) -> ServingFreshnessStatus:
     """Classify read-plane serving freshness without mutating canonical state.
 
-    LIVE tolerates one missed baseline boundary and up to two worker cadences.
-    LAGGING tolerates up to six cadences. Missing, future-dated, misaligned, or
-    older evidence fails closed to STALE.
+    LIVE tolerates one missed baseline boundary and up to two worker cadences,
+    but only when the latest COMPLETE baseline's canonical freshness aggregate
+    is OK. DEGRADED caps serving at LAGGING. FAILED, UNKNOWN, absent, invalid,
+    future-dated, misaligned, or older evidence fails closed to STALE.
     """
     _require_aware("now", now)
     utc_now = now.astimezone(UTC)
@@ -99,6 +104,15 @@ def classify_serving_freshness(
         if snapshot_lag_seconds < 0:
             reasons.append("SNAPSHOT_FROM_FUTURE")
 
+        if latest_baseline_freshness is None:
+            reasons.append("BASELINE_FRESHNESS_MISSING")
+        elif latest_baseline_freshness not in _CANONICAL_FRESHNESS_STATES:
+            reasons.append("BASELINE_FRESHNESS_INVALID")
+        elif latest_baseline_freshness == "FAILED":
+            reasons.append("BASELINE_FRESHNESS_FAILED")
+        elif latest_baseline_freshness == "UNKNOWN":
+            reasons.append("BASELINE_FRESHNESS_UNKNOWN")
+
     if latest_worker_beat_at is None:
         reasons.append("NO_WORKER_HEARTBEAT")
     else:
@@ -116,6 +130,7 @@ def classify_serving_freshness(
         if (
             snapshot_lag_seconds <= LIVE_MAX_SNAPSHOT_LAG_SECONDS
             and heartbeat_age_seconds <= LIVE_MAX_HEARTBEAT_AGE_SECONDS
+            and latest_baseline_freshness == "OK"
         ):
             state = ServingFreshnessState.LIVE
         elif (
@@ -123,12 +138,16 @@ def classify_serving_freshness(
             and heartbeat_age_seconds <= LAGGING_MAX_HEARTBEAT_AGE_SECONDS
         ):
             state = ServingFreshnessState.LAGGING
+            if latest_baseline_freshness == "DEGRADED":
+                reasons.append("BASELINE_FRESHNESS_DEGRADED")
             if snapshot_lag_seconds > LIVE_MAX_SNAPSHOT_LAG_SECONDS:
                 reasons.append("SNAPSHOT_LAGGING")
             if heartbeat_age_seconds > LIVE_MAX_HEARTBEAT_AGE_SECONDS:
                 reasons.append("HEARTBEAT_LAGGING")
         else:
             state = ServingFreshnessState.STALE
+            if latest_baseline_freshness == "DEGRADED":
+                reasons.append("BASELINE_FRESHNESS_DEGRADED")
             if snapshot_lag_seconds > LAGGING_MAX_SNAPSHOT_LAG_SECONDS:
                 reasons.append("SNAPSHOT_STALE")
             if heartbeat_age_seconds > LAGGING_MAX_HEARTBEAT_AGE_SECONDS:
@@ -141,6 +160,7 @@ def classify_serving_freshness(
         latest_baseline_as_of=(
             None if latest_baseline_as_of is None else latest_baseline_as_of.astimezone(UTC)
         ),
+        latest_baseline_freshness=latest_baseline_freshness,
         latest_worker_beat_at=(
             None if latest_worker_beat_at is None else latest_worker_beat_at.astimezone(UTC)
         ),
@@ -169,16 +189,20 @@ def read_serving_freshness(database_url: str) -> ServingFreshnessStatus:
 
             cur.execute(
                 """
-                SELECT max(b.as_of)
+                SELECT b.as_of, b.snapshot_json ->> 'freshness_state'
                 FROM baseline_intelligence_snapshots b
                 JOIN projection_receipts r ON r.receipt_id = b.receipt_id
                 WHERE r.status = 'COMPLETE'
+                  AND r.projection_name = 'baseline-intelligence'
+                ORDER BY b.as_of DESC, b.snapshot_id DESC
+                LIMIT 1
                 """
             )
             baseline_row = cur.fetchone()
-            if baseline_row is None:
-                raise RuntimeError("baseline freshness query returned no row")
-            latest_baseline = cast(datetime | None, baseline_row[0])
+            latest_baseline = None if baseline_row is None else cast(datetime, baseline_row[0])
+            latest_baseline_freshness = (
+                None if baseline_row is None else cast(str | None, baseline_row[1])
+            )
 
             cur.execute("SELECT max(beat_at) FROM worker_heartbeats")
             heartbeat_row = cur.fetchone()
@@ -189,6 +213,7 @@ def read_serving_freshness(database_url: str) -> ServingFreshnessStatus:
     return classify_serving_freshness(
         now=now,
         latest_baseline_as_of=latest_baseline,
+        latest_baseline_freshness=latest_baseline_freshness,
         latest_worker_beat_at=latest_heartbeat,
     )
 
