@@ -134,7 +134,8 @@ def _publication_from_runtime_ancestry(
 
     if len(candidates) != 1:
         raise RuntimeError(
-            "exact canonical PEF_V1 freeze publication merge is not uniquely present in runtime ancestry"
+            "exact canonical PEF_V1 freeze publication merge is not uniquely present "
+            "in runtime ancestry"
         )
     return candidates[0]
 
