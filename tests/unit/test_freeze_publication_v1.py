@@ -111,6 +111,48 @@ def test_v1_publication_rejects_post_freeze_execution_drift(tmp_path: Path) -> N
         derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
 
 
+def test_v1_publication_rejects_added_shadow_package(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    module = tmp_path / "src/frontier/application/pef_v1_confirmatory.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("frozen = True\n", encoding="utf-8")
+    _git(tmp_path, "add", str(module.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+
+    shadow = tmp_path / "src/frontier/application/pef_v1_confirmatory/__init__.py"
+    shadow.parent.mkdir(parents=True)
+    shadow.write_text("frozen = False\n", encoding="utf-8")
+    _git(tmp_path, "add", str(shadow.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "shadow frozen module")
+
+    with pytest.raises(RuntimeError, match="execution semantics drifted"):
+        derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+
+
+def test_v1_publication_rejects_registry_parser_drift(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.email", "frontier@example.test")
+    _git(tmp_path, "config", "user.name", "Frontier Test")
+    parser = tmp_path / "src/frontier/adapters/acquisition/json_values.py"
+    parser.parent.mkdir(parents=True)
+    parser.write_text("frozen = True\n", encoding="utf-8")
+    _git(tmp_path, "add", str(parser.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "implementation")
+    receipt = _frozen_receipt(tmp_path)
+    path = _publish_receipt_merge(tmp_path, receipt)
+
+    parser.write_text("frozen = False\n", encoding="utf-8")
+    _git(tmp_path, "add", str(parser.relative_to(tmp_path)))
+    _git(tmp_path, "commit", "-m", "drift registry parser")
+
+    with pytest.raises(RuntimeError, match="execution semantics drifted"):
+        derive_freeze_publication_v1(tmp_path, receipt, receipt_path=path)
+
+
 def test_v1_publication_ignores_git_replacement_grafts(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-b", "main")
     _git(tmp_path, "config", "user.email", "frontier@example.test")
