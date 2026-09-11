@@ -15,6 +15,8 @@ jobs:
   run-current-boundary:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      FRONTIER_PEF_V1_OPERATOR_COMMIT: 24446ebdd637617b9f603b936fc7dc1fd150368a
     steps:
       - name: Credential gate
         id: credential-gate
@@ -64,11 +66,11 @@ jobs:
           PY
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout canonical main
+      - name: Checkout immutable PEF_V1 operator authority
         if: steps.credential-gate.outputs.enabled == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: main
+          ref: 24446ebdd637617b9f603b936fc7dc1fd150368a
           fetch-depth: 0
 
       - name: Set up Python
@@ -88,6 +90,7 @@ jobs:
         if: steps.credential-gate.outputs.enabled == 'true'
         run: |
           set -euo pipefail
+          test "$(git --no-replace-objects rev-parse HEAD)" = "$FRONTIER_PEF_V1_OPERATOR_COMMIT"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           uv lock --check
           uv sync --all-extras --frozen
