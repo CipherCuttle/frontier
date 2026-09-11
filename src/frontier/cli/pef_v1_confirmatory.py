@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -20,6 +21,8 @@ _OPERATOR_LEASE_NAME = "frontier-pef-v1-confirmatory-lease"
 _OPERATOR_LEASE_KEY = int.from_bytes(
     hashlib.sha256(_OPERATOR_LEASE_NAME.encode()).digest()[:8], "big"
 ) & ((1 << 63) - 1)
+_OPERATOR_COMMIT_ENV = "FRONTIER_PEF_V1_OPERATOR_COMMIT"
+_COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{40,64}$")
 
 
 class _PinnedFreezeBindingResolver:
@@ -68,6 +71,30 @@ def require_clean_repository_tree(root: Path) -> None:
         raise ValueError("PEF_V1 confirmatory operation forbids a dirty Git worktree")
 
 
+def require_pinned_operator_commit(root: Path) -> str:
+    """Require the scheduler to execute one immutable reviewed operator commit."""
+    expected = os.getenv(_OPERATOR_COMMIT_ENV)
+    if expected is None or _COMMIT_HASH_RE.fullmatch(expected) is None:
+        raise ValueError(
+            f"PEF_V1 confirmatory operation requires {_OPERATOR_COMMIT_ENV}"
+        )
+    try:
+        result = subprocess.run(
+            ["git", "--no-replace-objects", "rev-parse", "HEAD"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError("PEF_V1 operator commit cannot be verified") from error
+    actual = result.stdout.strip()
+    if actual != expected:
+        raise ValueError("PEF_V1 runtime HEAD does not match pinned operator commit")
+    return actual
+
+
 def _acquire_operator_lease(conn: psycopg.Connection[tuple[object, ...]]) -> bool:
     with conn.cursor() as cur:
         cur.execute("SELECT pg_try_advisory_lock(%s)", (_OPERATOR_LEASE_KEY,))
@@ -94,10 +121,12 @@ def run_once(
 ) -> int:
     require_direct_session_database_url(database_url)
     require_clean_repository_tree(root)
+    require_pinned_operator_commit(root)
 
     # Project/runtime imports are intentionally delayed until the Git worktree
-    # is proven clean. Dirty candidate code or registry-loader code therefore
-    # cannot execute before the confirmatory contamination gate.
+    # is proven clean and pinned to the reviewed immutable operator commit.
+    # Dirty or descendant candidate/verifier code therefore cannot execute
+    # before the confirmatory contamination gate.
     from frontier.adapters.acquisition.frozen_config import load_source_registry_from_git_ref
     from frontier.adapters.postgres.experiment_attempts import PostgresExperimentAttemptRepository
     from frontier.adapters.postgres.frozen_registry_intelligence import (
