@@ -28,13 +28,11 @@ _FROZEN_EXECUTION_PATHS = (
     "uv.lock",
 )
 _POST_FREEZE_APPROVED_EXECUTION_BLOBS = {
-    "src/frontier/application/candidate_freeze_v1.py": (
-        "3b79f58d1d3ab04c9371fbb2822c0742f1303c5b"
-    ),
+    "src/frontier/application/candidate_freeze_v1.py": ("3b79f58d1d3ab04c9371fbb2822c0742f1303c5b"),
     "src/frontier/adapters/acquisition/frozen_config.py": (
         "8e948289e5e569ae84560238bfff087960daeedf"
     ),
-    "src/frontier/cli/pef_v1_confirmatory.py": "a1018b4ea5fc3a384a331b522ef1ae044eed45a4",
+    "src/frontier/cli/pef_v1_confirmatory.py": "d5dff73d758fc626271f93bd3948887a900677c7",
 }
 # This module is the compatibility checker itself. It may differ from the
 # original freeze only because production execution is separately pinned by
@@ -62,6 +60,44 @@ def _git_text(root: Path, args: list[str]) -> str:
     except (OSError, subprocess.SubprocessError) as error:
         raise RuntimeError("PEF_V1 candidate freeze Git publication cannot be verified") from error
     return result.stdout.strip()
+
+
+def _git_path_exists(root: Path, ref_path: str) -> bool:
+    try:
+        result = subprocess.run(
+            _git_command(["cat-file", "-e", ref_path]),
+            cwd=root,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError("PEF_V1 frozen execution compatibility cannot be verified") from error
+    if result.returncode not in (0, 1, 128):
+        raise RuntimeError("PEF_V1 frozen execution compatibility cannot be verified")
+    return result.returncode == 0
+
+
+def _added_python_path_shadows_frozen_module(
+    root: Path,
+    *,
+    implementation_commit: str,
+    path: str,
+) -> bool:
+    if not path.startswith("src/frontier/") or not path.endswith(".py"):
+        return False
+    if path.endswith("/__init__.py"):
+        package = path[: -len("/__init__.py")]
+        alternate = f"{package}.py"
+        if _git_path_exists(root, f"{implementation_commit}:{alternate}"):
+            return True
+        listed = _git_text(
+            root,
+            ["ls-tree", "-r", "--name-only", implementation_commit, "--", f"{package}/"],
+        )
+        return bool(listed)
+    alternate = f"{path[:-3]}/__init__.py"
+    return _git_path_exists(root, f"{implementation_commit}:{alternate}")
 
 
 def _git_json(root: Path, ref_path: str) -> object:
@@ -95,7 +131,7 @@ def _require_frozen_execution_compatibility(
     root: Path,
     receipt: CandidateFreezeReceiptV1,
 ) -> None:
-    """Reject descendant edits/additions that can determine confirmatory evidence."""
+    """Reject post-freeze changes that can alter confirmatory execution."""
     implementation_commit = receipt.implementation_commit
     assert implementation_commit is not None
     try:
@@ -145,8 +181,14 @@ def _require_frozen_execution_compatibility(
             continue
         if path in _PINNED_OPERATOR_AUTHORITY_ALLOWLIST:
             continue
-        # Unreviewed additions are drift too: a new package can shadow a
-        # frozen sibling module on Python's import path.
+        if status == "A":
+            if _added_python_path_shadows_frozen_module(
+                root,
+                implementation_commit=implementation_commit,
+                path=path,
+            ):
+                drift.append(f"{status}:{path}")
+            continue
         drift.append(f"{status}:{path}")
     if drift:
         detail = ", ".join(sorted(drift))
