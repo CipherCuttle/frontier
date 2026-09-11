@@ -1,0 +1,136 @@
+name: live-acquisition-once-demo
+
+on:
+  push:
+    branches:
+      - ops/live-operations-v1-serving-freshness-smoke-r2
+    paths:
+      - ".github/workflows/live-acquisition-once-demo.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-acquisition-once-demo
+  cancel-in-progress: false
+
+jobs:
+  bounded-production-cycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+
+      - name: Verify frozen environment
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          uv lock --check
+          uv sync --all-extras --frozen
+
+      - name: Doctor, run one acquisition cycle, and re-read freshness
+        shell: bash
+        env:
+          CANONICAL_DATABASE_SECRET: ${{ secrets.FRONTIER_DATABASE_URL_DIRECT }}
+          FRONTIER_WORKER_ID: github-live-once-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CANONICAL_DATABASE_SECRET:-}" ]]; then
+            echo "::error::FRONTIER_DATABASE_URL_DIRECT is not configured."
+            exit 1
+          fi
+
+          direct_url="$(python - <<'PY'
+          from urllib.parse import parse_qsl, urlsplit, urlunsplit
+          import os
+
+          url = os.environ["CANONICAL_DATABASE_SECRET"]
+          parsed = urlsplit(url)
+          host = (parsed.hostname or "").lower()
+          canonical_direct = "ep-weathered-sky-b1gmhqk8.c-5.eu-central-1.aws.neon.tech"
+          canonical_pooler = "ep-weathered-sky-b1gmhqk8-pooler.c-5.eu-central-1.aws.neon.tech"
+          if parsed.scheme not in {"postgres", "postgresql"}:
+              raise SystemExit("canonical database secret must be a Postgres URI")
+          if parsed.fragment:
+              raise SystemExit("canonical database secret must not contain a fragment")
+          if host not in {canonical_direct, canonical_pooler}:
+              raise SystemExit("canonical database secret must target Neon main")
+          if parsed.username != "frontier" or parsed.path != "/frontier":
+              raise SystemExit("canonical database secret identity mismatch")
+          if parsed.port not in {None, 5432} or parsed.password is None:
+              raise SystemExit("canonical database secret connection metadata mismatch")
+          query = sorted(parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True))
+          if query != [("channel_binding", "require"), ("sslmode", "require")]:
+              raise SystemExit("canonical database secret query mismatch")
+          if host == canonical_direct:
+              print(url)
+          else:
+              userinfo, _ = parsed.netloc.rsplit("@", 1)
+              port_suffix = f":{parsed.port}" if parsed.port is not None else ""
+              print(urlunsplit((
+                  parsed.scheme,
+                  f"{userinfo}@{canonical_direct}{port_suffix}",
+                  parsed.path,
+                  parsed.query,
+                  "",
+              )))
+          PY
+          )"
+          echo "::add-mask::$direct_url"
+          export FRONTIER_DATABASE_URL="$direct_url"
+          export FRONTIER_DATABASE_URL_DIRECT="$direct_url"
+
+          echo "### Database readiness" >> "$GITHUB_STEP_SUMMARY"
+          uv run frontier doctor | tee /tmp/frontier-doctor.json
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/frontier-doctor.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          set +e
+          uv run python -m frontier.cli.live_acquisition --once --worker-id "$FRONTIER_WORKER_ID" \
+            | tee /tmp/frontier-live-once.json
+          worker_rc=${PIPESTATUS[0]}
+          set -e
+
+          if [[ "$worker_rc" -eq 2 ]]; then
+            echo "::warning::bounded acquisition cycle completed with one or more isolated source failures"
+          elif [[ "$worker_rc" -ne 0 ]]; then
+            echo "::error::bounded acquisition cycle failed with exit code $worker_rc"
+            exit "$worker_rc"
+          fi
+
+          echo "### Bounded acquisition cycle" >> "$GITHUB_STEP_SUMMARY"
+          echo "- exit code: \`$worker_rc\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/frontier-live-once.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          freshness="$(uv run python scripts/ops/serving_freshness.py)"
+          printf '%s\n' "$freshness"
+          RESULT="$freshness" python - <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["RESULT"])
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"### Serving freshness after bounded cycle: `{payload['state']}`\n\n")
+              summary.write(f"- baseline: `{payload.get('latest_baseline_as_of')}`\n")
+              summary.write(f"- baseline freshness: `{payload.get('latest_baseline_freshness')}`\n")
+              summary.write(f"- acquisition heartbeat: `{payload.get('latest_worker_beat_at')}`\n")
+              summary.write(f"- reasons: `{', '.join(payload.get('reasons', [])) or 'none'}`\n")
+          PY
