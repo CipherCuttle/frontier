@@ -11,6 +11,7 @@ import psycopg
 
 DATABASE_URL_ENV = "FRONTIER_DATABASE_URL"
 SCHEMA_VERSION = "serving-freshness-v0"
+SERVING_WORKER_ROLE = "ACQUISITION"
 BASELINE_CADENCE_SECONDS = 300
 LIVE_MAX_SNAPSHOT_LAG_SECONDS = BASELINE_CADENCE_SECONDS
 LIVE_MAX_HEARTBEAT_AGE_SECONDS = BASELINE_CADENCE_SECONDS * 2
@@ -206,7 +207,10 @@ def read_serving_freshness(database_url: str) -> ServingFreshnessStatus:
             None if baseline_row is None else cast(str | None, baseline_row[1])
         )
 
-        cur.execute("SELECT max(beat_at) FROM worker_heartbeats")
+        cur.execute(
+            "SELECT max(beat_at) FROM worker_heartbeats WHERE role = %s",
+            (SERVING_WORKER_ROLE,),
+        )
         heartbeat_row = cur.fetchone()
         if heartbeat_row is None:
             raise RuntimeError("worker heartbeat query returned no row")
