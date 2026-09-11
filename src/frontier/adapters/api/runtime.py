@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import atexit
 import os
 from collections.abc import Callable
-from typing import Protocol
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,13 +16,7 @@ CORS_ORIGINS_ENV = "FRONTIER_PUBLIC_READ_CORS_ORIGINS"
 DEFAULT_CORS_ORIGINS = ("https://raw.githack.com",)
 
 
-class PublicReadRuntimeRepository(Protocol):
-    def verify_read_only_session(self) -> bool: ...
-
-    def close(self) -> None: ...
-
-
-def _cors_origins(value: str | None) -> tuple[str, ...]:
+def parse_cors_origins(value: str | None) -> tuple[str, ...]:
     if value is None:
         return DEFAULT_CORS_ORIGINS
     origins = tuple(item.strip().rstrip("/") for item in value.split(",") if item.strip())
@@ -38,7 +32,7 @@ def create_public_read_runtime_app(
     database_url: str,
     *,
     allowed_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS,
-    repository_factory: Callable[[str], PublicReadRuntimeRepository] = (
+    repository_factory: Callable[[str], PostgresPublicReadRepository] = (
         PostgresPublicReadRepository.connect
     ),
 ) -> FastAPI:
@@ -55,7 +49,7 @@ def create_public_read_runtime_app(
         allow_methods=["GET"],
         allow_headers=[],
     )
-    app.add_event_handler("shutdown", repository.close)
+    atexit.register(repository.close)
     return app
 
 
@@ -65,5 +59,5 @@ def create_runtime_app_from_env() -> FastAPI:
         raise RuntimeError(f"{DATABASE_URL_ENV} is required")
     return create_public_read_runtime_app(
         database_url,
-        allowed_origins=_cors_origins(os.getenv(CORS_ORIGINS_ENV)),
+        allowed_origins=parse_cors_origins(os.getenv(CORS_ORIGINS_ENV)),
     )
