@@ -61,7 +61,7 @@ def require_direct_session_database_url(database_url: str) -> str:
     return normalized
 
 
-def _is_transient_database_error(error: BaseException) -> bool:
+def is_transient_database_error(error: BaseException) -> bool:
     if isinstance(error, psycopg.OperationalError):
         return True
     return isinstance(error, DatabaseReadinessError) and isinstance(
@@ -69,7 +69,7 @@ def _is_transient_database_error(error: BaseException) -> bool:
     )
 
 
-def _cycle_has_failure(cycle: PollCycleResult) -> bool:
+def cycle_has_failure(cycle: PollCycleResult) -> bool:
     return bool(cycle.errors) or any(
         result.status is CollectionRunStatus.FAILED for result in cycle.acquired
     )
@@ -223,7 +223,7 @@ async def _run_connected(
         )
 
         if once:
-            return 2 if _cycle_has_failure(cycle) else 0
+            return 2 if cycle_has_failure(cycle) else 0
 
         remaining = worker.seconds_until_next_cycle()
         while remaining > 0 and not shutdown.stop:
@@ -285,7 +285,7 @@ def run_live_acquisition(
             )
             return result
         except (psycopg.OperationalError, DatabaseReadinessError) as error:
-            if not _is_transient_database_error(error):
+            if not is_transient_database_error(error):
                 raise ValueError(str(error)) from error
             reconnect_failures += 1
             if once or reconnect_failures > _MAX_RECONNECT_FAILURES:
