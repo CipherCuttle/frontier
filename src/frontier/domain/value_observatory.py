@@ -436,10 +436,7 @@ class ValueObservatoryOutcome:
             self.coverage_reason is None or not self.coverage_reason.strip()
         ):
             raise ValueError("unresolved outcome requires an explicit coverage reason")
-        if (
-            self.exposure_state is ExposureState.SHADOW_UNEXPOSED
-            and self.exposure_at is not None
-        ):
+        if self.exposure_state is ExposureState.SHADOW_UNEXPOSED and self.exposure_at is not None:
             raise ValueError("shadow-unexposed outcome cannot carry exposure_at")
         if self.exposure_state is ExposureState.PUBLICLY_EXPOSED and self.exposure_at is None:
             raise ValueError("publicly exposed outcome requires exposure_at")
