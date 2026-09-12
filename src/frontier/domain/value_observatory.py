@@ -31,6 +31,12 @@ def _require_nonempty(value: str, label: str) -> None:
         raise ValueError(f"{label} must be non-empty")
 
 
+def _canonical_strings(values: tuple[str, ...]) -> list[CanonicalValue]:
+    result: list[CanonicalValue] = []
+    result.extend(sorted(values))
+    return result
+
+
 def _canonical_health_bindings(
     bindings: tuple[SourceHealthBinding, ...],
 ) -> list[CanonicalValue]:
@@ -179,9 +185,9 @@ class ValueObservatoryOpportunity:
         return {
             "anchor_at": canonical_timestamp(self.anchor_at),
             "anchor_payload_digest": str(self.anchor_payload_digest),
-            "anchor_refs": sorted(self.anchor_refs),
+            "anchor_refs": _canonical_strings(self.anchor_refs),
             "authority_state": self.authority_state,
-            "canonical_urls": sorted(self.canonical_urls),
+            "canonical_urls": _canonical_strings(self.canonical_urls),
             "domain": self.domain,
             "opportunity_protocol_digest": str(self.opportunity_protocol_digest),
             "recorded_at": canonical_timestamp(self.recorded_at),
@@ -216,8 +222,8 @@ class CaptureItem:
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
         return {
-            "canonical_urls": sorted(self.canonical_urls),
-            "evidence_refs": sorted(self.evidence_refs),
+            "canonical_urls": _canonical_strings(self.canonical_urls),
+            "evidence_refs": _canonical_strings(self.evidence_refs),
             "item_key": self.item_key,
             "position": self.position,
             "raw_item_digest": str(self.raw_item_digest),
@@ -313,7 +319,7 @@ class ValueObservatoryCapture:
             "arm": self.arm.value,
             "authority_state": self.authority_state,
             "captured_at": canonical_timestamp(self.captured_at),
-            "domain_scope": sorted(self.domain_scope),
+            "domain_scope": _canonical_strings(self.domain_scope),
             "executor": self.executor.to_canonical(),
             "failure_reason": self.failure_reason,
             "input_digest": str(self.input_digest),
