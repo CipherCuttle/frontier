@@ -46,9 +46,14 @@ MERGE_AUTHORITY: false
 Every arm must prove:
 
 - an executor exists;
+- the readiness record is bound to the trusted exact `BenchmarkExecutorIdentity`, including its configuration digest;
+- the readiness record binds the exact frozen benchmark protocol digest;
+- the capability claim is accompanied by an auditable proof artifact reference plus content digest;
 - the exact benchmark knowledge horizon is enforced;
 - an immutable `ValueObservatoryCapture` shape can be emitted;
 - executor failure can be emitted explicitly as a failed capture instead of being silently dropped.
+
+A capability enum alone is never enough to produce `READY`. Missing trusted executor identity, protocol mismatch, executor-identity drift, or missing/malformed proof binding fails closed. The pure gate does not fetch proof artifacts; the reference plus digest makes the evidence independently inspectable and prevents later executor/configuration substitution from inheriting an earlier readiness result.
 
 Additional arm-specific requirements are fail-closed.
 
@@ -76,7 +81,7 @@ All seven must prove horizon-safe collection state. The executor must preserve p
 
 ### WEB_LLM_BENCHMARK
 
-Requires provider identity, exact model identity, prompt digest, raw response digest, citations, no FRONTIER private state, no silent provider/model fallback, and retrieval-level enforcement of the benchmark knowledge cutoff. Citation or publication timestamps alone are insufficient.
+Requires provider identity, exact model identity, prompt digest, raw response digest, citations, no FRONTIER private state, no silent provider/model fallback, and retrieval-level enforcement of the benchmark knowledge cutoff. Citation or publication timestamps alone are insufficient. The trusted expected executor identity itself must contain provider, model, and prompt digest before it can participate in a `READY` assessment.
 
 ## Current implementation audit at base SHA
 
@@ -90,6 +95,20 @@ The readiness gate itself does not claim any executor is ready. The repository s
 | `WEB_LLM_BENCHMARK` | prompt/identity rules are frozen, but no provider/model executor has proven retrieval-level knowledge-cutoff enforcement | `BLOCKED` |
 
 This is intentional. Missing executor evidence remains a blocker; the gate must never infer readiness from nearby infrastructure.
+
+## Hostile review repair
+
+The first independent hostile review found one P1: a caller could previously enumerate every capability and obtain `READY` without binding the claim to a real executor, frozen protocol identity, or auditable proof artifact.
+
+The repair requires:
+
+1. a trusted expected `BenchmarkExecutorIdentity` for each frozen arm;
+2. exact equality between that identity and the executor identity in the readiness evidence;
+3. exact frozen protocol-digest equality;
+4. a non-empty proof artifact reference and digest on every readiness record;
+5. complete provider/model/prompt identity for the Web-LLM arm.
+
+This repair does not create any executor or make the current repository ready. It only prevents self-declared capability sets from clearing the gate.
 
 ## Non-escalation
 
