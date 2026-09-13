@@ -29,13 +29,9 @@ class InternalBenchmarkBoundaryResolver(Protocol):
     integrity drift must raise rather than choosing a latest/nearest substitute.
     """
 
-    def resolve_naive(
-        self, knowledge_horizon: datetime
-    ) -> ExactNaiveBenchmarkBoundary | None: ...
+    def resolve_naive(self, knowledge_horizon: datetime) -> ExactNaiveBenchmarkBoundary | None: ...
 
-    def resolve_pef_v1(
-        self, knowledge_horizon: datetime
-    ) -> ExactPefV1BenchmarkBoundary | None: ...
+    def resolve_pef_v1(self, knowledge_horizon: datetime) -> ExactPefV1BenchmarkBoundary | None: ...
 
 
 __all__ = [
