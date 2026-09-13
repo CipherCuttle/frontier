@@ -412,9 +412,7 @@ def _require_pef_run_integrity(row: tuple[object, ...], *, knowledge_horizon: da
             row_artifact,
         ),
         (
-            _string(
-                run_json.get("candidate_output_digest"), "PEF_V1 run JSON output digest"
-            ),
+            _string(run_json.get("candidate_output_digest"), "PEF_V1 run JSON output digest"),
             row_output_digest,
         ),
     )
