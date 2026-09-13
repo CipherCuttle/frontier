@@ -27,8 +27,7 @@
     "docs/ROADMAP.md",
     "docs/CONSTITUTION.md",
     "src/**/*.py",
-    "scripts/verify.py",
-    ".github/workflows/verify.yml"
+    "scripts/verify.py"
   ],
   "ignore": {
     "useGitignore": true,
