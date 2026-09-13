@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Protocol
 
 from frontier.application.value_observatory_dry_run import (
     BENCHMARK_CAPTURE_V0_ALERT_BUDGET,
@@ -11,6 +12,7 @@ from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
     PEF_AUTHORITY_STATE,
     PEF_RANKING_POLICY_VERSION,
+    PEF_RECEIPT_SCHEMA_VERSION,
     PEF_SCHEMA_VERSION,
     PefArtifactStatus,
 )
@@ -24,7 +26,6 @@ from frontier.domain.intelligence import (
     BASELINE_RANKING_POLICY_VERSION,
     BASELINE_RECEIPT_SCHEMA_VERSION,
     BASELINE_SCHEMA_VERSION,
-    BaselineEpisode,
     BaselineSnapshot,
 )
 from frontier.domain.pef_v1 import (
@@ -54,25 +55,33 @@ _INTERNAL_ARMS = frozenset(
 )
 
 
+class _RankedCaptureSource(Protocol):
+    rank: int
+    episode_id: str
+    observation_ids: tuple[str, ...]
+
+    def to_canonical(self) -> dict[str, CanonicalValue]: ...
+
+
 def _require_exact_horizon(actual: datetime, expected: datetime, label: str) -> None:
     if actual != expected:
         raise ValueError(f"{label} must match the exact benchmark knowledge horizon")
 
 
-def _require_ranked_items(items: tuple[BaselineEpisode, ...] | tuple[object, ...]) -> None:
-    ranks = tuple(getattr(item, "rank") for item in items)
+def _require_ranked_items(items: tuple[_RankedCaptureSource, ...]) -> None:
+    ranks = tuple(item.rank for item in items)
     if ranks != tuple(range(1, len(items) + 1)):
         raise ValueError("internal benchmark source ranking must be contiguous from one")
 
 
-def _capture_items(items: tuple[object, ...]) -> tuple[CaptureItem, ...]:
+def _capture_items(items: tuple[_RankedCaptureSource, ...]) -> tuple[CaptureItem, ...]:
     selected = items[:BENCHMARK_CAPTURE_V0_ALERT_BUDGET]
     return tuple(
         CaptureItem(
             position=index,
-            item_key=getattr(item, "episode_id"),
+            item_key=item.episode_id,
             raw_item_digest=sha256_digest(canonical_json_bytes(item.to_canonical())),
-            evidence_refs=tuple(getattr(item, "observation_ids")),
+            evidence_refs=item.observation_ids,
         )
         for index, item in enumerate(selected, start=1)
     )
@@ -159,7 +168,9 @@ def build_naive_observatory_capture(
     if receipt.output_digest != snapshot_digest:
         raise ValueError("naive benchmark receipt does not bind the supplied snapshot")
 
-    ordered = tuple(sorted(snapshot.episodes, key=lambda item: item.rank))
+    ordered: tuple[_RankedCaptureSource, ...] = tuple(
+        sorted(snapshot.episodes, key=lambda item: item.rank)
+    )
     _require_ranked_items(ordered)
     capture_items = _capture_items(ordered)
     return _capture(
@@ -214,6 +225,8 @@ def build_pef_v1_observatory_capture(
 
     if receipt.status is not ProjectionStatus.COMPLETE:
         raise ValueError("PEF_V1 benchmark requires a COMPLETE receipt")
+    if receipt.receipt_schema_version != PEF_RECEIPT_SCHEMA_VERSION:
+        raise ValueError("PEF_V1 benchmark receipt schema-family mismatch")
     if receipt.projection_name != PEF_V1_PROJECTION_NAME:
         raise ValueError("PEF_V1 benchmark receipt projection name mismatch")
     if receipt.projection_version != PEF_V1_PROJECTION_VERSION:
@@ -231,7 +244,9 @@ def build_pef_v1_observatory_capture(
     if receipt.output_digest != artifact.output_digest:
         raise ValueError("PEF_V1 benchmark receipt does not bind the supplied artifact")
 
-    ordered = tuple(sorted(artifact.episodes, key=lambda item: item.rank))
+    ordered: tuple[_RankedCaptureSource, ...] = tuple(
+        sorted(artifact.episodes, key=lambda item: item.rank)
+    )
     _require_ranked_items(ordered)
     capture_items = _capture_items(ordered)
     return _capture(
