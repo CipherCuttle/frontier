@@ -576,9 +576,7 @@ class PostgresInternalBenchmarkBoundaryResolver:
             if len(rows) != 1:
                 raise RuntimeError("exact PEF_V1 run artifact/receipt binding is missing")
             row = rows[0]
-            freeze_receipt_id = _require_pef_run_integrity(
-                row, knowledge_horizon=knowledge_horizon
-            )
+            freeze_receipt_id = _require_pef_run_integrity(row, knowledge_horizon=knowledge_horizon)
             _require_pef_freeze_authority(
                 cur,
                 freeze_receipt_id=freeze_receipt_id,
