@@ -1,0 +1,80 @@
+name: agent-context
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-context-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    continue-on-error: true
+    env:
+      REPOMIX_VERSION: '1.18.0'
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+
+      - name: Set up Node for context tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+
+      - name: Generate exact-SHA agent context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p agent-context
+          git ls-files | LC_ALL=C sort > agent-context/structure.txt
+          npm exec --yes --package="repomix@${REPOMIX_VERSION}" -- \
+            repomix --config repomix.config.json --output agent-context/compressed-code.xml
+
+          structure_sha="$(sha256sum agent-context/structure.txt | cut -d' ' -f1)"
+          code_sha="$(sha256sum agent-context/compressed-code.xml | cut -d' ' -f1)"
+          generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          jq -n \
+            --arg schema_version 'agent-context-v1' \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_ref "$SOURCE_REF" \
+            --arg event "$GITHUB_EVENT_NAME" \
+            --arg generated_at "$generated_at" \
+            --arg repomix_version "$REPOMIX_VERSION" \
+            --arg structure_sha256 "$structure_sha" \
+            --arg compressed_code_sha256 "$code_sha" \
+            '{
+              schema_version: $schema_version,
+              repository: $repository,
+              source_sha: $source_sha,
+              source_ref: $source_ref,
+              event: $event,
+              generated_at: $generated_at,
+              generator: {name: "repomix", version: $repomix_version, compress: true, security_check: true, token_budget: 100000},
+              files: {
+                "structure.txt": {sha256: $structure_sha256},
+                "compressed-code.xml": {sha256: $compressed_code_sha256}
+              }
+            }' > agent-context/metadata.json
+
+      - name: Upload short-lived context artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: agent-context-${{ env.SOURCE_SHA }}
+          path: agent-context/
+          if-no-files-found: error
+          retention-days: 3
