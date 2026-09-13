@@ -26,8 +26,7 @@
     "docs/PLANNING_INDEX.md",
     "docs/ROADMAP.md",
     "docs/CONSTITUTION.md",
-    "src/**/*.py",
-    "scripts/verify.py"
+    "src/**/*.py"
   ],
   "ignore": {
     "useGitignore": true,
