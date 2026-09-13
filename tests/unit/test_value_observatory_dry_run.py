@@ -292,9 +292,7 @@ def test_temporal_ordering_uses_utc_instants_across_dst_fold() -> None:
     first_arm_start = datetime(2026, 11, 1, 1, 20, tzinfo=zone, fold=0)
     registration = datetime(2026, 11, 1, 1, 10, tzinfo=zone, fold=1)
     captured_at = datetime(2026, 11, 1, 1, 25, tzinfo=zone, fold=1)
-    exact_window_start = (
-        local_horizon.astimezone(UTC) - timedelta(hours=24)
-    ).astimezone(zone)
+    exact_window_start = (local_horizon.astimezone(UTC) - timedelta(hours=24)).astimezone(zone)
 
     dst_population = replace(
         source_population,
