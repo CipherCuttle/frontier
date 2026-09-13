@@ -86,10 +86,7 @@ def assess(
 def test_complete_self_declared_bundle_stays_pending_trusted_authority() -> None:
     assessment = assess(complete_all())
 
-    assert (
-        assessment.status
-        is BenchmarkExecutorReadinessStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
-    )
+    assert assessment.status is BenchmarkExecutorReadinessStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
     assert assessment.evidence_complete_arms == BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
     assert assessment.blocked_arms == ()
     assert assessment.blockers == ()
@@ -122,10 +119,7 @@ def test_arbitrary_self_claim_cannot_become_activation_ready() -> None:
         protocol_digest=arbitrary_protocol,
     )
 
-    assert (
-        assessment.status
-        is BenchmarkExecutorReadinessStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
-    )
+    assert assessment.status is BenchmarkExecutorReadinessStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
     assert assessment.evidence_complete_arms == BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
 
 
