@@ -1,0 +1,36 @@
+name: gh-aw-compile
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/frontier-dev-plan.md"
+      - ".github/workflows/gh-aw-compile.yml"
+      - ".gitattributes"
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install gh-aw
+        uses: github/gh-aw/actions/setup-cli@bde367913adeb3132f0a171594c88a17f4b7d08c # v0.88.7
+        with:
+          version: v0.88.7
+      - name: Compile Frontier planner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh aw compile frontier-dev-plan
+          gh aw compile --validate
+      - name: Upload generated workflow evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: frontier-dev-plan-compiled
+          path: |
+            .github/workflows/frontier-dev-plan.lock.yml
+            .github/aw/actions-lock.json
+          if-no-files-found: error
+          retention-days: 7
