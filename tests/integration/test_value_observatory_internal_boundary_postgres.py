@@ -207,7 +207,7 @@ def _pef_boundary(
 
 def _persist_pef_freeze_authority(conn: ConnectionT, horizon: datetime) -> str:
     receipt = CandidateFreezeReceiptV1(
-        frozen_at=horizon - timedelta(hours=1),
+        frozen_at=horizon - timedelta(days=3650),
         status=FreezeStatus.FROZEN,
         drift_reasons=(),
         preregistration_digest=digest("a"),
