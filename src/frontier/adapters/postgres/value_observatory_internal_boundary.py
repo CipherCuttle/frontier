@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import cast
 
@@ -13,6 +14,7 @@ from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
     PEF_AUTHORITY_STATE,
     PEF_RANKING_POLICY_VERSION,
+    PEF_RECEIPT_SCHEMA_VERSION,
     PEF_SCHEMA_VERSION,
     SHADOW_SCHEMA_VERSION,
     PefArtifactStatus,
@@ -46,6 +48,7 @@ from frontier.domain.receipt import ProjectionReceipt, ProjectionStatus
 ConnectionT = psycopg.Connection[tuple[object, ...]]
 CursorT = psycopg.Cursor[tuple[object, ...]]
 _RUN_CLASS_CONFIRMATORY = "CONFIRMATORY"
+_FREEZE_RECEIPT_ID_RE = re.compile(r"^freezereceipt_[0-9a-f]{64}$")
 
 
 def _require_aware(value: datetime) -> None:
@@ -57,6 +60,12 @@ def _mapping(value: object, label: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise RuntimeError(f"{label} canonical JSON is not an object")
     return cast(dict[str, object], value)
+
+
+def _objects(value: object, label: str) -> list[object]:
+    if not isinstance(value, list):
+        raise RuntimeError(f"{label} is not a list")
+    return cast(list[object], value)
 
 
 def _string(value: object, label: str) -> str:
@@ -86,9 +95,10 @@ def _optional_string(value: object, label: str) -> str | None:
 
 
 def _strings(value: object, label: str) -> tuple[str, ...]:
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+    values = _objects(value, label)
+    if not all(isinstance(item, str) for item in values):
         raise RuntimeError(f"{label} is not a string list")
-    return tuple(cast(str, item) for item in value)
+    return tuple(cast(str, item) for item in values)
 
 
 def _timestamp(value: object, label: str) -> datetime:
@@ -183,9 +193,7 @@ def _baseline_episode(raw: object) -> BaselineEpisode:
 
 def _baseline_snapshot(raw: object) -> BaselineSnapshot:
     document = _mapping(raw, "baseline snapshot")
-    episodes_value = document.get("episodes")
-    if not isinstance(episodes_value, list):
-        raise RuntimeError("baseline snapshot episodes are not a list")
+    episodes = _objects(document.get("episodes"), "baseline snapshot episodes")
     try:
         snapshot = BaselineSnapshot(
             as_of=_timestamp(document.get("as_of"), "baseline snapshot as_of"),
@@ -201,7 +209,7 @@ def _baseline_snapshot(raw: object) -> BaselineSnapshot:
             schema_state=HealthValue(
                 _string(document.get("schema_state"), "baseline schema state")
             ),
-            episodes=tuple(_baseline_episode(item) for item in episodes_value),
+            episodes=tuple(_baseline_episode(item) for item in episodes),
             schema_version=_string(document.get("schema_version"), "baseline schema version"),
             projection_version=_string(
                 document.get("projection_version"), "baseline projection version"
@@ -255,9 +263,7 @@ def _pef_episode(raw: object) -> PefEpisodeRanking:
 
 def _pef_v1_artifact(raw: object, *, generated_at: datetime) -> PefV1Artifact:
     document = _mapping(raw, "PEF_V1 artifact")
-    episodes_value = document.get("episodes")
-    if not isinstance(episodes_value, list):
-        raise RuntimeError("PEF_V1 artifact episodes are not a list")
+    episodes = _objects(document.get("episodes"), "PEF_V1 artifact episodes")
     try:
         artifact = PefV1Artifact(
             as_of=_timestamp(document.get("as_of"), "PEF_V1 artifact as_of"),
@@ -275,7 +281,7 @@ def _pef_v1_artifact(raw: object, *, generated_at: datetime) -> PefV1Artifact:
             failure_reason=_optional_string(
                 document.get("failure_reason"), "PEF_V1 failure reason"
             ),
-            episodes=tuple(_pef_episode(item) for item in episodes_value),
+            episodes=tuple(_pef_episode(item) for item in episodes),
             experiment_id=_string(document.get("experiment_id"), "PEF_V1 experiment id"),
             candidate_id=_string(document.get("candidate_id"), "PEF_V1 candidate id"),
             schema_version=_string(document.get("schema_version"), "PEF_V1 schema version"),
@@ -354,23 +360,70 @@ def _require_pef_run_integrity(row: tuple[object, ...], *, knowledge_horizon: da
         raise RuntimeError("PEF_V1 shadow run digest does not bind canonical payload")
     if run_id != "shadowrun_" + sha256_hex(canonical_json_bytes(run_json)):
         raise RuntimeError("PEF_V1 shadow run id does not bind canonical payload")
+
+    row_status = _string(row[2], "PEF_V1 run status")
+    row_candidate_id = _string(row[3], "PEF_V1 run candidate id")
+    row_schema = _string(row[4], "PEF_V1 run schema")
+    row_algorithm = _string(row[5], "PEF_V1 run algorithm")
+    row_configuration = _string(row[6], "PEF_V1 run configuration")
+    row_authority = _string(row[7], "PEF_V1 run authority")
+    row_control_snapshot = _string(row[8], "PEF_V1 run control snapshot id")
+    row_control_receipt = _string(row[9], "PEF_V1 run control receipt id")
+    row_artifact = _string(row[10], "PEF_V1 run candidate artifact id")
+    row_output_digest = _string(row[11], "PEF_V1 run candidate output digest")
+
     if _string(run_json.get("experiment_id"), "PEF_V1 run experiment id") != PEF_V1_EXPERIMENT_ID:
         raise RuntimeError("PEF_V1 shadow run experiment identity mismatch")
     if _timestamp(run_json.get("as_of"), "PEF_V1 run as_of") != knowledge_horizon:
         raise RuntimeError("PEF_V1 shadow run does not bind the exact requested horizon")
-    if _string(row[3], "PEF_V1 run candidate id") != PEF_V1_CANDIDATE_ID:
+    if _timestamp(run_json.get("generated_at"), "PEF_V1 run generated_at") != knowledge_horizon:
+        raise RuntimeError("PEF_V1 confirmatory run generated_at must equal its exact horizon")
+    if row_candidate_id != PEF_V1_CANDIDATE_ID:
         raise RuntimeError("PEF_V1 shadow run candidate identity mismatch")
-    if _string(row[4], "PEF_V1 run schema") != SHADOW_SCHEMA_VERSION:
+    if row_schema != SHADOW_SCHEMA_VERSION:
         raise RuntimeError("PEF_V1 shadow run schema identity mismatch")
-    if _string(row[5], "PEF_V1 run algorithm") != PEF_ALGORITHM_VERSION:
+    if row_algorithm != PEF_ALGORITHM_VERSION:
         raise RuntimeError("PEF_V1 shadow run algorithm identity mismatch")
-    if Digest(_string(row[6], "PEF_V1 run configuration")) != PEF_V1_CONFIGURATION_DIGEST:
+    if Digest(row_configuration) != PEF_V1_CONFIGURATION_DIGEST:
         raise RuntimeError("PEF_V1 shadow run configuration identity mismatch")
-    if _string(row[7], "PEF_V1 run authority") != PEF_AUTHORITY_STATE:
+    if row_authority != PEF_AUTHORITY_STATE:
         raise RuntimeError("PEF_V1 shadow run authority-state mismatch")
+
+    json_bindings = (
+        (_string(run_json.get("status"), "PEF_V1 run JSON status"), row_status),
+        (_string(run_json.get("candidate_id"), "PEF_V1 run JSON candidate id"), row_candidate_id),
+        (_string(run_json.get("schema_version"), "PEF_V1 run JSON schema"), row_schema),
+        (_string(run_json.get("algorithm_version"), "PEF_V1 run JSON algorithm"), row_algorithm),
+        (
+            _string(run_json.get("configuration_digest"), "PEF_V1 run JSON configuration"),
+            row_configuration,
+        ),
+        (_string(run_json.get("authority_state"), "PEF_V1 run JSON authority"), row_authority),
+        (
+            _string(run_json.get("control_snapshot_id"), "PEF_V1 run JSON control snapshot"),
+            row_control_snapshot,
+        ),
+        (
+            _string(run_json.get("control_receipt_id"), "PEF_V1 run JSON control receipt"),
+            row_control_receipt,
+        ),
+        (
+            _string(run_json.get("candidate_artifact_id"), "PEF_V1 run JSON artifact id"),
+            row_artifact,
+        ),
+        (
+            _string(
+                run_json.get("candidate_output_digest"), "PEF_V1 run JSON output digest"
+            ),
+            row_output_digest,
+        ),
+    )
+    if any(canonical_value != row_value for canonical_value, row_value in json_bindings):
+        raise RuntimeError("PEF_V1 shadow run row does not bind canonical run payload")
+
     freeze_id = run_json.get("candidate_freeze_receipt_id")
-    if not isinstance(freeze_id, str) or not freeze_id.startswith("freezereceipt_"):
-        raise RuntimeError("PEF_V1 shadow run is not bound to frozen candidate authority")
+    if not isinstance(freeze_id, str) or not _FREEZE_RECEIPT_ID_RE.fullmatch(freeze_id):
+        raise RuntimeError("PEF_V1 shadow run is not bound to canonical frozen candidate authority")
 
 
 def _require_pef_artifact_integrity(
@@ -405,6 +458,8 @@ def _require_pef_artifact_integrity(
         or artifact.candidate_id != PEF_V1_CANDIDATE_ID
     ):
         raise RuntimeError("PEF_V1 artifact experiment/candidate identity mismatch")
+    if _optional_string(row[27], "PEF_V1 artifact failure reason") != artifact.failure_reason:
+        raise RuntimeError("PEF_V1 artifact row failure reason does not bind canonical payload")
     artifact_digest = sha256_digest(canonical_json_bytes(artifact.to_canonical()))
     if (
         artifact_digest != Digest(_string(row[26], "PEF_V1 artifact output digest"))
@@ -431,7 +486,8 @@ def _require_pef_artifact_integrity(
     if receipt.as_of != knowledge_horizon or receipt.generated_at != artifact.generated_at:
         raise RuntimeError("PEF_V1 receipt timing does not bind the persisted artifact")
     if (
-        receipt.projection_name != PEF_V1_PROJECTION_NAME
+        receipt.receipt_schema_version != PEF_RECEIPT_SCHEMA_VERSION
+        or receipt.projection_name != PEF_V1_PROJECTION_NAME
         or receipt.projection_version != PEF_V1_PROJECTION_VERSION
         or receipt.schema_version != PEF_SCHEMA_VERSION
         or receipt.algorithm_version != PEF_ALGORITHM_VERSION
