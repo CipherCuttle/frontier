@@ -122,7 +122,9 @@ def _capture(
     raw_response_digest: Digest,
 ) -> ValueObservatoryCapture:
     if captured_at > knowledge_horizon + BENCHMARK_CAPTURE_V0_CAPTURE_DEADLINE:
-        raise ValueError("complete internal benchmark capture exceeds the frozen 30-minute deadline")
+        raise ValueError(
+            "complete internal benchmark capture exceeds the frozen 30-minute deadline"
+        )
     return ValueObservatoryCapture(
         arm=arm,
         captured_at=captured_at,
