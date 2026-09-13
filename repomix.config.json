@@ -21,7 +21,6 @@
   },
   "include": [
     "AGENTS.md",
-    "mise.toml",
     "docs/PLANNING_INDEX.md",
     "docs/ROADMAP.md",
     "docs/CONSTITUTION.md",
