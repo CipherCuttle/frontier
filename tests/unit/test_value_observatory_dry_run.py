@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -282,6 +283,46 @@ def test_registration_must_be_strictly_before_first_arm_start() -> None:
     boundary_opportunity = opportunity(source_population, recorded_at=first_arm_start)
     with pytest.raises(ValueError, match="preregistered before any benchmark arm starts"):
         validate(source_population, (boundary_opportunity,), captures, evidence)
+
+
+def test_temporal_ordering_uses_utc_instants_across_dst_fold() -> None:
+    source_population, _, captures, _ = valid_boundary()
+    zone = ZoneInfo("America/Nassau")
+    local_horizon = datetime(2026, 11, 1, 1, 0, tzinfo=zone, fold=1)
+    first_arm_start = datetime(2026, 11, 1, 1, 20, tzinfo=zone, fold=0)
+    registration = datetime(2026, 11, 1, 1, 10, tzinfo=zone, fold=1)
+    captured_at = datetime(2026, 11, 1, 1, 25, tzinfo=zone, fold=1)
+    exact_window_start = (
+        local_horizon.astimezone(UTC) - timedelta(hours=24)
+    ).astimezone(zone)
+
+    dst_population = replace(
+        source_population,
+        knowledge_horizon=local_horizon,
+        recorded_at=registration,
+    )
+    dst_opportunities = (opportunity(dst_population, recorded_at=registration),)
+    dst_captures = tuple(
+        replace(
+            item,
+            captured_at=captured_at,
+            knowledge_horizon=local_horizon,
+            selection_window_start=exact_window_start,
+            selection_window_end=local_horizon,
+        )
+        for item in captures
+    )
+    dst_evidence = tuple(
+        arm_evidence(
+            arm,
+            started_at=first_arm_start,
+            source_state_horizon=local_horizon,
+        )
+        for arm in BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
+    )
+
+    with pytest.raises(ValueError, match="manifest must be frozen"):
+        validate(dst_population, dst_opportunities, dst_captures, dst_evidence)
 
 
 def test_manifest_must_be_frozen_before_any_arm_starts() -> None:
