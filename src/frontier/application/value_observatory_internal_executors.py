@@ -5,6 +5,7 @@ from typing import Protocol
 
 from frontier.application.value_observatory_dry_run import (
     BENCHMARK_CAPTURE_V0_ALERT_BUDGET,
+    BENCHMARK_CAPTURE_V0_CAPTURE_DEADLINE,
     BENCHMARK_CAPTURE_V0_DOMAIN_SCOPE,
     BENCHMARK_CAPTURE_V0_SELECTION_WINDOW,
 )
@@ -120,6 +121,8 @@ def _capture(
     items: tuple[CaptureItem, ...],
     raw_response_digest: Digest,
 ) -> ValueObservatoryCapture:
+    if captured_at > knowledge_horizon + BENCHMARK_CAPTURE_V0_CAPTURE_DEADLINE:
+        raise ValueError("complete internal benchmark capture exceeds the frozen 30-minute deadline")
     return ValueObservatoryCapture(
         arm=arm,
         captured_at=captured_at,
@@ -173,10 +176,10 @@ def build_naive_observatory_capture(
     if receipt.output_digest != snapshot_digest:
         raise ValueError("naive benchmark receipt does not bind the supplied snapshot")
 
-    ordered: tuple[_RankedCaptureSource, ...] = tuple(
-        sorted(snapshot.episodes, key=lambda item: item.rank)
-    )
-    _require_ranked_items(ordered)
+    source_ranked = tuple(sorted(snapshot.episodes, key=lambda item: item.rank))
+    _require_ranked_items(source_ranked)
+    lexical = tuple(sorted(snapshot.episodes, key=lambda item: item.episode_id))
+    ordered = tuple(sorted(lexical, key=lambda item: item.last_observed_at, reverse=True))
     capture_items = _capture_items(ordered)
     return _capture(
         arm=ObservatoryArm.FRONTIER_NAIVE_CONTROL,
@@ -248,6 +251,12 @@ def build_pef_v1_observatory_capture(
         raise ValueError("PEF_V1 benchmark source-registry mismatch")
     if receipt.output_digest != artifact.output_digest:
         raise ValueError("PEF_V1 benchmark receipt does not bind the supplied artifact")
+    if receipt.generated_at != artifact.generated_at:
+        raise ValueError("PEF_V1 benchmark artifact/receipt generation timestamp mismatch")
+    if artifact.generated_at > captured_at:
+        raise ValueError("PEF_V1 benchmark artifact was generated after captured_at")
+    if artifact.generated_at > knowledge_horizon + BENCHMARK_CAPTURE_V0_CAPTURE_DEADLINE:
+        raise ValueError("PEF_V1 benchmark artifact exceeds the frozen 30-minute capture deadline")
 
     ordered: tuple[_RankedCaptureSource, ...] = tuple(
         sorted(artifact.episodes, key=lambda item: item.rank)
