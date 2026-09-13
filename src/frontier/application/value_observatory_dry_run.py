@@ -23,11 +23,25 @@ BENCHMARK_CAPTURE_V0_REQUIRED_ARMS = (
     ObservatoryArm.ORDINARY_AGGREGATION,
     ObservatoryArm.WEB_LLM_BENCHMARK,
 )
+_BENCHMARK_CAPTURE_V0_BOUNDARY_HOURS = frozenset({0, 6, 12, 18})
 
 
 def _require_aware(value: datetime, label: str) -> None:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{label} must be timezone-aware")
+
+
+def _require_aligned_utc_boundary(value: datetime) -> None:
+    if (
+        value.utcoffset() != timedelta(0)
+        or value.hour not in _BENCHMARK_CAPTURE_V0_BOUNDARY_HOURS
+        or value.minute != 0
+        or value.second != 0
+        or value.microsecond != 0
+    ):
+        raise ValueError(
+            "dry-run knowledge horizon must be aligned to 00:00, 06:00, 12:00, or 18:00 UTC"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +89,7 @@ def validate_benchmark_capture_v0_dry_run(
     knowledge_horizon = population.knowledge_horizon
     required_arms = set(BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
 
+    _require_aligned_utc_boundary(knowledge_horizon)
     require_population_opportunity_completeness(population, opportunities)
 
     capture_by_arm = _index_captures(captures)
@@ -85,9 +100,9 @@ def validate_benchmark_capture_v0_dry_run(
         raise ValueError("dry-run evidence must contain exactly the four frozen benchmark arms")
 
     first_arm_start = min(item.started_at for item in arm_evidence)
-    if population.recorded_at > first_arm_start:
+    if population.recorded_at >= first_arm_start:
         raise ValueError("population manifest must be frozen before any benchmark arm starts")
-    if any(item.recorded_at > first_arm_start for item in opportunities):
+    if any(item.recorded_at >= first_arm_start for item in opportunities):
         raise ValueError("all opportunities must be preregistered before any benchmark arm starts")
 
     deadline = knowledge_horizon + BENCHMARK_CAPTURE_V0_CAPTURE_DEADLINE
