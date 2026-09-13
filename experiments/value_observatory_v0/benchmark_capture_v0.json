@@ -1,0 +1,119 @@
+{
+  "activation": {
+    "backfill_allowed": false,
+    "early_stopping_allowed": false,
+    "requires_artifact_schema_merged": true,
+    "requires_independent_hostile_review": true,
+    "requires_parent_authority_merged": true,
+    "requires_protocol_digest_receipt": true,
+    "requires_protocol_merged": true,
+    "result_driven_extension_allowed": false
+  },
+  "arms": [
+    {
+      "arm": "FRONTIER_NAIVE_CONTROL",
+      "executor_rule": "canonical PIT candidate population only; observed_at descending then item_key lexical",
+      "experimental_score_allowed": false,
+      "frontier_hidden_history_allowed": true
+    },
+    {
+      "arm": "FRONTIER_EXISTING_EXPERIMENTAL",
+      "executor_rule": "latest valid frozen PEF_V1 output with boundary <= knowledge_horizon; no recomputation or substitution",
+      "experimental_score_allowed": true,
+      "frontier_hidden_history_allowed": true
+    },
+    {
+      "arm": "ORDINARY_AGGREGATION",
+      "executor_rule": "one current public retrieval attempt per frozen source; no FRONTIER DB/history/grouping/projection/PEF/feature-ledger access; merge by eligible source timestamp descending then item_key lexical",
+      "experimental_score_allowed": false,
+      "frontier_hidden_history_allowed": false,
+      "source_ids": [
+        "hn.frontpage",
+        "pypi.updates",
+        "github.ml-repos",
+        "arxiv.cs-ai",
+        "cisa.kev",
+        "hf.models",
+        "gdelt.frontier"
+      ]
+    },
+    {
+      "arm": "WEB_LLM_BENCHMARK",
+      "executor_rule": "ordinary web-connected retrieval only; no FRONTIER private state; no silent provider/model fallback",
+      "experimental_score_allowed": false,
+      "frontier_hidden_history_allowed": false,
+      "model_change_policy": "new_series_segment",
+      "prompt": "You are a web-connected discovery benchmark. Using only public web evidence available at or before {{KNOWLEDGE_HORIZON_UTC}}, identify up to 5 consequential emerging developments from the preceding 24 hours across AI/ML, software/security, and the public technology ecosystem. Do not use or infer any private FRONTIER state. Prefer developments that are genuinely new or newly consequential rather than routine updates. Return results in ranked order. For every result provide: a stable title, a brief factual description, at least one source URL, and the source publication/update timestamp when available. Do not include evidence first published after {{KNOWLEDGE_HORIZON_UTC}}. If fewer than 5 eligible developments can be supported, return fewer. Do not pad the list.",
+      "provider_change_policy": "new_series_segment",
+      "requires_citations": true,
+      "requires_exact_model_identity": true
+    }
+  ],
+  "artifact_schema": "VALUE_OBSERVATORY_ARTIFACT_SCHEMA_V0",
+  "authority_status": "CANDIDATE_SUBORDINATE_AUTHORITY",
+  "causal_contamination": {
+    "early_independent_exposure_must_be_recorded": true,
+    "frontier_caused_attention_counts_as_organic_confirmation": false,
+    "scored_lists_shadow_until_longest_registered_outcome_horizon_matures": true
+  },
+  "domain_scope": [
+    "GLOBAL"
+  ],
+  "failure_rules": {
+    "backfill_failed_boundary": false,
+    "failed_arm_creates_frontier_win": false,
+    "failed_pairwise_result": "UNRESOLVED",
+    "failure_rate_mandatory_in_reporting": true,
+    "ordinary_aggregation_executor_failure": "FAILED",
+    "ordinary_aggregation_individual_source_failure": "RETAIN_AS_SOURCE_EVIDENCE",
+    "persist_every_scheduled_arm": true
+  },
+  "horizon_rules": {
+    "executor_unable_to_enforce_horizon": "FAILED",
+    "future_timestamp_items_ineligible": true,
+    "knowledge_horizon_is_aligned_boundary": true,
+    "scored_retry_allowed": false
+  },
+  "item_rules": {
+    "cross_arm_budget_borrowing_allowed": false,
+    "positions_contiguous_from_one": true,
+    "post_deadline_topup_allowed": false,
+    "repeat_alerts_across_boundaries_preserved": true,
+    "tie_breaker": "canonical_item_key_lexical",
+    "underfilled_complete_allowed": true,
+    "within_capture_item_keys_unique": true
+  },
+  "non_escalation": {
+    "canonical_public_ranking_mutation_allowed": false,
+    "llm_ranking_authority_allowed": false,
+    "llm_truth_authority_allowed": false,
+    "missed_boundary_backfill_allowed": false,
+    "pef_v1_mutation_allowed": false
+  },
+  "parent_authority": "FRONTIER_VALUE_OBSERVATORY_V0",
+  "protocol_id": "frontier-benchmark-capture-v0",
+  "protocol_identity_breakers": [
+    "alert_budget",
+    "cadence",
+    "selection_window",
+    "arm_definition",
+    "ordinary_aggregation_source_set",
+    "web_llm_prompt",
+    "deterministic_ordering",
+    "failure_policy"
+  ],
+  "schedule": {
+    "alert_budget_per_arm": 5,
+    "aligned_hours": [
+      0,
+      6,
+      12,
+      18
+    ],
+    "capture_deadline_minutes": 30,
+    "initial_run_days": 14,
+    "selection_window_seconds": 86400,
+    "timezone": "UTC"
+  },
+  "schema_version": "frontier-benchmark-capture-preregistration-v0"
+}
