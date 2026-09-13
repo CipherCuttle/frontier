@@ -1,0 +1,40 @@
+# Universal Dev Spine V1 pilot.
+# This file standardizes development commands only; repository authority remains in AGENTS.md
+# and the canonical documents it names. It does not replace uv, pytest, ruff, Pyright, or CI.
+
+[tasks.context]
+description = "Show exact Git state and Frontier authority entry points"
+run = '''
+set -eu
+printf 'HEAD %s\n' "$(git rev-parse HEAD)"
+git status --short --branch
+printf '\nAuthority entry points:\n'
+printf '%s\n' \
+  'AGENTS.md' \
+  'docs/PLANNING_INDEX.md' \
+  'docs/ROADMAP.md'
+'''
+
+[tasks.test]
+description = "Run Frontier's default pytest suite"
+run = "uv run pytest -q"
+
+[tasks.lint]
+description = "Run Frontier's canonical formatting, lint, and type checks"
+run = [
+  "uv run ruff format --check --exclude scripts/preflight .",
+  "uv run ruff check --exclude scripts/preflight .",
+  "uv run pyright",
+]
+
+[tasks.verify]
+description = "Run Frontier's canonical local acceptance path"
+run = [
+  "uv lock --check",
+  "uv sync --all-extras --frozen",
+  "uv run python scripts/verify.py",
+]
+
+[tasks.ci]
+description = "Run the closest local equivalent of required CI; remote service/ops jobs remain authoritative"
+depends = ["verify"]
