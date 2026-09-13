@@ -26,7 +26,6 @@
     "docs/PLANNING_INDEX.md",
     "docs/ROADMAP.md",
     "docs/CONSTITUTION.md",
-    "agent_skills/**/*.md",
     "src/**/*.py",
     "scripts/verify.py",
     ".github/workflows/verify.yml"
