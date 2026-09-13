@@ -16,12 +16,18 @@ printf '%s\n' \
 '''
 
 [tasks.test]
-description = "Run Frontier's default pytest suite"
-run = "uv run pytest -q"
+description = "Run Frontier's default pytest suite from the canonical frozen dev environment"
+run = [
+  "uv lock --check",
+  "uv sync --all-extras --frozen",
+  "uv run pytest -q",
+]
 
 [tasks.lint]
-description = "Run Frontier's canonical formatting, lint, and type checks"
+description = "Run Frontier's canonical formatting, lint, and type checks from the frozen dev environment"
 run = [
+  "uv lock --check",
+  "uv sync --all-extras --frozen",
   "uv run ruff format --check --exclude scripts/preflight .",
   "uv run ruff check --exclude scripts/preflight .",
   "uv run pyright",
