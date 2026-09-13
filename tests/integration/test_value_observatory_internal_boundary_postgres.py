@@ -14,6 +14,7 @@ from frontier.adapters.postgres.intelligence import PostgresBaselineIntelligence
 from frontier.adapters.postgres.value_observatory_internal_boundary import (
     PostgresInternalBenchmarkBoundaryResolver,
 )
+from frontier.application.freeze_publication import CandidateFreezePublication
 from frontier.domain.advanced_intelligence import (
     PEF_ALGORITHM_VERSION,
     PEF_AUTHORITY_STATE,
@@ -27,6 +28,8 @@ from frontier.domain.advanced_intelligence import (
     ShadowExperimentRun,
     ShadowRunStatus,
 )
+from frontier.domain.candidate_freeze import FreezeStatus, RegistryEntryDigest
+from frontier.domain.candidate_freeze_v1 import CandidateFreezeReceiptV1
 from frontier.domain.canonical_json import canonical_json_bytes
 from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.health import HealthValue
@@ -55,6 +58,7 @@ DB_URL = os.getenv("FRONTIER_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="FRONTIER_TEST_DATABASE_URL not set")
 REGISTRY = Digest("sha256:" + "7" * 64)
 ConnectionT = psycopg.Connection[tuple[object, ...]]
+CursorT = psycopg.Cursor[tuple[object, ...]]
 
 
 def digest(char: str) -> Digest:
@@ -138,6 +142,7 @@ def _pef_boundary(
     label: str,
     *,
     failed: bool = False,
+    freeze_receipt_id: str | None = None,
 ) -> tuple[PefV1Artifact, ProjectionReceipt, ShadowExperimentRun]:
     status = PefArtifactStatus.FAILED if failed else PefArtifactStatus.RAN
     failure_reason = "candidate failed" if failed else None
@@ -193,9 +198,147 @@ def _pef_boundary(
         algorithm_version=PEF_ALGORITHM_VERSION,
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
         authority_state=PEF_AUTHORITY_STATE,
-        candidate_freeze_receipt_id="freezereceipt_" + "8" * 64,
+        candidate_freeze_receipt_id=(
+            "freezereceipt_" + "8" * 64
+            if freeze_receipt_id is None
+            else freeze_receipt_id
+        ),
     )
     return artifact, receipt, run
+
+
+def _persist_pef_freeze_authority(conn: ConnectionT, horizon: datetime) -> str:
+    receipt = CandidateFreezeReceiptV1(
+        frozen_at=horizon - timedelta(hours=1),
+        status=FreezeStatus.FROZEN,
+        drift_reasons=(),
+        preregistration_digest=digest("a"),
+        preregistration_config_digest=PEF_V1_CONFIGURATION_DIGEST,
+        implementation_commit="a" * 40,
+        implementation_tree_digest="b" * 40,
+        dependency_lock_digest=digest("d"),
+        source_registry_digest=digest("e"),
+        registry_entry_digests=(
+            RegistryEntryDigest(path="sources/registry/test.json", digest=digest("f")),
+        ),
+    )
+    entry_values = [entry.to_canonical() for entry in receipt.registry_entry_digests or ()]
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO candidate_freeze_receipts (
+                receipt_id, schema_version, candidate_id, experiment_id,
+                algorithm_version, configuration_digest, status,
+                preregistration_path, preregistration_digest,
+                preregistration_config_digest, implementation_commit,
+                implementation_tree_digest, dependency_lock_digest,
+                source_registry_digest, registry_entry_digests,
+                drift_reasons, receipt_digest, frozen_at, verified_at,
+                original_receipt_digest, receipt_json
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                receipt.receipt_id,
+                receipt.schema_version,
+                receipt.candidate_id,
+                receipt.experiment_id,
+                receipt.algorithm_version,
+                str(receipt.configuration_digest),
+                receipt.status.value,
+                receipt.preregistration_path,
+                str(receipt.preregistration_digest),
+                str(receipt.preregistration_config_digest),
+                receipt.implementation_commit,
+                receipt.implementation_tree_digest,
+                str(receipt.dependency_lock_digest),
+                str(receipt.source_registry_digest),
+                Jsonb(entry_values),
+                Jsonb(list(receipt.drift_reasons)),
+                str(receipt.receipt_digest),
+                receipt.frozen_at,
+                receipt.verified_at,
+                receipt.original_receipt_digest,
+                Jsonb(receipt.to_canonical()),
+            ),
+        )
+        cur.execute(
+            "SELECT durable_freeze_at FROM candidate_freeze_receipts WHERE receipt_id = %s",
+            (receipt.receipt_id,),
+        )
+        durable_row = cur.fetchone()
+        if durable_row is None or not isinstance(durable_row[0], datetime):
+            raise AssertionError("test freeze did not become durable")
+        publication = CandidateFreezePublication(
+            freeze_receipt_id=receipt.receipt_id,
+            freeze_receipt_digest=receipt.receipt_digest,
+            implementation_commit=receipt.implementation_commit or "",
+            implementation_tree_digest=receipt.implementation_tree_digest or "",
+            publication_commit="c" * 40,
+            publication_committer_at=horizon - timedelta(minutes=30),
+        )
+        cur.execute(
+            """
+            INSERT INTO candidate_freeze_publications (
+                receipt_id, schema_version, freeze_receipt_digest,
+                implementation_commit, implementation_tree_digest,
+                publication_commit, publication_committer_at,
+                publication_digest, publication_json
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                publication.freeze_receipt_id,
+                publication.schema_version,
+                str(publication.freeze_receipt_digest),
+                publication.implementation_commit,
+                publication.implementation_tree_digest,
+                publication.publication_commit,
+                publication.publication_committer_at,
+                str(publication.publication_digest),
+                Jsonb(publication.to_canonical()),
+            ),
+        )
+    return receipt.receipt_id
+
+
+def _insert_pef_run(
+    cur: CursorT,
+    run: ShadowExperimentRun,
+    *,
+    row_candidate_id: str | None = None,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO shadow_experiment_runs (
+            run_id, experiment_id, candidate_id, schema_version,
+            algorithm_version, configuration_digest, authority_state,
+            status, as_of, control_snapshot_id, control_receipt_id,
+            candidate_artifact_id, candidate_output_digest,
+            coverage_state, episode_universe_digest, run_digest,
+            failure_reason, run_class, run_json
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,
+        (
+            run.run_id,
+            run.experiment_id,
+            run.candidate_id if row_candidate_id is None else row_candidate_id,
+            run.schema_version,
+            run.algorithm_version,
+            str(run.configuration_digest),
+            run.authority_state,
+            run.status.value,
+            run.as_of,
+            run.control_snapshot_id,
+            run.control_receipt_id,
+            run.candidate_artifact_id,
+            str(run.candidate_output_digest),
+            run.coverage_state.value,
+            str(run.episode_universe_digest),
+            str(run.run_digest),
+            run.failure_reason,
+            "CONFIRMATORY",
+            Jsonb(run.to_canonical()),
+        ),
+    )
 
 
 def _persist_pef_boundary(
@@ -262,50 +405,26 @@ def _persist_pef_boundary(
                 Jsonb(artifact.to_canonical()),
             ),
         )
-        cur.execute(
-            """
-            INSERT INTO shadow_experiment_runs (
-                run_id, experiment_id, candidate_id, schema_version,
-                algorithm_version, configuration_digest, authority_state,
-                status, as_of, control_snapshot_id, control_receipt_id,
-                candidate_artifact_id, candidate_output_digest,
-                coverage_state, episode_universe_digest, run_digest,
-                failure_reason, run_class, run_json
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """,
-            (
-                run.run_id,
-                run.experiment_id,
-                run.candidate_id if row_candidate_id is None else row_candidate_id,
-                run.schema_version,
-                run.algorithm_version,
-                str(run.configuration_digest),
-                run.authority_state,
-                run.status.value,
-                run.as_of,
-                run.control_snapshot_id,
-                run.control_receipt_id,
-                run.candidate_artifact_id,
-                str(run.candidate_output_digest),
-                run.coverage_state.value,
-                str(run.episode_universe_digest),
-                str(run.run_digest),
-                run.failure_reason,
-                "CONFIRMATORY",
-                Jsonb(run.to_canonical()),
-            ),
-        )
+        _insert_pef_run(cur, run, row_candidate_id=row_candidate_id)
+
+
+def _persist_pef_run_only(conn: ConnectionT, run: ShadowExperimentRun) -> None:
+    with conn.transaction(), conn.cursor() as cur:
+        _insert_pef_run(cur, run)
 
 
 def test_resolver_round_trips_exact_naive_and_pef_boundaries() -> None:
     assert DB_URL is not None
     horizon = datetime(2031, 1, 1, 0, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
+        freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
         snapshot, baseline_receipt = _baseline_boundary(horizon, "a")
         PostgresBaselineIntelligenceRepository(conn).publish_complete_snapshot(
             snapshot, baseline_receipt
         )
-        artifact, pef_receipt, run = _pef_boundary(horizon, "bc")
+        artifact, pef_receipt, run = _pef_boundary(
+            horizon, "bc", freeze_receipt_id=freeze_receipt_id
+        )
         _persist_pef_boundary(conn, artifact, pef_receipt, run)
 
         resolver = PostgresInternalBenchmarkBoundaryResolver(conn)
@@ -371,7 +490,13 @@ def test_resolver_preserves_exact_failed_pef_boundary_instead_of_hiding_it() -> 
     assert DB_URL is not None
     horizon = datetime(2031, 5, 1, 0, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
-        artifact, receipt, run = _pef_boundary(horizon, "ef", failed=True)
+        freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
+        artifact, receipt, run = _pef_boundary(
+            horizon,
+            "ef",
+            failed=True,
+            freeze_receipt_id=freeze_receipt_id,
+        )
         _persist_pef_boundary(conn, artifact, receipt, run)
 
         resolved = PostgresInternalBenchmarkBoundaryResolver(conn).resolve_pef_v1(horizon)
@@ -404,9 +529,41 @@ def test_resolver_rejects_wrong_pef_receipt_schema_family() -> None:
     assert DB_URL is not None
     horizon = datetime(2031, 7, 1, 12, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
-        artifact, receipt, run = _pef_boundary(horizon, "cd")
+        freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
+        artifact, receipt, run = _pef_boundary(
+            horizon, "cd", freeze_receipt_id=freeze_receipt_id
+        )
         wrong_receipt = replace(receipt, receipt_schema_version="wrong-receipt-v0")
         _persist_pef_boundary(conn, artifact, wrong_receipt, run)
 
         with pytest.raises(RuntimeError, match="receipt frozen identity mismatch"):
+            PostgresInternalBenchmarkBoundaryResolver(conn).resolve_pef_v1(horizon)
+
+
+def test_resolver_rejects_missing_pef_freeze_authority() -> None:
+    assert DB_URL is not None
+    horizon = datetime(2031, 8, 1, 18, 0, tzinfo=UTC)
+    with psycopg.connect(DB_URL) as conn:
+        artifact, receipt, run = _pef_boundary(horizon, "ef")
+        _persist_pef_boundary(conn, artifact, receipt, run)
+
+        with pytest.raises(RuntimeError, match="referenced freeze authority is missing"):
+            PostgresInternalBenchmarkBoundaryResolver(conn).resolve_pef_v1(horizon)
+
+
+def test_resolver_counts_dangling_exact_run_before_binding_lookup() -> None:
+    assert DB_URL is not None
+    horizon = datetime(2031, 9, 1, 0, 0, tzinfo=UTC)
+    with psycopg.connect(DB_URL) as conn:
+        freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
+        artifact, receipt, run = _pef_boundary(
+            horizon, "ab", freeze_receipt_id=freeze_receipt_id
+        )
+        _persist_pef_boundary(conn, artifact, receipt, run)
+        _, _, dangling_run = _pef_boundary(
+            horizon, "cd", freeze_receipt_id=freeze_receipt_id
+        )
+        _persist_pef_run_only(conn, dangling_run)
+
+        with pytest.raises(RuntimeError, match="ambiguous exact PEF_V1"):
             PostgresInternalBenchmarkBoundaryResolver(conn).resolve_pef_v1(horizon)
