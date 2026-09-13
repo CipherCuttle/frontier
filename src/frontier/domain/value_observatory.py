@@ -198,8 +198,7 @@ class RegisteredOutcomeDefinition:
         if self.horizon_seconds <= 0:
             raise ValueError("outcome horizon_seconds must be positive")
         keys = [
-            (item.source_id, item.offset_seconds_from_anchor)
-            for item in self.coverage_requirements
+            (item.source_id, item.offset_seconds_from_anchor) for item in self.coverage_requirements
         ]
         if len(set(keys)) != len(keys):
             raise ValueError("outcome coverage requirements contain duplicate boundaries")
@@ -395,7 +394,9 @@ class ValueObservatoryOpportunity:
     def to_canonical(self) -> dict[str, CanonicalValue]:
         definitions: list[CanonicalValue] = [
             item.to_canonical()
-            for item in sorted(self.outcome_definitions, key=lambda item: item.outcome_definition_id)
+            for item in sorted(
+                self.outcome_definitions, key=lambda item: item.outcome_definition_id
+            )
         ]
         return {
             "anchor_at": canonical_timestamp(self.anchor_at),
@@ -658,8 +659,13 @@ class ValueObservatoryOutcome:
             or item.available_at > self.resolution_at
             for item in self.evidence
         ):
-            raise ValueError("outcome evidence source material must become available after registration")
-        if any(item.collection_state is not EvidenceCollectionState.PROSPECTIVE for item in self.evidence):
+            raise ValueError(
+                "outcome evidence source material must become available after registration"
+            )
+        if any(
+            item.collection_state is not EvidenceCollectionState.PROSPECTIVE
+            for item in self.evidence
+        ):
             raise ValueError("recovered outcome evidence is not eligible for prospective scoring")
         if len({item.health_observation_id for item in self.coverage_bindings}) != len(
             self.coverage_bindings
@@ -710,10 +716,14 @@ class ValueObservatoryOutcome:
         }
         actual = {(item.source_id, item.as_of): item for item in self.coverage_bindings}
         if set(actual) != set(expected):
-            raise ValueError("negative outcome coverage does not match the preregistered boundary set")
+            raise ValueError(
+                "negative outcome coverage does not match the preregistered boundary set"
+            )
         for key, requirement in expected.items():
             if not requirement.accepts(actual[key]):
-                raise ValueError("negative outcome coverage fails the preregistered health threshold")
+                raise ValueError(
+                    "negative outcome coverage fails the preregistered health threshold"
+                )
 
     @property
     def outcome_digest(self) -> Digest:
@@ -797,9 +807,7 @@ def require_outcome_opportunity_binding(
         raise ValueError("outcome anchor does not match opportunity artifact")
     if outcome.opportunity_recorded_at != opportunity.recorded_at:
         raise ValueError("outcome registration time does not match opportunity artifact")
-    registrations = {
-        item.registration_digest: item for item in opportunity.outcome_definitions
-    }
+    registrations = {item.registration_digest: item for item in opportunity.outcome_definitions}
     if outcome.outcome_definition.registration_digest not in registrations:
         raise ValueError("outcome definition was not preregistered on the opportunity artifact")
     if registrations[outcome.outcome_definition.registration_digest] != outcome.outcome_definition:
