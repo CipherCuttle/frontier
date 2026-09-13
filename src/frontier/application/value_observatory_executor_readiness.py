@@ -195,7 +195,7 @@ def assess_benchmark_executor_readiness_v0(
 ) -> BenchmarkExecutorReadinessAssessment:
     """Assess whether all four exact frozen executors satisfy their activation contract."""
 
-    required_arms = set(BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
+    required_arms: set[ObservatoryArm] = set(BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
     expected_by_arm = _index_expectations(expected_executors, required_arms=required_arms)
     evidence_by_arm = _index_evidence(evidence, required_arms=required_arms)
 
