@@ -38,6 +38,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          jq -e '
+            .output.compress == true and
+            .security.enableSecurityCheck == true and
+            .output.tokenBudget == 100000
+          ' repomix.config.json >/dev/null || {
+            echo 'repomix.config.json violates the agent-context-v1 packing policy' >&2
+            exit 1
+          }
+
+          config_sha="$(sha256sum repomix.config.json | cut -d' ' -f1)"
+          compress="$(jq -r '.output.compress' repomix.config.json)"
+          security_check="$(jq -r '.security.enableSecurityCheck' repomix.config.json)"
+          token_budget="$(jq -r '.output.tokenBudget' repomix.config.json)"
+
           mkdir -p agent-context
           git ls-files | LC_ALL=C sort > agent-context/structure.txt
           npm exec --yes --package="repomix@${REPOMIX_VERSION}" -- \
@@ -55,6 +70,10 @@ jobs:
             --arg event "$GITHUB_EVENT_NAME" \
             --arg generated_at "$generated_at" \
             --arg repomix_version "$REPOMIX_VERSION" \
+            --arg config_sha256 "$config_sha" \
+            --argjson compress "$compress" \
+            --argjson security_check "$security_check" \
+            --argjson token_budget "$token_budget" \
             --arg structure_sha256 "$structure_sha" \
             --arg compressed_code_sha256 "$code_sha" \
             '{
@@ -64,7 +83,14 @@ jobs:
               source_ref: $source_ref,
               event: $event,
               generated_at: $generated_at,
-              generator: {name: "repomix", version: $repomix_version, compress: true, security_check: true, token_budget: 100000},
+              generator: {
+                name: "repomix",
+                version: $repomix_version,
+                config_sha256: $config_sha256,
+                compress: $compress,
+                security_check: $security_check,
+                token_budget: $token_budget
+              },
               files: {
                 "structure.txt": {sha256: $structure_sha256},
                 "compressed-code.xml": {sha256: $compressed_code_sha256}
