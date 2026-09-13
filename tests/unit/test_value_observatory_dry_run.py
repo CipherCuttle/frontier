@@ -271,7 +271,7 @@ def test_population_and_outcomes_must_be_preregistered_before_any_arm_starts() -
 
 
 def test_registration_must_be_strictly_before_first_arm_start() -> None:
-    source_population, opportunities, captures, evidence = valid_boundary()
+    source_population, _, captures, evidence = valid_boundary()
     first_arm_start = min(item.started_at for item in evidence)
 
     boundary_population = replace(source_population, recorded_at=first_arm_start)
