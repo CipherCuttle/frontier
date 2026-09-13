@@ -297,10 +297,13 @@ def test_capture_must_use_population_horizon_and_finish_by_deadline() -> None:
     source_population, opportunities, captures, evidence = valid_boundary()
     first = captures[0]
 
+    changed_horizon = HORIZON + timedelta(minutes=1)
     wrong_horizon = replace(
         first,
-        knowledge_horizon=HORIZON - timedelta(minutes=1),
-        selection_window_end=HORIZON - timedelta(minutes=1),
+        captured_at=changed_horizon + timedelta(seconds=10),
+        knowledge_horizon=changed_horizon,
+        selection_window_start=changed_horizon - timedelta(hours=24),
+        selection_window_end=changed_horizon,
     )
     with pytest.raises(ValueError, match="knowledge horizon"):
         validate(source_population, opportunities, (wrong_horizon, *captures[1:]), evidence)
@@ -310,12 +313,17 @@ def test_capture_must_use_population_horizon_and_finish_by_deadline() -> None:
         validate(source_population, opportunities, (late_capture, *captures[1:]), evidence)
 
 
-def test_arm_cannot_start_before_horizon_or_after_deadline() -> None:
+def test_arm_cannot_start_before_manifest_or_after_deadline() -> None:
     source_population, opportunities, captures, evidence = valid_boundary()
 
-    before = replace(evidence[0], started_at=HORIZON - timedelta(seconds=1))
-    with pytest.raises(ValueError, match="cannot start before"):
-        validate(source_population, opportunities, captures, (before, *evidence[1:]))
+    before_manifest = replace(evidence[0], started_at=HORIZON - timedelta(seconds=1))
+    with pytest.raises(ValueError, match="manifest must be frozen"):
+        validate(
+            source_population,
+            opportunities,
+            captures,
+            (before_manifest, *evidence[1:]),
+        )
 
     after = replace(evidence[0], started_at=HORIZON + timedelta(minutes=30, seconds=1))
     with pytest.raises(ValueError, match="arm start exceeds"):
