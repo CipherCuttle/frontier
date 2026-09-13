@@ -166,7 +166,9 @@ def _validate_capture_contract(
     if capture.domain_scope != BENCHMARK_CAPTURE_V0_DOMAIN_SCOPE:
         raise ValueError("dry-run capture must use the frozen GLOBAL domain scope")
     if capture.selection_window_start != window_start:
-        raise ValueError("dry-run capture selection window start is not the frozen 24-hour boundary")
+        raise ValueError(
+            "dry-run capture selection window start is not the frozen 24-hour boundary"
+        )
     if capture.selection_window_end != knowledge_horizon:
         raise ValueError("dry-run capture selection window must end at the knowledge horizon")
     if evidence.started_at < knowledge_horizon:
@@ -182,7 +184,9 @@ def _validate_capture_contract(
         if not evidence.horizon_enforced:
             raise ValueError("complete dry-run arm requires enforced point-in-time source state")
         if evidence.source_state_horizon != knowledge_horizon:
-            raise ValueError("complete dry-run arm source state must bind the exact knowledge horizon")
+            raise ValueError(
+                "complete dry-run arm source state must bind the exact knowledge horizon"
+            )
 
 
 __all__ = [
