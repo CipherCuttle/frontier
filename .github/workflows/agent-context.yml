@@ -1,0 +1,144 @@
+name: agent-context
+
+on:
+  workflow_run:
+    workflows: [verify]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-context-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  pack:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    continue-on-error: true
+    env:
+      REPOMIX_VERSION: '1.18.0'
+      EXPECTED_CONFIG_SHA256: 'ab4497ce145279da19cd5e1ab2dd90aa7947239f1bebfa841ca23de80558adea'
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_REF: ${{ github.event.workflow_run.head_branch }}
+      SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+      SOURCE_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node for context tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+
+      - name: Install signed Repomix outside the checkout
+        shell: bash
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+          npm_config_userconfig: /dev/null
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/dev-spine-repomix"
+          mkdir -p "$tool_dir"
+          cd "$tool_dir"
+          printf '{"private":true}\n' > package.json
+          npm install --ignore-scripts --no-audit --no-fund --save-exact \
+            --registry=https://registry.npmjs.org/ "repomix@${REPOMIX_VERSION}"
+          npm audit signatures --registry=https://registry.npmjs.org/
+          test "$("$tool_dir/node_modules/.bin/repomix" --version)" = "$REPOMIX_VERSION"
+
+      - name: Generate exact-SHA agent context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          config_sha="$(sha256sum repomix.config.json | cut -d' ' -f1)"
+          if [ "$config_sha" != "$EXPECTED_CONFIG_SHA256" ]; then
+            echo "repomix.config.json digest mismatch; refusing source-controlled packing policy" >&2
+            exit 1
+          fi
+
+          compress="$(jq -r '.output.compress' repomix.config.json)"
+          security_check="$(jq -r '.security.enableSecurityCheck' repomix.config.json)"
+          token_budget="$(jq -r '.output.tokenBudget' repomix.config.json)"
+          tool="$RUNNER_TEMP/dev-spine-repomix/node_modules/.bin/repomix"
+
+          mkdir -p agent-context
+          git ls-files | LC_ALL=C sort > agent-context/structure.txt
+          "$tool" --config "$GITHUB_WORKSPACE/repomix.config.json" \
+            --output agent-context/compressed-code.xml
+
+          structure_sha="$(sha256sum agent-context/structure.txt | cut -d' ' -f1)"
+          code_sha="$(sha256sum agent-context/compressed-code.xml | cut -d' ' -f1)"
+          generated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          jq -n \
+            --arg schema_version 'dev-spine-agent-context-v1' \
+            --arg purpose 'developer-tooling-rehydration' \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_ref "$SOURCE_REF" \
+            --arg event "$SOURCE_EVENT" \
+            --arg source_workflow_run_id "$SOURCE_WORKFLOW_RUN_ID" \
+            --arg generated_at "$generated_at" \
+            --arg repomix_version "$REPOMIX_VERSION" \
+            --arg config_sha256 "$config_sha" \
+            --argjson compress "$compress" \
+            --argjson security_check "$security_check" \
+            --argjson token_budget "$token_budget" \
+            --arg structure_sha256 "$structure_sha" \
+            --arg compressed_code_sha256 "$code_sha" \
+            '{
+              schema_version: $schema_version,
+              purpose: $purpose,
+              repository: $repository,
+              source_sha: $source_sha,
+              source_ref: $source_ref,
+              event: $event,
+              source_workflow_run_id: $source_workflow_run_id,
+              generated_at: $generated_at,
+              trust: {
+                authoritative: false,
+                completeness: "bounded",
+                generated_interpretation: true,
+                workflow_definition_source: "default-branch-workflow_run",
+                product_authority: false,
+                scientific_authority: false,
+                governance_authority: false,
+                runtime_authority: false,
+                merge_authority: false,
+                source_inspection_required: true
+              },
+              generator: {
+                name: "repomix",
+                version: $repomix_version,
+                dependency_install: "runner-temp+official-registry+ignore-scripts+npm-audit-signatures",
+                config_sha256: $config_sha256,
+                compress: $compress,
+                security_check: $security_check,
+                token_budget: $token_budget
+              },
+              files: {
+                "structure.txt": {sha256: $structure_sha256, role: "tracked-file-topology"},
+                "compressed-code.xml": {sha256: $compressed_code_sha256, role: "bounded-generated-context"}
+              }
+            }' > agent-context/metadata.json
+
+      - name: Upload short-lived context artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dev-spine-context-${{ env.SOURCE_SHA }}
+          path: agent-context/
+          if-no-files-found: error
+          retention-days: 3
