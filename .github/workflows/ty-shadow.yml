@@ -1,0 +1,48 @@
+name: ty-shadow
+
+on:
+  pull_request:
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ty-shadow.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ty-shadow:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
+      - name: Sync frozen environment
+        run: uv sync --all-extras --frozen
+      - name: Run ty shadow
+        shell: bash
+        run: |
+          set +e
+          start_ms=$(date +%s%3N)
+          uvx --from ty==0.0.80 ty check > ty-shadow.out 2>&1
+          exit_code=$?
+          end_ms=$(date +%s%3N)
+          duration_ms=$((end_ms - start_ms))
+
+          cat ty-shadow.out
+
+          {
+            echo "### ty shadow"
+            echo
+            echo "- version: \`0.0.80\`"
+            echo "- exit code: \`${exit_code}\`"
+            echo "- duration: \`${duration_ms} ms\`"
+            echo "- status: observational only; Pyright remains authoritative"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Shadow experiment only: diagnostics are evidence, not an acceptance gate.
+          exit 0
