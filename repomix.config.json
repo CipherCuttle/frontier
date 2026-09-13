@@ -19,7 +19,21 @@
       "includeLogs": false
     }
   },
-  "include": ["**/*"],
+  "include": [
+    "AGENTS.md",
+    "README.md",
+    "mise.toml",
+    "pyproject.toml",
+    "docs/PLANNING_INDEX.md",
+    "docs/ROADMAP.md",
+    "docs/CONSTITUTION.md",
+    "docs/adr/**/*.md",
+    "agent_skills/**/*.md",
+    "src/**/*.py",
+    "scripts/verify.py",
+    ".github/workflows/*.yml",
+    ".github/workflows/*.yaml"
+  ],
   "ignore": {
     "useGitignore": true,
     "useDotIgnore": true,
