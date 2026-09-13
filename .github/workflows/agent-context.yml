@@ -1,28 +1,33 @@
 name: agent-context
 
 on:
-  pull_request:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_run:
+    workflows: [verify]
+    types: [completed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: agent-context-${{ github.ref }}
+  group: agent-context-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: true
 
 jobs:
   pack:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     continue-on-error: true
     env:
       REPOMIX_VERSION: '1.18.0'
       EXPECTED_CONFIG_SHA256: 'ab4497ce145279da19cd5e1ab2dd90aa7947239f1bebfa841ca23de80558adea'
-      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_REF: ${{ github.event.workflow_run.head_branch }}
+      SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+      SOURCE_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - name: Checkout exact source SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -60,7 +65,7 @@ jobs:
 
           config_sha="$(sha256sum repomix.config.json | cut -d' ' -f1)"
           if [ "$config_sha" != "$EXPECTED_CONFIG_SHA256" ]; then
-            echo "repomix.config.json digest mismatch; refusing PR-controlled packing policy" >&2
+            echo "repomix.config.json digest mismatch; refusing source-controlled packing policy" >&2
             exit 1
           fi
 
@@ -84,7 +89,8 @@ jobs:
             --arg repository "$GITHUB_REPOSITORY" \
             --arg source_sha "$SOURCE_SHA" \
             --arg source_ref "$SOURCE_REF" \
-            --arg event "$GITHUB_EVENT_NAME" \
+            --arg event "$SOURCE_EVENT" \
+            --arg source_workflow_run_id "$SOURCE_WORKFLOW_RUN_ID" \
             --arg generated_at "$generated_at" \
             --arg repomix_version "$REPOMIX_VERSION" \
             --arg config_sha256 "$config_sha" \
@@ -100,11 +106,13 @@ jobs:
               source_sha: $source_sha,
               source_ref: $source_ref,
               event: $event,
+              source_workflow_run_id: $source_workflow_run_id,
               generated_at: $generated_at,
               trust: {
                 authoritative: false,
                 completeness: "bounded",
                 generated_interpretation: true,
+                workflow_definition_source: "default-branch-workflow_run",
                 product_authority: false,
                 scientific_authority: false,
                 governance_authority: false,
