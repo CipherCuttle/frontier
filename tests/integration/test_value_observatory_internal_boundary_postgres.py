@@ -386,7 +386,7 @@ def test_resolver_rejects_self_consistent_run_json_that_disagrees_with_row_ident
     assert DB_URL is not None
     horizon = datetime(2031, 6, 1, 6, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
-        artifact, receipt, run = _pef_boundary(horizon, "gh")
+        artifact, receipt, run = _pef_boundary(horizon, "ab")
         forged_run = replace(run, candidate_id="forged-candidate")
         _persist_pef_boundary(
             conn,
@@ -404,7 +404,7 @@ def test_resolver_rejects_wrong_pef_receipt_schema_family() -> None:
     assert DB_URL is not None
     horizon = datetime(2031, 7, 1, 12, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
-        artifact, receipt, run = _pef_boundary(horizon, "ij")
+        artifact, receipt, run = _pef_boundary(horizon, "cd")
         wrong_receipt = replace(receipt, receipt_schema_version="wrong-receipt-v0")
         _persist_pef_boundary(conn, artifact, wrong_receipt, run)
 
