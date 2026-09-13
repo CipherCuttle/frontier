@@ -252,7 +252,9 @@ def test_naive_adapter_rejects_receipt_not_binding_snapshot() -> None:
 
 def test_naive_adapter_rejects_noncontiguous_source_ranking() -> None:
     snapshot = baseline_snapshot(count=2)
-    invalid = replace(snapshot, episodes=(snapshot.episodes[0], replace(snapshot.episodes[1], rank=3)))
+    invalid = replace(
+        snapshot, episodes=(snapshot.episodes[0], replace(snapshot.episodes[1], rank=3))
+    )
     receipt = baseline_receipt(invalid)
 
     with pytest.raises(ValueError, match="contiguous from one"):
