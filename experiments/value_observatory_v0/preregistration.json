@@ -1,0 +1,107 @@
+{
+  "schema_version": "frontier-value-observatory-preregistration-v0",
+  "phase_id": "FRONTIER_VALUE_OBSERVATORY_V0",
+  "status": "CANDIDATE_AUTHORITY_UNTIL_MERGE",
+  "authority_document": "docs/FRONTIER_VALUE_OBSERVATORY_V0.md",
+  "objective": "Measure prospectively whether FRONTIER provides useful lead time on later-consequential emerging developments relative to simpler discovery comparators without mutating active PEF_V1 or canonical public ranking.",
+  "product_claim_under_test": "At equal alert budget and knowledge horizon, FRONTIER surfaces developments that later receive independent downstream evidence earlier than a naive FRONTIER control, ordinary aggregation, and a competent web-connected general LLM.",
+  "null_hypothesis": "FRONTIER provides no practically useful prospective advantage over simpler discovery methods.",
+  "protected_pef_v1": {
+    "experiment_id": "advanced-ranking-pef-v1",
+    "candidate_id": "prospective-primary-emission-freshness-v1",
+    "authority_state": "EXPERIMENTAL_SHADOW",
+    "ranking_window_start": "2026-09-10T10:05:00Z",
+    "ranking_window_end": "2026-10-08T10:05:00Z",
+    "label_maturation_end": "2026-10-09T10:05:00Z",
+    "no_early_stopping": true,
+    "no_window_extension": true,
+    "no_backfill": true,
+    "registry_mutation_forbidden": true,
+    "candidate_identity_mutation_forbidden": true,
+    "overlapping_materially_distinct_confirmatory_ranking_candidate_forbidden_without_separate_multiplicity_authority": true
+  },
+  "authorized_work": [
+    "VALUE_OBSERVATORY_ARTIFACT_SCHEMA_V0",
+    "SIGNAL_FEATURE_LEDGER_V0",
+    "BENCHMARK_CAPTURE_V0",
+    "OUTCOME_SIDECARS_V0",
+    "VALUE_REPORT_V0"
+  ],
+  "not_authorized": [
+    "EMERGENCE_RANKING_V0",
+    "canonical_ranking_change",
+    "public_recommendation_authority_change",
+    "llm_truth_or_ranking_authority",
+    "pef_v1_registry_change",
+    "pef_v1_window_change",
+    "pef_v1_backfill_or_replay",
+    "entity_or_provenance_promotion",
+    "post_hoc_outcome_definition_for_scored_results"
+  ],
+  "signal_dimensions": [
+    "novelty",
+    "burst",
+    "persistence",
+    "diffusion",
+    "root_diversity",
+    "adoption",
+    "confirmation",
+    "coverage",
+    "manipulation_reflexivity",
+    "freshness"
+  ],
+  "signal_model_constraints": {
+    "single_magic_scalar_authorized": false,
+    "role_transition_modeling_authorized": true,
+    "presentation_diversity_may_not_mutate_scientific_ranking": true
+  },
+  "required_benchmark_arms": [
+    "FRONTIER_NAIVE_CONTROL",
+    "FRONTIER_EXISTING_EXPERIMENTAL",
+    "ORDINARY_AGGREGATION",
+    "WEB_LLM_BENCHMARK"
+  ],
+  "benchmark_constraints": {
+    "equal_alert_budget_required": true,
+    "exact_k_frozen_before_first_scored_capture": true,
+    "capture_cadence_frozen_before_first_scored_capture": true,
+    "domain_scope_frozen_before_first_scored_capture": true,
+    "llm_prompt_frozen_before_first_scored_capture": true,
+    "llm_provider_model_version_recorded": true,
+    "benchmark_failure_semantics_frozen_before_first_scored_capture": true,
+    "future_only_scored_evidence": true
+  },
+  "initial_outcome_horizons": {
+    "early_attention_discovery": "approximately_24h",
+    "behavioral_adoption": "approximately_7d",
+    "confirmation_impact": "approximately_30d",
+    "exact_domain_specific_definitions_required_before_confirmatory_product_claim": true
+  },
+  "outcome_states_required": [
+    "POSITIVE",
+    "NEGATIVE_WITH_ADEQUATE_COVERAGE",
+    "UNRESOLVED_COVERAGE"
+  ],
+  "causal_contamination_rule": "Public exposure of a scored candidate before outcome maturation must either be prevented or explicitly modeled and excluded from claims of organic independent validation.",
+  "required_reporting": [
+    "precision_or_outcome_yield_at_equal_budget",
+    "miss_rate",
+    "lead_time_to_independent_attention_or_discovery",
+    "lead_time_to_behavioral_or_adoption_evidence",
+    "lead_time_to_authoritative_confirmation_when_defined",
+    "false_alert_burden",
+    "coverage_conditioned_unresolved_fraction",
+    "wins_ties_losses_vs_each_comparator",
+    "per_domain_results",
+    "pooled_results",
+    "full_result_distribution",
+    "benchmark_execution_failures"
+  ],
+  "loss_reporting_required": true,
+  "cherry_picked_case_studies_insufficient": true,
+  "completion_semantics": "V0 completion proves measurement capability only and does not itself prove FRONTIER product superiority.",
+  "later_authority_required_for": [
+    "FRONTIER_VALUE_PROOF_V1",
+    "EMERGENCE_RANKING_V0"
+  ]
+}

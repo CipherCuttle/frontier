@@ -38,6 +38,14 @@ The next product phase is source diversity, not advanced ranking. FRONTIER needs
 
 See `ROADMAP.md` for the bounded sequence.
 
+## Current product-value measurement authority
+
+`docs/FRONTIER_VALUE_OBSERVATORY_V0.md` is the explicit bounded authority for prospectively measuring whether FRONTIER provides useful early-warning value beyond simpler discovery methods. Its machine-readable preregistration is `experiments/value_observatory_v0/preregistration.json`.
+
+Until the governance PR containing those files is merged, their state is `CANDIDATE_AUTHORITY`. Merge promotes the observatory authority to `FROZEN_V0`.
+
+This authority is deliberately observational during the active PEF_V1 confirmatory window. It does not authorize a new ranking candidate, PEF_V1 mutation, source-registry mutation for PEF_V1, LLM truth authority, or public-ranking change.
+
 ## Implementation governance
 
 `IMPLEMENT -> TEST -> ONE independent hostile review -> repair Critical/High -> ONE targeted re-review only if Critical/High fixes were required -> COMMIT/CLOSE -> MOVE FORWARD`
