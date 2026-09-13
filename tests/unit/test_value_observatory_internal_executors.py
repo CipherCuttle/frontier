@@ -341,7 +341,9 @@ def test_pef_adapter_emits_frozen_top_five_without_recomputation() -> None:
 
 def test_pef_adapter_rejects_generation_timestamp_mismatch() -> None:
     artifact = pef_artifact()
-    receipt = replace(pef_receipt(artifact), generated_at=artifact.generated_at + timedelta(seconds=1))
+    receipt = replace(
+        pef_receipt(artifact), generated_at=artifact.generated_at + timedelta(seconds=1)
+    )
 
     with pytest.raises(ValueError, match="generation timestamp mismatch"):
         build_pef_v1_observatory_capture(
