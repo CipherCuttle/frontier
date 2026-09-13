@@ -5,6 +5,7 @@
     "requires_all_four_executors_ready": true,
     "requires_arm_independent_population_manifest": true,
     "requires_artifact_schema_merged": true,
+    "requires_horizon_safe_comparators": true,
     "requires_independent_hostile_review": true,
     "requires_outcome_definitions_frozen": true,
     "requires_parent_authority_merged": true,
@@ -22,15 +23,18 @@
     },
     {
       "arm": "FRONTIER_EXISTING_EXPERIMENTAL",
-      "executor_rule": "latest valid frozen PEF_V1 output with boundary <= knowledge_horizon; no recomputation or substitution",
+      "executor_rule": "exact valid frozen PEF_V1 output whose boundary equals knowledge_horizon; no prior-boundary carry-forward, recomputation, or substitution",
       "experimental_score_allowed": true,
-      "frontier_hidden_history_allowed": true
+      "frontier_hidden_history_allowed": true,
+      "requires_exact_boundary": true
     },
     {
       "arm": "ORDINARY_AGGREGATION",
-      "executor_rule": "one current public retrieval attempt per frozen source; no FRONTIER DB/history/grouping/projection/PEF/feature-ledger access; merge by eligible source timestamp descending then item_key lexical",
+      "executor_rule": "one horizon-safe public retrieval attempt per frozen source; no FRONTIER DB/history/grouping/projection/PEF/feature-ledger access; mutable collection/list state must be reconstructable at knowledge_horizon; merge by eligible source timestamp descending then item_key lexical",
       "experimental_score_allowed": false,
       "frontier_hidden_history_allowed": false,
+      "post_horizon_mutable_collection_state_allowed": false,
+      "requires_horizon_safe_collection_state": true,
       "source_ids": [
         "hn.frontpage",
         "pypi.updates",
@@ -43,7 +47,7 @@
     },
     {
       "arm": "WEB_LLM_BENCHMARK",
-      "executor_rule": "ordinary web-connected retrieval only; no FRONTIER private state; no silent provider/model fallback",
+      "executor_rule": "ordinary web-connected retrieval only; no FRONTIER private state; retrieval itself must enforce the frozen knowledge_horizon; no silent provider/model fallback",
       "experimental_score_allowed": false,
       "frontier_hidden_history_allowed": false,
       "model_change_policy": "new_series_segment",
@@ -52,7 +56,9 @@
       "requires_citations": true,
       "requires_exact_model_identity": true,
       "requires_prompt_digest": true,
-      "requires_provider_identity": true
+      "requires_provider_identity": true,
+      "requires_retrieval_knowledge_cutoff": true,
+      "timestamp_filter_alone_sufficient_for_horizon": false
     }
   ],
   "artifact_schema": "VALUE_OBSERVATORY_ARTIFACT_SCHEMA_V0",
@@ -71,15 +77,21 @@
     "failed_pairwise_result": "UNRESOLVED",
     "failure_rate_mandatory_in_reporting": true,
     "ordinary_aggregation_executor_failure": "FAILED",
+    "ordinary_aggregation_horizon_unsafe_source": "FAILED",
     "ordinary_aggregation_individual_source_failure": "RETAIN_AS_SOURCE_EVIDENCE",
+    "pef_exact_boundary_missing": "FAILED",
     "persist_every_scheduled_arm": true,
-    "population_freeze_failure_creates_scored_boundary": false
+    "population_freeze_failure_creates_scored_boundary": false,
+    "web_llm_retrieval_cutoff_unenforceable": "FAILED"
   },
   "horizon_rules": {
     "executor_unable_to_enforce_horizon": "FAILED",
     "future_timestamp_items_ineligible": true,
     "knowledge_horizon_is_aligned_boundary": true,
-    "scored_retry_allowed": false
+    "pef_prior_boundary_fallback_allowed": false,
+    "post_horizon_mutable_collection_state_ineligible": true,
+    "scored_retry_allowed": false,
+    "web_llm_post_horizon_knowledge_allowed": false
   },
   "item_rules": {
     "cross_arm_budget_borrowing_allowed": false,
@@ -128,7 +140,9 @@
     "failure_policy",
     "population_protocol",
     "outcome_definition_set",
-    "coverage_acceptance_policy"
+    "coverage_acceptance_policy",
+    "knowledge_horizon_enforcement",
+    "pef_exact_boundary_policy"
   ],
   "schedule": {
     "alert_budget_per_arm": 5,
