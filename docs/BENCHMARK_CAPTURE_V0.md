@@ -23,6 +23,7 @@ This protocol MUST NOT:
 - add LLM output to truth, identity, grouping, ranking, or outcome authority;
 - backfill a missed scored benchmark boundary;
 - reuse future evidence to repair an earlier benchmark capture;
+- choose or alter outcome definitions after scored evidence is visible;
 - expose scored item lists publicly before their registered outcome horizons mature;
 - treat a benchmark failure as a FRONTIER win.
 
@@ -42,6 +43,24 @@ Every scheduled boundary attempts all four frozen arms against the same:
 Each arm produces one immutable `ValueObservatoryCapture` artifact with `COMPLETE` or `FAILED` status.
 
 A capture is not silently dropped because an arm failed.
+
+### 3.1 Arm-independent population and outcome preregistration
+
+The scored denominator is frozen independently of the four benchmark arms.
+
+Before any arm executes at a scored boundary, the observatory must:
+
+1. create one immutable `ValueObservatoryPopulationManifest` at the exact benchmark `knowledge_horizon` under a frozen population protocol digest;
+2. derive that manifest without using any arm's surfaced output to decide which members exist;
+3. register exactly one `ValueObservatoryOpportunity` for every population member and verify exact population completeness;
+4. bind each opportunity to the manifest/member identity and exact anchor material;
+5. attach the exact preregistered outcome definition(s), protocol digest(s), horizon(s), required coverage boundaries, and acceptable health states before outcome evidence can mature.
+
+An arm may surface or miss population members, but it may not create, remove, or redefine the scored opportunity population.
+
+If the population manifest or exact opportunity-completeness check cannot be frozen before arm execution, that boundary is not a valid scored boundary. It is recorded as a protocol execution failure and is never backfilled.
+
+Outcome rules are prospective authority. A later evaluator may not inspect observed results and then choose a more favorable outcome definition, horizon, source set, coverage boundary, or accepted health threshold.
 
 ## 4. Cadence and initial run
 
@@ -167,6 +186,8 @@ Each capture must record:
 - returned citations/URLs;
 - capture time.
 
+The `ValueObservatoryCapture` is invalid for this arm if provider identity, exact model identity, or prompt digest is missing.
+
 Rules:
 
 - the LLM receives no FRONTIER private database state or hidden historical features;
@@ -203,6 +224,8 @@ Failure rules:
 - benchmark failure rate is itself mandatory output;
 - there is no scored retry or backfill.
 
+A population-manifest/completeness failure invalidates the whole scored boundary rather than allowing any arm to define the denominator from its own surfaced results.
+
 ## 10. Equal-budget comparison rule
 
 Only items within positions 1 through 5 are scored for any arm.
@@ -211,13 +234,17 @@ Comparisons with different budgets are invalid under V0.
 
 No later report may expand one arm's item set, use hidden lower-ranked results, or compare a complete five-item set against another arm's unrecorded overflow.
 
-## 11. Source health and coverage
+## 11. Source health, future evidence, and coverage
 
 Every capture binds exact source-health evidence available at or before the knowledge horizon.
 
 Coverage degradation must remain visible.
 
-Silence under inadequate outcome coverage cannot later be converted into a negative label.
+Outcome evidence used for prospective scoring must bind both when the source material became available and when FRONTIER observed it. Material already available at or before opportunity registration is ineligible even if collected later. Backfilled/recovered evidence is retained as diagnostic evidence but is not eligible for prospective scoring.
+
+For each registered outcome definition, the exact required source/boundary set and the accepted transport, freshness, completeness, and schema states must be preregistered. `NEGATIVE_WITH_ADEQUATE_COVERAGE` is valid only when the observed coverage bindings exactly match that required set and every bound health dimension satisfies its frozen acceptance set.
+
+Silence under missing, incomplete, degraded-beyond-threshold, or otherwise inadequate outcome coverage cannot later be converted into a negative label.
 
 Benchmark execution health and outcome-observation health are separate concepts and must remain separately auditable.
 
@@ -240,7 +267,10 @@ The following require a new protocol identity before scored use:
 - ordinary-aggregation source-set change;
 - prompt text change;
 - deterministic ordering change;
-- benchmark failure-policy change.
+- benchmark failure-policy change;
+- population-protocol change;
+- scored outcome-definition-set change;
+- outcome coverage acceptance-policy change.
 
 Executor bug fixes that do not change protocol semantics must still record a new executor version.
 
@@ -254,23 +284,32 @@ The first scored V0 boundary is forbidden until:
 2. `VALUE_OBSERVATORY_ARTIFACT_SCHEMA_V0` is merged;
 3. this `BENCHMARK_CAPTURE_V0` protocol is merged and frozen;
 4. the exact protocol JSON digest is recorded by the operator;
-5. all four executors can emit the immutable capture artifact shape without mutating PEF_V1;
-6. one independent hostile review for this bounded phase is complete.
+5. the arm-independent population executor can emit a manifest at the exact scored knowledge horizon and prove exact opportunity completeness;
+6. every scored opportunity can be bound before outcome maturity to the exact frozen outcome definition(s), horizon(s), coverage requirements, and accepted health states;
+7. all four executors can emit the immutable capture artifact shape without mutating PEF_V1;
+8. Web-LLM execution can bind provider, exact model, prompt digest, executor version, raw response digest, and citations without silent fallback;
+9. one independent hostile review for this bounded phase is complete.
 
 ## 15. Verification and reporting
 
 Before activation, implementation must prove:
 
+- an arm-independent population manifest is frozen before arm execution;
+- exact one-opportunity-per-population-member completeness;
+- preregistered outcome definitions/coverage rules cannot be selected after evidence arrives;
+- recovered or pre-registration source material cannot become prospective positive evidence;
+- negative outcomes require the exact frozen coverage-boundary set and accepted health states;
 - identical knowledge horizon across all attempted arms;
 - exact `K = 5` enforcement;
 - deterministic item ordering;
 - failed-arm persistence;
 - no future-timestamp item acceptance;
+- exact Web-LLM provider/model/prompt identity;
 - no PEF_V1 mutation;
 - no canonical public-ranking mutation;
 - no LLM truth/ranking authority.
 
-The eventual value report must include every scheduled boundary and preserve wins, losses, misses, false alerts, unresolved outcomes, coverage failures, and benchmark failures.
+The eventual value report must include every scheduled boundary and preserve wins, losses, misses, false alerts, unresolved outcomes, coverage failures, population/boundary failures, and benchmark failures.
 
 ## 16. V0 interpretation
 
