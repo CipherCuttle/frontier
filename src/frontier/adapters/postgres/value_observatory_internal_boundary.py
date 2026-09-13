@@ -7,7 +7,7 @@ from typing import cast
 import psycopg
 
 from frontier.adapters.postgres.pef_v1_confirmatory import (
-    _load_binding as _load_pef_v1_freeze_binding,
+    _load_binding as _load_pef_v1_freeze_binding,  # pyright: ignore[reportPrivateUsage]
 )
 from frontier.application.freeze_publication import require_confirmatory_boundary
 from frontier.application.value_observatory_internal_boundary import (
