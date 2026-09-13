@@ -56,9 +56,14 @@ _INTERNAL_ARMS = frozenset(
 
 
 class _RankedCaptureSource(Protocol):
-    rank: int
-    episode_id: str
-    observation_ids: tuple[str, ...]
+    @property
+    def rank(self) -> int: ...
+
+    @property
+    def episode_id(self) -> str: ...
+
+    @property
+    def observation_ids(self) -> tuple[str, ...]: ...
 
     def to_canonical(self) -> dict[str, CanonicalValue]: ...
 
