@@ -4,17 +4,22 @@ on:
   pull_request:
     paths:
       - ".github/workflows/frontier-dev-plan.md"
+      - ".github/workflows/frontier-dev-plan.lock.yml"
+      - ".github/aw/actions-lock.json"
       - ".github/workflows/gh-aw-compile.yml"
       - ".gitattributes"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   compile:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
       - name: Install gh-aw
         uses: github/gh-aw/actions/setup-cli@bde367913adeb3132f0a171594c88a17f4b7d08c # v0.88.7
         with:
@@ -25,6 +30,17 @@ jobs:
         run: |
           gh aw compile frontier-dev-plan
           gh aw compile --validate
+      - name: Commit generated lock evidence when changed
+        run: |
+          git add .github/workflows/frontier-dev-plan.lock.yml .github/aw/actions-lock.json
+          if git diff --cached --quiet; then
+            echo "Generated workflow already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "tooling: compile frontier dev planner"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
       - name: Upload generated workflow evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
