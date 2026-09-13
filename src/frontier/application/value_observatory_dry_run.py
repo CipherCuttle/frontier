@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from frontier.domain.digests import Digest
 from frontier.domain.value_observatory import (
@@ -32,12 +32,12 @@ def _require_aware(value: datetime, label: str) -> None:
 
 
 def _require_aligned_utc_boundary(value: datetime) -> None:
+    utc_value = value.astimezone(UTC)
     if (
-        value.utcoffset() != timedelta(0)
-        or value.hour not in _BENCHMARK_CAPTURE_V0_BOUNDARY_HOURS
-        or value.minute != 0
-        or value.second != 0
-        or value.microsecond != 0
+        utc_value.hour not in _BENCHMARK_CAPTURE_V0_BOUNDARY_HOURS
+        or utc_value.minute != 0
+        or utc_value.second != 0
+        or utc_value.microsecond != 0
     ):
         raise ValueError(
             "dry-run knowledge horizon must be aligned to 00:00, 06:00, 12:00, or 18:00 UTC"
