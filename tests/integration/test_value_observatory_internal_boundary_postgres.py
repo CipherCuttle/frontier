@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -202,6 +203,8 @@ def _persist_pef_boundary(
     artifact: PefV1Artifact,
     receipt: ProjectionReceipt,
     run: ShadowExperimentRun,
+    *,
+    row_candidate_id: str | None = None,
 ) -> None:
     with conn.transaction(), conn.cursor() as cur:
         cur.execute(
@@ -273,7 +276,7 @@ def _persist_pef_boundary(
             (
                 run.run_id,
                 run.experiment_id,
-                run.candidate_id,
+                run.candidate_id if row_candidate_id is None else row_candidate_id,
                 run.schema_version,
                 run.algorithm_version,
                 str(run.configuration_digest),
@@ -377,3 +380,33 @@ def test_resolver_preserves_exact_failed_pef_boundary_instead_of_hiding_it() -> 
         assert resolved.artifact.status is PefArtifactStatus.FAILED
         assert resolved.artifact.failure_reason == "candidate failed"
         assert resolved.receipt.status is ProjectionStatus.FAILED
+
+
+def test_resolver_rejects_self_consistent_run_json_that_disagrees_with_row_identity() -> None:
+    assert DB_URL is not None
+    horizon = datetime(2031, 6, 1, 6, 0, tzinfo=UTC)
+    with psycopg.connect(DB_URL) as conn:
+        artifact, receipt, run = _pef_boundary(horizon, "gh")
+        forged_run = replace(run, candidate_id="forged-candidate")
+        _persist_pef_boundary(
+            conn,
+            artifact,
+            receipt,
+            forged_run,
+            row_candidate_id=PEF_V1_CANDIDATE_ID,
+        )
+
+        with pytest.raises(RuntimeError, match="row does not bind canonical run payload"):
+            PostgresInternalBenchmarkBoundaryResolver(conn).resolve_pef_v1(horizon)
+
+
+def test_resolver_rejects_wrong_pef_receipt_schema_family() -> None:
+    assert DB_URL is not None
+    horizon = datetime(2031, 7, 1, 12, 0, tzinfo=UTC)
+    with psycopg.connect(DB_URL) as conn:
+        artifact, receipt, run = _pef_boundary(horizon, "ij")
+        wrong_receipt = replace(receipt, receipt_schema_version="wrong-receipt-v0")
+        _persist_pef_boundary(conn, artifact, wrong_receipt, run)
+
+        with pytest.raises(RuntimeError, match="receipt frozen identity mismatch"):
+            PostgresInternalBenchmarkBoundaryResolver(conn).resolve_pef_v1(horizon)
