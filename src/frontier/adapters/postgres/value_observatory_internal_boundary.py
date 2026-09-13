@@ -147,9 +147,7 @@ def _baseline_episode(raw: object) -> BaselineEpisode:
         rank=_integer(item.get("rank"), "baseline episode rank"),
         episode_id=_string(item.get("episode_id"), "baseline episode id"),
         observation_ids=_strings(item.get("observation_ids"), "baseline observation ids"),
-        first_observed_at=_timestamp(
-            item.get("first_observed_at"), "baseline first_observed_at"
-        ),
+        first_observed_at=_timestamp(item.get("first_observed_at"), "baseline first_observed_at"),
         last_observed_at=_timestamp(item.get("last_observed_at"), "baseline last_observed_at"),
         age_seconds=_integer(item.get("age_seconds"), "baseline age_seconds"),
         evidence_count_total=_integer(
@@ -170,9 +168,7 @@ def _baseline_episode(raw: object) -> BaselineEpisode:
         mentions_24h=_integer(item.get("mentions_24h"), "baseline mentions_24h"),
         previous_6h=_integer(item.get("previous_6h"), "baseline previous_6h"),
         preprevious_6h=_integer(item.get("preprevious_6h"), "baseline preprevious_6h"),
-        velocity_6h_delta=_integer(
-            item.get("velocity_6h_delta"), "baseline velocity_6h_delta"
-        ),
+        velocity_6h_delta=_integer(item.get("velocity_6h_delta"), "baseline velocity_6h_delta"),
         acceleration_6h=_integer(item.get("acceleration_6h"), "baseline acceleration_6h"),
         source_ids=_strings(item.get("source_ids"), "baseline source ids"),
         source_count=_integer(item.get("source_count"), "baseline source count"),
@@ -252,9 +248,7 @@ def _pef_episode(raw: object) -> PefEpisodeRanking:
         mentions_1h=_integer(item.get("mentions_1h"), "PEF_V1 mentions_1h"),
         mentions_6h=_integer(item.get("mentions_6h"), "PEF_V1 mentions_6h"),
         mentions_24h=_integer(item.get("mentions_24h"), "PEF_V1 mentions_24h"),
-        velocity_6h_delta=_integer(
-            item.get("velocity_6h_delta"), "PEF_V1 velocity_6h_delta"
-        ),
+        velocity_6h_delta=_integer(item.get("velocity_6h_delta"), "PEF_V1 velocity_6h_delta"),
         acceleration_6h=_integer(item.get("acceleration_6h"), "PEF_V1 acceleration_6h"),
     )
 
@@ -294,9 +288,7 @@ def _pef_v1_artifact(raw: object, *, generated_at: datetime) -> PefV1Artifact:
             configuration_digest=Digest(
                 _string(document.get("configuration_digest"), "PEF_V1 configuration digest")
             ),
-            authority_state=_string(
-                document.get("authority_state"), "PEF_V1 authority state"
-            ),
+            authority_state=_string(document.get("authority_state"), "PEF_V1 authority state"),
             grouping_receipt_id=_string(
                 document.get("grouping_receipt_id"), "PEF_V1 grouping receipt id"
             ),
@@ -320,7 +312,10 @@ def _require_naive_integrity(
     raw_snapshot_id = "snapshot_" + sha256_hex(canonical_json_bytes(raw_snapshot))
     if snapshot_id != raw_snapshot_id or snapshot.snapshot_id != snapshot_id:
         raise RuntimeError("baseline snapshot id does not bind persisted canonical payload")
-    if snapshot.as_of != knowledge_horizon or _db_timestamp(row[5], "baseline as_of") != knowledge_horizon:
+    if (
+        snapshot.as_of != knowledge_horizon
+        or _db_timestamp(row[5], "baseline as_of") != knowledge_horizon
+    ):
         raise RuntimeError("baseline snapshot row does not bind the exact requested horizon")
     if (
         snapshot.projection_version != _string(row[1], "baseline projection version")
@@ -349,9 +344,7 @@ def _require_naive_integrity(
         raise RuntimeError("baseline receipt frozen identity mismatch")
 
 
-def _require_pef_run_integrity(
-    row: tuple[object, ...], *, knowledge_horizon: datetime
-) -> None:
+def _require_pef_run_integrity(row: tuple[object, ...], *, knowledge_horizon: datetime) -> None:
     run_id = _string(row[0], "PEF_V1 run id")
     if _string(row[1], "PEF_V1 run class") != _RUN_CLASS_CONFIRMATORY:
         raise RuntimeError("exact PEF_V1 boundary is not a confirmatory frozen run")
@@ -393,19 +386,24 @@ def _require_pef_artifact_integrity(
         raise RuntimeError("PEF_V1 artifact id does not bind canonical payload")
     if artifact.artifact_id != artifact_id:
         raise RuntimeError("PEF_V1 typed artifact identity drifted from persisted payload")
-    if artifact.as_of != knowledge_horizon or _db_timestamp(row[22], "PEF_V1 artifact as_of") != knowledge_horizon:
+    if (
+        artifact.as_of != knowledge_horizon
+        or _db_timestamp(row[22], "PEF_V1 artifact as_of") != knowledge_horizon
+    ):
         raise RuntimeError("PEF_V1 artifact row does not bind the exact requested horizon")
     if (
         _string(row[15], "PEF_V1 projection version") != PEF_V1_PROJECTION_VERSION
         or _string(row[16], "PEF_V1 artifact schema") != PEF_SCHEMA_VERSION
         or _string(row[17], "PEF_V1 artifact algorithm") != PEF_ALGORITHM_VERSION
         or _string(row[18], "PEF_V1 artifact ranking policy") != PEF_RANKING_POLICY_VERSION
-        or Digest(_string(row[19], "PEF_V1 artifact configuration"))
-        != PEF_V1_CONFIGURATION_DIGEST
+        or Digest(_string(row[19], "PEF_V1 artifact configuration")) != PEF_V1_CONFIGURATION_DIGEST
         or _string(row[20], "PEF_V1 artifact authority") != PEF_AUTHORITY_STATE
     ):
         raise RuntimeError("PEF_V1 artifact frozen identity mismatch")
-    if artifact.experiment_id != PEF_V1_EXPERIMENT_ID or artifact.candidate_id != PEF_V1_CANDIDATE_ID:
+    if (
+        artifact.experiment_id != PEF_V1_EXPERIMENT_ID
+        or artifact.candidate_id != PEF_V1_CANDIDATE_ID
+    ):
         raise RuntimeError("PEF_V1 artifact experiment/candidate identity mismatch")
     artifact_digest = sha256_digest(canonical_json_bytes(artifact.to_canonical()))
     if (
@@ -457,9 +455,7 @@ class PostgresInternalBenchmarkBoundaryResolver:
     def __init__(self, connection: ConnectionT) -> None:
         self._connection = connection
 
-    def resolve_naive(
-        self, knowledge_horizon: datetime
-    ) -> ExactNaiveBenchmarkBoundary | None:
+    def resolve_naive(self, knowledge_horizon: datetime) -> ExactNaiveBenchmarkBoundary | None:
         _require_aware(knowledge_horizon)
         with self._connection.cursor() as cur:
             rows = _select_exact_naive_rows(cur, knowledge_horizon)
@@ -479,9 +475,7 @@ class PostgresInternalBenchmarkBoundaryResolver:
         )
         return ExactNaiveBenchmarkBoundary(snapshot=snapshot, receipt=receipt)
 
-    def resolve_pef_v1(
-        self, knowledge_horizon: datetime
-    ) -> ExactPefV1BenchmarkBoundary | None:
+    def resolve_pef_v1(self, knowledge_horizon: datetime) -> ExactPefV1BenchmarkBoundary | None:
         _require_aware(knowledge_horizon)
         with self._connection.cursor() as cur:
             rows = _select_exact_pef_v1_rows(cur, knowledge_horizon)
@@ -507,9 +501,7 @@ class PostgresInternalBenchmarkBoundaryResolver:
         )
 
 
-def _select_exact_naive_rows(
-    cur: CursorT, knowledge_horizon: datetime
-) -> list[tuple[object, ...]]:
+def _select_exact_naive_rows(cur: CursorT, knowledge_horizon: datetime) -> list[tuple[object, ...]]:
     cur.execute(
         """
         SELECT s.snapshot_id, s.projection_version, s.schema_version,
