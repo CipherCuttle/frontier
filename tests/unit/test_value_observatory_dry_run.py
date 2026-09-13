@@ -297,7 +297,11 @@ def test_capture_must_use_population_horizon_and_finish_by_deadline() -> None:
     source_population, opportunities, captures, evidence = valid_boundary()
     first = captures[0]
 
-    wrong_horizon = replace(first, knowledge_horizon=HORIZON + timedelta(minutes=1))
+    wrong_horizon = replace(
+        first,
+        knowledge_horizon=HORIZON - timedelta(minutes=1),
+        selection_window_end=HORIZON - timedelta(minutes=1),
+    )
     with pytest.raises(ValueError, match="knowledge horizon"):
         validate(source_population, opportunities, (wrong_horizon, *captures[1:]), evidence)
 
