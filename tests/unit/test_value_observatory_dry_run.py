@@ -234,6 +234,19 @@ def test_valid_boundary_proves_all_four_complete_arms_without_scoring() -> None:
     assert len(result.capture_ids) == 4
 
 
+def test_population_horizon_must_match_frozen_utc_cadence() -> None:
+    source_population, opportunities, captures, evidence = valid_boundary()
+    off_cadence = HORIZON + timedelta(minutes=1)
+    invalid_population = replace(
+        source_population,
+        knowledge_horizon=off_cadence,
+        recorded_at=off_cadence + timedelta(seconds=1),
+    )
+
+    with pytest.raises(ValueError, match="aligned to 00:00, 06:00, 12:00, or 18:00 UTC"):
+        validate(invalid_population, opportunities, captures, evidence)
+
+
 def test_population_must_exactly_cover_arm_independent_denominator() -> None:
     source_population = population(
         members=(population_member(), population_member("package-2", char="2"))
@@ -255,6 +268,20 @@ def test_population_and_outcomes_must_be_preregistered_before_any_arm_starts() -
 
     with pytest.raises(ValueError, match="preregistered before any benchmark arm starts"):
         validate(source_population, (late_opportunity,), captures, evidence)
+
+
+def test_registration_must_be_strictly_before_first_arm_start() -> None:
+    source_population, opportunities, captures, evidence = valid_boundary()
+    first_arm_start = min(item.started_at for item in evidence)
+
+    boundary_population = replace(source_population, recorded_at=first_arm_start)
+    boundary_opportunities = (opportunity(boundary_population),)
+    with pytest.raises(ValueError, match="manifest must be frozen"):
+        validate(boundary_population, boundary_opportunities, captures, evidence)
+
+    boundary_opportunity = opportunity(source_population, recorded_at=first_arm_start)
+    with pytest.raises(ValueError, match="preregistered before any benchmark arm starts"):
+        validate(source_population, (boundary_opportunity,), captures, evidence)
 
 
 def test_manifest_must_be_frozen_before_any_arm_starts() -> None:
