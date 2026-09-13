@@ -327,7 +327,9 @@ def test_resolver_never_substitutes_prior_or_later_boundary() -> None:
             (requested + timedelta(hours=6), "e"),
         ):
             snapshot, receipt = _baseline_boundary(horizon, label)
-            PostgresBaselineIntelligenceRepository(conn).publish_complete_snapshot(snapshot, receipt)
+            PostgresBaselineIntelligenceRepository(conn).publish_complete_snapshot(
+                snapshot, receipt
+            )
             artifact, pef_receipt, run = _pef_boundary(horizon, label + "f")
             _persist_pef_boundary(conn, artifact, pef_receipt, run)
 
@@ -342,7 +344,9 @@ def test_resolver_fails_closed_on_ambiguous_exact_baseline_boundary() -> None:
     with psycopg.connect(DB_URL) as conn:
         for label in ("a", "b"):
             snapshot, receipt = _baseline_boundary(horizon, label)
-            PostgresBaselineIntelligenceRepository(conn).publish_complete_snapshot(snapshot, receipt)
+            PostgresBaselineIntelligenceRepository(conn).publish_complete_snapshot(
+                snapshot, receipt
+            )
 
         with pytest.raises(RuntimeError, match="ambiguous exact baseline"):
             PostgresInternalBenchmarkBoundaryResolver(conn).resolve_naive(horizon)
