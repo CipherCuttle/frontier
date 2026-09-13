@@ -8,8 +8,8 @@ from frontier.application.value_observatory_dry_run import BENCHMARK_CAPTURE_V0_
 from frontier.application.value_observatory_executor_readiness import (
     BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS,
     BenchmarkExecutorBlockerCode,
+    BenchmarkExecutorCandidate,
     BenchmarkExecutorCapability,
-    BenchmarkExecutorExpectation,
     BenchmarkExecutorReadinessEvidence,
     BenchmarkExecutorReadinessStatus,
     assess_benchmark_executor_readiness_v0,
@@ -40,19 +40,19 @@ def executor_identity(arm: ObservatoryArm) -> BenchmarkExecutorIdentity:
     return BenchmarkExecutorIdentity(**kwargs)  # type: ignore[arg-type]
 
 
-def expected_all() -> tuple[BenchmarkExecutorExpectation, ...]:
+def candidate_all() -> tuple[BenchmarkExecutorCandidate, ...]:
     return tuple(
-        BenchmarkExecutorExpectation(arm=arm, executor=executor_identity(arm))
+        BenchmarkExecutorCandidate(arm=arm, executor=executor_identity(arm))
         for arm in BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
     )
 
 
-def ready_evidence(arm: ObservatoryArm) -> BenchmarkExecutorReadinessEvidence:
+def complete_evidence(arm: ObservatoryArm) -> BenchmarkExecutorReadinessEvidence:
     kwargs: dict[str, object] = {
         "arm": arm,
         "executor": executor_identity(arm),
         "protocol_digest": PROTOCOL_DIGEST,
-        "proof_ref": f"test://executor-proof/{arm.value}",
+        "proof_ref": f"claim://executor-proof/{arm.value}",
         "proof_digest": digest("a"),
         "capabilities": ALL_CAPABILITIES,
     }
@@ -64,37 +64,74 @@ def ready_evidence(arm: ObservatoryArm) -> BenchmarkExecutorReadinessEvidence:
     return BenchmarkExecutorReadinessEvidence(**kwargs)  # type: ignore[arg-type]
 
 
-def ready_all() -> tuple[BenchmarkExecutorReadinessEvidence, ...]:
-    return tuple(ready_evidence(arm) for arm in BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
+def complete_all() -> tuple[BenchmarkExecutorReadinessEvidence, ...]:
+    return tuple(complete_evidence(arm) for arm in BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
 
 
 def assess(
     evidence: tuple[BenchmarkExecutorReadinessEvidence, ...],
     *,
-    expected: tuple[BenchmarkExecutorExpectation, ...] | None = None,
+    candidates: tuple[BenchmarkExecutorCandidate, ...] | None = None,
     protocol_digest: Digest = PROTOCOL_DIGEST,
 ):
-    if expected is None:
-        expected = expected_all()
+    if candidates is None:
+        candidates = candidate_all()
     return assess_benchmark_executor_readiness_v0(
-        protocol_digest=protocol_digest,
-        expected_executors=expected,
+        candidate_protocol_digest=protocol_digest,
+        candidate_executors=candidates,
         evidence=evidence,
     )
 
 
-def test_all_four_frozen_executors_must_be_ready_and_identity_bound() -> None:
-    assessment = assess(ready_all())
+def test_complete_self_declared_bundle_stays_pending_trusted_authority() -> None:
+    assessment = assess(complete_all())
 
-    assert assessment.status is BenchmarkExecutorReadinessStatus.READY
-    assert assessment.ready_arms == BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
+    assert (
+        assessment.status
+        is BenchmarkExecutorReadinessStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
+    )
+    assert assessment.evidence_complete_arms == BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
     assert assessment.blocked_arms == ()
     assert assessment.blockers == ()
+    assert "READY" not in BenchmarkExecutorReadinessStatus.__members__
 
 
-def test_missing_arm_evidence_blocks_readiness_instead_of_inferring_capability() -> None:
+def test_arbitrary_self_claim_cannot_become_activation_ready() -> None:
+    arbitrary_protocol = digest("f")
+    candidates = tuple(
+        BenchmarkExecutorCandidate(
+            arm=arm,
+            executor=replace(executor_identity(arm), executor_version="self-declared-v999"),
+        )
+        for arm in BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
+    )
     evidence = tuple(
-        item for item in ready_all() if item.arm is not ObservatoryArm.WEB_LLM_BENCHMARK
+        replace(
+            complete_evidence(arm),
+            executor=candidates[index].executor,
+            protocol_digest=arbitrary_protocol,
+            proof_ref="not-verified://self-claim",
+            proof_digest=digest("e"),
+        )
+        for index, arm in enumerate(BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
+    )
+
+    assessment = assess(
+        evidence,
+        candidates=candidates,
+        protocol_digest=arbitrary_protocol,
+    )
+
+    assert (
+        assessment.status
+        is BenchmarkExecutorReadinessStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
+    )
+    assert assessment.evidence_complete_arms == BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
+
+
+def test_missing_arm_evidence_blocks_instead_of_inferring_capability() -> None:
+    evidence = tuple(
+        item for item in complete_all() if item.arm is not ObservatoryArm.WEB_LLM_BENCHMARK
     )
 
     assessment = assess(evidence)
@@ -109,20 +146,20 @@ def test_missing_arm_evidence_blocks_readiness_instead_of_inferring_capability()
     ]
 
 
-def test_missing_trusted_executor_expectation_blocks_readiness() -> None:
-    expected = tuple(
-        item for item in expected_all() if item.arm is not ObservatoryArm.FRONTIER_NAIVE_CONTROL
+def test_missing_executor_candidate_blocks_evidence_completeness() -> None:
+    candidates = tuple(
+        item for item in candidate_all() if item.arm is not ObservatoryArm.FRONTIER_NAIVE_CONTROL
     )
 
-    assessment = assess(ready_all(), expected=expected)
+    assessment = assess(complete_all(), candidates=candidates)
 
     assert assessment.status is BenchmarkExecutorReadinessStatus.BLOCKED
     assert assessment.blocked_arms == (ObservatoryArm.FRONTIER_NAIVE_CONTROL,)
-    assert assessment.blockers[0].code is BenchmarkExecutorBlockerCode.EXECUTOR_EXPECTATION_MISSING
+    assert assessment.blockers[0].code is BenchmarkExecutorBlockerCode.EXECUTOR_CANDIDATE_MISSING
 
 
 def test_executor_identity_mismatch_blocks_even_when_capabilities_are_complete() -> None:
-    evidence = list(ready_all())
+    evidence = list(complete_all())
     current = evidence[0]
     evidence[0] = replace(
         current,
@@ -139,8 +176,8 @@ def test_executor_identity_mismatch_blocks_even_when_capabilities_are_complete()
     )
 
 
-def test_protocol_digest_mismatch_blocks_even_when_executor_identity_matches() -> None:
-    evidence = list(ready_all())
+def test_protocol_digest_mismatch_blocks_internal_candidate_bundle() -> None:
+    evidence = list(complete_all())
     evidence[0] = replace(evidence[0], protocol_digest=digest("b"))
 
     assessment = assess(tuple(evidence))
@@ -152,14 +189,14 @@ def test_protocol_digest_mismatch_blocks_even_when_executor_identity_matches() -
     )
 
 
-def test_readiness_evidence_requires_auditable_proof_reference() -> None:
+def test_evidence_claim_requires_nonempty_proof_reference() -> None:
     with pytest.raises(ValueError, match="proof_ref must be non-empty"):
-        replace(ready_evidence(ObservatoryArm.FRONTIER_NAIVE_CONTROL), proof_ref="   ")
+        replace(complete_evidence(ObservatoryArm.FRONTIER_NAIVE_CONTROL), proof_ref="   ")
 
 
-def test_web_llm_expected_identity_requires_provider_model_and_prompt_digest() -> None:
+def test_web_llm_candidate_identity_requires_provider_model_and_prompt_digest() -> None:
     with pytest.raises(ValueError, match="requires provider, model, and prompt digest"):
-        BenchmarkExecutorExpectation(
+        BenchmarkExecutorCandidate(
             arm=ObservatoryArm.WEB_LLM_BENCHMARK,
             executor=BenchmarkExecutorIdentity(
                 executor_id="web-llm",
@@ -170,7 +207,7 @@ def test_web_llm_expected_identity_requires_provider_model_and_prompt_digest() -
 
 
 def test_pef_arm_blocks_without_exact_boundary_frozen_output_capability() -> None:
-    evidence = list(ready_all())
+    evidence = list(complete_all())
     index = BENCHMARK_CAPTURE_V0_REQUIRED_ARMS.index(ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL)
     current = evidence[index]
     evidence[index] = replace(
@@ -191,7 +228,7 @@ def test_pef_arm_blocks_without_exact_boundary_frozen_output_capability() -> Non
 
 
 def test_ordinary_aggregation_requires_exact_frozen_source_set() -> None:
-    evidence = list(ready_all())
+    evidence = list(complete_all())
     index = BENCHMARK_CAPTURE_V0_REQUIRED_ARMS.index(ObservatoryArm.ORDINARY_AGGREGATION)
     source_ids = BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS - {"hn.frontpage"}
     evidence[index] = replace(
@@ -212,7 +249,7 @@ def test_ordinary_aggregation_requires_exact_frozen_source_set() -> None:
 
 
 def test_ordinary_aggregation_blocks_if_one_collection_state_is_not_horizon_safe() -> None:
-    evidence = list(ready_all())
+    evidence = list(complete_all())
     index = BENCHMARK_CAPTURE_V0_REQUIRED_ARMS.index(ObservatoryArm.ORDINARY_AGGREGATION)
     evidence[index] = replace(
         evidence[index],
@@ -230,7 +267,7 @@ def test_ordinary_aggregation_blocks_if_one_collection_state_is_not_horizon_safe
 
 
 def test_web_llm_timestamp_metadata_cannot_replace_retrieval_cutoff_enforcement() -> None:
-    evidence = list(ready_all())
+    evidence = list(complete_all())
     index = BENCHMARK_CAPTURE_V0_REQUIRED_ARMS.index(ObservatoryArm.WEB_LLM_BENCHMARK)
     current = evidence[index]
     evidence[index] = replace(
@@ -250,7 +287,7 @@ def test_web_llm_timestamp_metadata_cannot_replace_retrieval_cutoff_enforcement(
 
 
 def test_failed_capture_emission_is_required_for_every_arm() -> None:
-    evidence = list(ready_all())
+    evidence = list(complete_all())
     current = evidence[0]
     evidence[0] = replace(
         current,
@@ -266,23 +303,23 @@ def test_failed_capture_emission_is_required_for_every_arm() -> None:
 def test_source_bindings_are_forbidden_on_non_ordinary_arms() -> None:
     with pytest.raises(ValueError, match="only ORDINARY_AGGREGATION"):
         replace(
-            ready_evidence(ObservatoryArm.FRONTIER_NAIVE_CONTROL),
+            complete_evidence(ObservatoryArm.FRONTIER_NAIVE_CONTROL),
             source_ids=frozenset({"pypi.updates"}),
         )
 
 
 def test_duplicate_arm_evidence_fails_closed() -> None:
-    duplicate = ready_evidence(ObservatoryArm.FRONTIER_NAIVE_CONTROL)
+    duplicate = complete_evidence(ObservatoryArm.FRONTIER_NAIVE_CONTROL)
 
     with pytest.raises(ValueError, match="duplicate benchmark arm"):
-        assess((*ready_all(), duplicate))
+        assess((*complete_all(), duplicate))
 
 
-def test_duplicate_executor_expectation_fails_closed() -> None:
-    duplicate = BenchmarkExecutorExpectation(
+def test_duplicate_executor_candidate_fails_closed() -> None:
+    duplicate = BenchmarkExecutorCandidate(
         arm=ObservatoryArm.FRONTIER_NAIVE_CONTROL,
         executor=executor_identity(ObservatoryArm.FRONTIER_NAIVE_CONTROL),
     )
 
     with pytest.raises(ValueError, match="duplicate benchmark arm"):
-        assess(ready_all(), expected=(*expected_all(), duplicate))
+        assess(complete_all(), candidates=(*candidate_all(), duplicate))
