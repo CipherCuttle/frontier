@@ -199,9 +199,7 @@ def _pef_boundary(
         configuration_digest=PEF_V1_CONFIGURATION_DIGEST,
         authority_state=PEF_AUTHORITY_STATE,
         candidate_freeze_receipt_id=(
-            "freezereceipt_" + "8" * 64
-            if freeze_receipt_id is None
-            else freeze_receipt_id
+            "freezereceipt_" + "8" * 64 if freeze_receipt_id is None else freeze_receipt_id
         ),
     )
     return artifact, receipt, run
@@ -530,9 +528,7 @@ def test_resolver_rejects_wrong_pef_receipt_schema_family() -> None:
     horizon = datetime(2031, 7, 1, 12, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
         freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
-        artifact, receipt, run = _pef_boundary(
-            horizon, "cd", freeze_receipt_id=freeze_receipt_id
-        )
+        artifact, receipt, run = _pef_boundary(horizon, "cd", freeze_receipt_id=freeze_receipt_id)
         wrong_receipt = replace(receipt, receipt_schema_version="wrong-receipt-v0")
         _persist_pef_boundary(conn, artifact, wrong_receipt, run)
 
@@ -556,13 +552,9 @@ def test_resolver_counts_dangling_exact_run_before_binding_lookup() -> None:
     horizon = datetime(2031, 9, 1, 0, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
         freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
-        artifact, receipt, run = _pef_boundary(
-            horizon, "ab", freeze_receipt_id=freeze_receipt_id
-        )
+        artifact, receipt, run = _pef_boundary(horizon, "ab", freeze_receipt_id=freeze_receipt_id)
         _persist_pef_boundary(conn, artifact, receipt, run)
-        _, _, dangling_run = _pef_boundary(
-            horizon, "cd", freeze_receipt_id=freeze_receipt_id
-        )
+        _, _, dangling_run = _pef_boundary(horizon, "cd", freeze_receipt_id=freeze_receipt_id)
         _persist_pef_run_only(conn, dangling_run)
 
         with pytest.raises(RuntimeError, match="ambiguous exact PEF_V1"):
