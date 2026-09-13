@@ -6,6 +6,10 @@ from typing import cast
 
 import psycopg
 
+from frontier.adapters.postgres.pef_v1_confirmatory import (
+    _load_binding as _load_pef_v1_freeze_binding,
+)
+from frontier.application.freeze_publication import require_confirmatory_boundary
 from frontier.application.value_observatory_internal_boundary import (
     ExactNaiveBenchmarkBoundary,
     ExactPefV1BenchmarkBoundary,
@@ -21,6 +25,7 @@ from frontier.domain.advanced_intelligence import (
     PefEpisodeRanking,
     ShadowRunStatus,
 )
+from frontier.domain.candidate_freeze import FreezeStatus
 from frontier.domain.canonical_json import canonical_json_bytes
 from frontier.domain.digests import Digest, sha256_digest, sha256_hex
 from frontier.domain.health import HealthValue
@@ -350,7 +355,7 @@ def _require_naive_integrity(
         raise RuntimeError("baseline receipt frozen identity mismatch")
 
 
-def _require_pef_run_integrity(row: tuple[object, ...], *, knowledge_horizon: datetime) -> None:
+def _require_pef_run_integrity(row: tuple[object, ...], *, knowledge_horizon: datetime) -> str:
     run_id = _string(row[0], "PEF_V1 run id")
     if _string(row[1], "PEF_V1 run class") != _RUN_CLASS_CONFIRMATORY:
         raise RuntimeError("exact PEF_V1 boundary is not a confirmatory frozen run")
@@ -422,6 +427,35 @@ def _require_pef_run_integrity(row: tuple[object, ...], *, knowledge_horizon: da
     freeze_id = run_json.get("candidate_freeze_receipt_id")
     if not isinstance(freeze_id, str) or not _FREEZE_RECEIPT_ID_RE.fullmatch(freeze_id):
         raise RuntimeError("PEF_V1 shadow run is not bound to canonical frozen candidate authority")
+    return freeze_id
+
+
+def _require_pef_freeze_authority(
+    cur: CursorT, *, freeze_receipt_id: str, knowledge_horizon: datetime
+) -> None:
+    binding = _load_pef_v1_freeze_binding(cur, freeze_receipt_id)
+    if binding is None:
+        raise RuntimeError("PEF_V1 referenced freeze authority is missing")
+    if binding.receipt.status is not FreezeStatus.FROZEN or binding.durable_freeze_at is None:
+        raise RuntimeError("PEF_V1 referenced freeze authority is not durable FROZEN authority")
+    if (
+        binding.publication_commit is None
+        or binding.publication_committer_at is None
+        or binding.publication_digest is None
+    ):
+        raise RuntimeError("PEF_V1 referenced freeze authority is not published")
+    if (
+        binding.publication_committer_at < binding.durable_freeze_at
+        or binding.publication_committer_at < binding.receipt.frozen_at
+    ):
+        raise RuntimeError("PEF_V1 freeze publication precedes its durable receipt")
+    try:
+        require_confirmatory_boundary(
+            as_of=knowledge_horizon,
+            publication_committer_at=binding.publication_committer_at,
+        )
+    except ValueError as error:
+        raise RuntimeError("PEF_V1 freeze publication does not authorize this boundary") from error
 
 
 def _require_pef_artifact_integrity(
@@ -532,13 +566,25 @@ class PostgresInternalBenchmarkBoundaryResolver:
     def resolve_pef_v1(self, knowledge_horizon: datetime) -> ExactPefV1BenchmarkBoundary | None:
         _require_aware(knowledge_horizon)
         with self._connection.cursor() as cur:
-            rows = _select_exact_pef_v1_rows(cur, knowledge_horizon)
-        if not rows:
-            return None
-        if len(rows) != 1:
-            raise RuntimeError("ambiguous exact PEF_V1 benchmark boundary")
-        row = rows[0]
-        _require_pef_run_integrity(row, knowledge_horizon=knowledge_horizon)
+            exact_runs = _select_exact_pef_v1_run_ids(cur, knowledge_horizon)
+            if not exact_runs:
+                return None
+            if len(exact_runs) != 1:
+                raise RuntimeError("ambiguous exact PEF_V1 benchmark boundary")
+            run_id = _string(exact_runs[0][0], "PEF_V1 run id")
+            rows = _select_pef_v1_bound_rows(cur, run_id)
+            if len(rows) != 1:
+                raise RuntimeError("exact PEF_V1 run artifact/receipt binding is missing")
+            row = rows[0]
+            freeze_receipt_id = _require_pef_run_integrity(
+                row, knowledge_horizon=knowledge_horizon
+            )
+            _require_pef_freeze_authority(
+                cur,
+                freeze_receipt_id=freeze_receipt_id,
+                knowledge_horizon=knowledge_horizon,
+            )
+
         receipt_id = _string(row[25], "PEF_V1 candidate receipt id")
         receipt = _receipt_from_row(row, offset=29, expected_receipt_id=receipt_id)
         artifact = _pef_v1_artifact(row[28], generated_at=receipt.generated_at)
@@ -548,11 +594,7 @@ class PostgresInternalBenchmarkBoundaryResolver:
             artifact=artifact,
             receipt=receipt,
         )
-        return ExactPefV1BenchmarkBoundary(
-            run_id=_string(row[0], "PEF_V1 run id"),
-            artifact=artifact,
-            receipt=receipt,
-        )
+        return ExactPefV1BenchmarkBoundary(run_id=run_id, artifact=artifact, receipt=receipt)
 
 
 def _select_exact_naive_rows(cur: CursorT, knowledge_horizon: datetime) -> list[tuple[object, ...]]:
@@ -575,9 +617,22 @@ def _select_exact_naive_rows(cur: CursorT, knowledge_horizon: datetime) -> list[
     return list(cur.fetchall())
 
 
-def _select_exact_pef_v1_rows(
+def _select_exact_pef_v1_run_ids(
     cur: CursorT, knowledge_horizon: datetime
 ) -> list[tuple[object, ...]]:
+    cur.execute(
+        """
+        SELECT run_id
+        FROM shadow_experiment_runs
+        WHERE experiment_id = %s AND as_of = %s
+        ORDER BY run_id
+        """,
+        (PEF_V1_EXPERIMENT_ID, knowledge_horizon),
+    )
+    return list(cur.fetchall())
+
+
+def _select_pef_v1_bound_rows(cur: CursorT, run_id: str) -> list[tuple[object, ...]]:
     cur.execute(
         """
         SELECT run.run_id, run.run_class, run.status, run.candidate_id,
@@ -602,10 +657,9 @@ def _select_exact_pef_v1_rows(
         JOIN pef_ranking_artifacts artifact
           ON artifact.artifact_id = run.candidate_artifact_id
         JOIN projection_receipts receipt ON receipt.receipt_id = artifact.receipt_id
-        WHERE run.experiment_id = %s AND run.as_of = %s
-        ORDER BY run.run_id
+        WHERE run.run_id = %s AND run.experiment_id = %s
         """,
-        (PEF_V1_EXPERIMENT_ID, knowledge_horizon),
+        (run_id, PEF_V1_EXPERIMENT_ID),
     )
     return list(cur.fetchall())
 
