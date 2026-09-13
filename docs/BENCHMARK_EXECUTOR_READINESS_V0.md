@@ -8,15 +8,15 @@ Base SHA: `55f79eb7463a8c75750a75f39bfba97902921a23`.
 
 ## Objective
 
-Add a pure, fail-closed readiness gate for the four frozen `BENCHMARK_CAPTURE_V0` arms before any scheduler, persistence loop, live comparator call, or scored benchmark capture is authorized.
+Add a pure, fail-closed evidence-completeness gate for the four frozen `BENCHMARK_CAPTURE_V0` arms before any scheduler, persistence loop, live comparator call, or scored benchmark capture is authorized.
 
-This phase does not execute benchmark arms. It only represents the capabilities each executor must prove before activation may proceed.
+This phase does not execute benchmark arms and does not create executor authority. It represents the capabilities a candidate executor must eventually prove, while refusing to convert caller-supplied identity/protocol/proof claims into activation readiness.
 
 ## Task envelope
 
 ```text
 BASE_SHA: 55f79eb7463a8c75750a75f39bfba97902921a23
-OBJECTIVE: pure executor-readiness gate for BENCHMARK_CAPTURE_V0
+OBJECTIVE: pure executor-readiness evidence gate for BENCHMARK_CAPTURE_V0
 AUTHORITY_REFS:
   - docs/FRONTIER_VALUE_OBSERVATORY_V0.md
   - docs/BENCHMARK_CAPTURE_V0.md
@@ -43,23 +43,28 @@ MERGE_AUTHORITY: false
 
 ## Frozen executor requirements represented by the gate
 
-Every arm must prove:
+Every arm's candidate evidence must contain:
 
-- an executor exists;
-- the readiness record is bound to the trusted exact `BenchmarkExecutorIdentity`, including its configuration digest;
-- the readiness record binds the exact frozen benchmark protocol digest;
-- the capability claim is accompanied by an auditable proof artifact reference plus content digest;
-- the exact benchmark knowledge horizon is enforced;
-- an immutable `ValueObservatoryCapture` shape can be emitted;
-- executor failure can be emitted explicitly as a failed capture instead of being silently dropped.
+- an exact `BenchmarkExecutorIdentity`, including configuration digest;
+- a benchmark protocol digest claim;
+- an auditable proof-artifact reference plus claimed content digest;
+- exact benchmark knowledge-horizon enforcement;
+- immutable `ValueObservatoryCapture` emission capability;
+- explicit failed-capture emission instead of silent dropping.
 
-A capability enum alone is never enough to produce `READY`. Missing trusted executor identity, protocol mismatch, executor-identity drift, or missing/malformed proof binding fails closed. The pure gate does not fetch proof artifacts; the reference plus digest makes the evidence independently inspectable and prevents later executor/configuration substitution from inheriting an earlier readiness result.
+The gate validates internal completeness and consistency of those claims. It does **not** trust the caller as authority and does **not** dereference or independently verify proof artifacts in this phase.
+
+Therefore the strongest possible result from this module is:
+
+`EVIDENCE_COMPLETE_PENDING_AUTHORITY`
+
+There is deliberately no `READY` status. A separately reviewed later authority phase must anchor the exact executor identities and frozen protocol digest outside the evidence caller and verify the referenced proof artifacts before any arm can satisfy the activation requirement `requires_all_four_executors_ready=true`.
 
 Additional arm-specific requirements are fail-closed.
 
 ### FRONTIER_NAIVE_CONTROL
 
-Requires a canonical point-in-time candidate population, frozen naive ordering, and proof that no experimental score influences the arm.
+Requires a canonical point-in-time candidate population, frozen naive ordering, and evidence that no experimental score influences the arm.
 
 ### FRONTIER_EXISTING_EXPERIMENTAL
 
@@ -77,49 +82,48 @@ Requires the exact frozen seven-source set:
 - `hf.models`;
 - `gdelt.frontier`.
 
-All seven must prove horizon-safe collection state. The executor must preserve per-source attempt status and raw payload digests, must not read FRONTIER private/history/grouping/projection/PEF/feature state, and must use the frozen deterministic timestamp ordering.
+All seven must claim horizon-safe collection state. The executor evidence must preserve per-source attempt status and raw payload digests, must not claim FRONTIER private/history/grouping/projection/PEF/feature state, and must represent the frozen deterministic timestamp ordering. These remain claims until separately verified.
 
 ### WEB_LLM_BENCHMARK
 
-Requires provider identity, exact model identity, prompt digest, raw response digest, citations, no FRONTIER private state, no silent provider/model fallback, and retrieval-level enforcement of the benchmark knowledge cutoff. Citation or publication timestamps alone are insufficient. The trusted expected executor identity itself must contain provider, model, and prompt digest before it can participate in a `READY` assessment.
+Requires provider identity, exact model identity, prompt digest, raw response digest, citations, no FRONTIER private state, no silent provider/model fallback, and retrieval-level enforcement of the benchmark knowledge cutoff. Citation or publication timestamps alone are insufficient. Candidate Web-LLM identity is structurally incomplete unless provider, model, and prompt digest are all present.
 
 ## Current implementation audit at base SHA
 
-The readiness gate itself does not claim any executor is ready. The repository state at the base SHA remains blocked for activation:
+The gate itself does not claim any executor is ready. Repository state remains blocked for activation:
 
-| Arm | Current audit | Readiness consequence |
+| Arm | Current audit | Activation consequence |
 |---|---|---|
 | `FRONTIER_NAIVE_CONTROL` | PIT construction exists, but there is not yet a benchmark executor that binds exact retained boundary input and emits the observatory capture contract | `BLOCKED` |
 | `FRONTIER_EXISTING_EXPERIMENTAL` | PEF_V1 confirmatory storage has an exact `experiment_id + as_of` lookup seam, but no observatory executor adapter yet binds that output into the frozen capture contract | `BLOCKED` |
 | `ORDINARY_AGGREGATION` | no frozen seven-source benchmark comparator executor exists; horizon-safe collection-state support is not yet proven source-by-source | `BLOCKED` |
 | `WEB_LLM_BENCHMARK` | prompt/identity rules are frozen, but no provider/model executor has proven retrieval-level knowledge-cutoff enforcement | `BLOCKED` |
 
-This is intentional. Missing executor evidence remains a blocker; the gate must never infer readiness from nearby infrastructure.
+This is intentional. Nearby infrastructure, capability enums, candidate identities, protocol-digest claims, and claimed proof references cannot create activation readiness.
 
-## Hostile review repair
+## Hostile review history
 
-The first independent hostile review found one P1: a caller could previously enumerate every capability and obtain `READY` without binding the claim to a real executor, frozen protocol identity, or auditable proof artifact.
+The first independent hostile review found one P1: capability enumeration could produce `READY` without binding the claim to an exact executor/protocol/proof artifact.
 
-The repair requires:
+The first repair added candidate executor identity, protocol digest, and proof reference/digest fields. The single targeted re-review correctly found that this still failed the authority boundary: the same caller controlled the supposed expected identity, protocol digest, evidence, and unverified proof reference, so self-declaration could still produce `READY`.
 
-1. a trusted expected `BenchmarkExecutorIdentity` for each frozen arm;
-2. exact equality between that identity and the executor identity in the readiness evidence;
-3. exact frozen protocol-digest equality;
-4. a non-empty proof artifact reference and digest on every readiness record;
-5. complete provider/model/prompt identity for the Web-LLM arm.
+The final bounded repair therefore removes the `READY` path entirely from this phase. Self-declared complete bundles can only produce `EVIDENCE_COMPLETE_PENDING_AUTHORITY`. Missing or internally inconsistent claims still produce `BLOCKED` with explicit blocker codes.
 
-This repair does not create any executor or make the current repository ready. It only prevents self-declared capability sets from clearing the gate.
+No further review is authorized by the bounded review budget. Final closure is therefore gated by exact-head CI plus the explicit non-escalation above; a future executor-authority phase must receive its own authority and review.
 
 ## Non-escalation
 
-Passing this readiness gate later will not by itself:
+`EVIDENCE_COMPLETE_PENDING_AUTHORITY` does not:
 
+- mark any executor ready;
 - activate the 14-day scored run;
 - authorize persistence or scheduling;
 - authorize backfill or retry of missed scored boundaries;
+- verify a proof artifact merely because a ref/digest is present;
+- freeze an executor identity or protocol digest;
 - alter PEF_V1;
 - alter canonical ranking;
 - grant an LLM truth or ranking authority;
 - prove FRONTIER product superiority.
 
-Activation still requires every prerequisite frozen by `BENCHMARK_CAPTURE_V0`, including population and opportunity completeness, preregistered outcome bindings, exact protocol identity, all four real executors, and the bounded independent review gate.
+Activation still requires every prerequisite frozen by `BENCHMARK_CAPTURE_V0`, including population and opportunity completeness, preregistered outcome bindings, immutable trusted protocol/executor authority, verified proof artifacts for all four real executors, and the required independent review gate.
