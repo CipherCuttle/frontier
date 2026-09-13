@@ -218,6 +218,53 @@ def test_naive_adapter_emits_frozen_top_five_capture_from_exact_snapshot() -> No
     assert capture.raw_response_digest == receipt.output_digest
 
 
+def test_naive_adapter_uses_frozen_recency_then_item_key_order_not_baseline_rank() -> None:
+    snapshot = baseline_snapshot(count=3)
+    snapshot = replace(
+        snapshot,
+        episodes=(
+            replace(
+                snapshot.episodes[0],
+                episode_id="episode-z",
+                first_observed_at=HORIZON - timedelta(minutes=3),
+                last_observed_at=HORIZON - timedelta(minutes=3),
+                age_seconds=180,
+            ),
+            replace(
+                snapshot.episodes[1],
+                episode_id="episode-b",
+                first_observed_at=HORIZON - timedelta(minutes=1),
+                last_observed_at=HORIZON - timedelta(minutes=1),
+                age_seconds=60,
+            ),
+            replace(
+                snapshot.episodes[2],
+                episode_id="episode-a",
+                first_observed_at=HORIZON - timedelta(minutes=1),
+                last_observed_at=HORIZON - timedelta(minutes=1),
+                age_seconds=60,
+            ),
+        ),
+    )
+    receipt = baseline_receipt(snapshot)
+
+    capture = build_naive_observatory_capture(
+        snapshot,
+        receipt,
+        knowledge_horizon=HORIZON,
+        captured_at=CAPTURED_AT,
+        executor=executor(ObservatoryArm.FRONTIER_NAIVE_CONTROL),
+        protocol_digest=PROTOCOL_DIGEST,
+        source_health_bindings=health(),
+    )
+
+    assert tuple(item.item_key for item in capture.items) == (
+        "episode-a",
+        "episode-b",
+        "episode-z",
+    )
+
+
 def test_naive_adapter_rejects_prior_boundary_snapshot() -> None:
     snapshot = replace(baseline_snapshot(), as_of=HORIZON - timedelta(hours=6))
     receipt = baseline_receipt(snapshot)
@@ -290,6 +337,71 @@ def test_pef_adapter_emits_frozen_top_five_without_recomputation() -> None:
     )
     assert capture.items[0].evidence_refs == ("obs-pef-1",)
     assert capture.raw_response_digest == artifact.output_digest
+
+
+def test_pef_adapter_rejects_generation_timestamp_mismatch() -> None:
+    artifact = pef_artifact()
+    receipt = replace(pef_receipt(artifact), generated_at=artifact.generated_at + timedelta(seconds=1))
+
+    with pytest.raises(ValueError, match="generation timestamp mismatch"):
+        build_pef_v1_observatory_capture(
+            artifact,
+            receipt,
+            knowledge_horizon=HORIZON,
+            captured_at=CAPTURED_AT,
+            executor=executor(ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL),
+            protocol_digest=PROTOCOL_DIGEST,
+            source_health_bindings=health(),
+        )
+
+
+def test_pef_adapter_rejects_artifact_generated_after_claimed_capture() -> None:
+    artifact = replace(pef_artifact(), generated_at=CAPTURED_AT + timedelta(seconds=1))
+    receipt = pef_receipt(artifact)
+
+    with pytest.raises(ValueError, match="generated after captured_at"):
+        build_pef_v1_observatory_capture(
+            artifact,
+            receipt,
+            knowledge_horizon=HORIZON,
+            captured_at=CAPTURED_AT,
+            executor=executor(ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL),
+            protocol_digest=PROTOCOL_DIGEST,
+            source_health_bindings=health(),
+        )
+
+
+def test_pef_adapter_rejects_artifact_generated_after_capture_deadline() -> None:
+    late_time = HORIZON + timedelta(minutes=31)
+    artifact = replace(pef_artifact(), generated_at=late_time)
+    receipt = pef_receipt(artifact)
+
+    with pytest.raises(ValueError, match="artifact exceeds the frozen 30-minute capture deadline"):
+        build_pef_v1_observatory_capture(
+            artifact,
+            receipt,
+            knowledge_horizon=HORIZON,
+            captured_at=late_time,
+            executor=executor(ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL),
+            protocol_digest=PROTOCOL_DIGEST,
+            source_health_bindings=health(),
+        )
+
+
+def test_pef_adapter_rejects_complete_capture_after_capture_deadline() -> None:
+    artifact = pef_artifact()
+    receipt = pef_receipt(artifact)
+
+    with pytest.raises(ValueError, match="complete internal benchmark capture exceeds"):
+        build_pef_v1_observatory_capture(
+            artifact,
+            receipt,
+            knowledge_horizon=HORIZON,
+            captured_at=HORIZON + timedelta(minutes=31),
+            executor=executor(ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL),
+            protocol_digest=PROTOCOL_DIGEST,
+            source_health_bindings=health(),
+        )
 
 
 def test_pef_adapter_rejects_prior_boundary_artifact() -> None:
