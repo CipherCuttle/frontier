@@ -275,7 +275,9 @@ def test_registration_must_be_strictly_before_first_arm_start() -> None:
     first_arm_start = min(item.started_at for item in evidence)
 
     boundary_population = replace(source_population, recorded_at=first_arm_start)
-    boundary_opportunities = (opportunity(boundary_population),)
+    boundary_opportunities = (
+        opportunity(boundary_population, recorded_at=first_arm_start),
+    )
     with pytest.raises(ValueError, match="manifest must be frozen"):
         validate(boundary_population, boundary_opportunities, captures, evidence)
 
