@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from frontier.application.value_observatory_dry_run import BENCHMARK_CAPTURE_V0_REQUIRED_ARMS
-from frontier.domain.value_observatory import ObservatoryArm
+from frontier.domain.digests import Digest
+from frontier.domain.value_observatory import BenchmarkExecutorIdentity, ObservatoryArm
 
 BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS = frozenset(
     {
@@ -54,6 +55,9 @@ class BenchmarkExecutorReadinessStatus(StrEnum):
 
 class BenchmarkExecutorBlockerCode(StrEnum):
     ARM_EVIDENCE_MISSING = "ARM_EVIDENCE_MISSING"
+    EXECUTOR_EXPECTATION_MISSING = "EXECUTOR_EXPECTATION_MISSING"
+    EXECUTOR_IDENTITY_MISMATCH = "EXECUTOR_IDENTITY_MISMATCH"
+    PROTOCOL_DIGEST_MISMATCH = "PROTOCOL_DIGEST_MISMATCH"
     MISSING_CAPABILITY = "MISSING_CAPABILITY"
     ORDINARY_SOURCE_SET_MISMATCH = "ORDINARY_SOURCE_SET_MISMATCH"
     ORDINARY_SOURCE_HORIZON_UNSAFE = "ORDINARY_SOURCE_HORIZON_UNSAFE"
@@ -110,16 +114,50 @@ _REQUIRED_CAPABILITIES = {
 }
 
 
+def _require_nonempty(value: str, label: str) -> None:
+    if not value.strip():
+        raise ValueError(f"{label} must be non-empty")
+
+
+def _require_web_llm_identity(
+    arm: ObservatoryArm,
+    executor: BenchmarkExecutorIdentity,
+) -> None:
+    if arm is not ObservatoryArm.WEB_LLM_BENCHMARK:
+        return
+    if executor.provider is None or executor.model is None or executor.prompt_digest is None:
+        raise ValueError(
+            "WEB_LLM_BENCHMARK executor identity requires provider, model, and prompt digest"
+        )
+
+
 @dataclass(frozen=True, slots=True)
-class BenchmarkExecutorReadinessEvidence:
-    """Diagnostic capability evidence for one frozen BENCHMARK_CAPTURE_V0 arm."""
+class BenchmarkExecutorExpectation:
+    """Trusted expected executor identity for one frozen arm."""
 
     arm: ObservatoryArm
+    executor: BenchmarkExecutorIdentity
+
+    def __post_init__(self) -> None:
+        _require_web_llm_identity(self.arm, self.executor)
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkExecutorReadinessEvidence:
+    """Diagnostic capability evidence bound to one exact executor and proof artifact."""
+
+    arm: ObservatoryArm
+    executor: BenchmarkExecutorIdentity
+    protocol_digest: Digest
+    proof_ref: str
+    proof_digest: Digest
     capabilities: frozenset[BenchmarkExecutorCapability]
     source_ids: frozenset[str] = frozenset()
     horizon_safe_source_ids: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
+        _require_nonempty(self.proof_ref, "executor readiness proof_ref")
+        _require_web_llm_identity(self.arm, self.executor)
         if any(not source_id.strip() for source_id in self.source_ids):
             raise ValueError("executor readiness source ids must be non-empty")
         if any(not source_id.strip() for source_id in self.horizon_safe_source_ids):
@@ -150,26 +188,35 @@ class BenchmarkExecutorReadinessAssessment:
 
 
 def assess_benchmark_executor_readiness_v0(
+    *,
+    protocol_digest: Digest,
+    expected_executors: tuple[BenchmarkExecutorExpectation, ...],
     evidence: tuple[BenchmarkExecutorReadinessEvidence, ...],
 ) -> BenchmarkExecutorReadinessAssessment:
-    """Assess whether all four frozen benchmark executors satisfy their activation contract."""
+    """Assess whether all four exact frozen executors satisfy their activation contract."""
 
-    indexed: dict[ObservatoryArm, BenchmarkExecutorReadinessEvidence] = {}
     required_arms = set(BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
-    for item in evidence:
-        if item.arm not in required_arms:
-            raise ValueError("executor readiness evidence contains a non-V0 benchmark arm")
-        if item.arm in indexed:
-            raise ValueError("executor readiness evidence contains a duplicate benchmark arm")
-        indexed[item.arm] = item
+    expected_by_arm = _index_expectations(expected_executors, required_arms=required_arms)
+    evidence_by_arm = _index_evidence(evidence, required_arms=required_arms)
 
     blockers: list[BenchmarkExecutorReadinessBlocker] = []
     ready_arms: list[ObservatoryArm] = []
     blocked_arms: list[ObservatoryArm] = []
 
     for arm in BENCHMARK_CAPTURE_V0_REQUIRED_ARMS:
-        item = indexed.get(arm)
+        expectation = expected_by_arm.get(arm)
+        item = evidence_by_arm.get(arm)
         arm_blockers: list[BenchmarkExecutorReadinessBlocker] = []
+
+        if expectation is None:
+            arm_blockers.append(
+                BenchmarkExecutorReadinessBlocker(
+                    arm=arm,
+                    code=BenchmarkExecutorBlockerCode.EXECUTOR_EXPECTATION_MISSING,
+                    detail="no trusted exact executor identity supplied for frozen arm",
+                )
+            )
+
         if item is None:
             arm_blockers.append(
                 BenchmarkExecutorReadinessBlocker(
@@ -179,6 +226,23 @@ def assess_benchmark_executor_readiness_v0(
                 )
             )
         else:
+            if item.protocol_digest != protocol_digest:
+                arm_blockers.append(
+                    BenchmarkExecutorReadinessBlocker(
+                        arm=arm,
+                        code=BenchmarkExecutorBlockerCode.PROTOCOL_DIGEST_MISMATCH,
+                        detail="readiness evidence does not bind the frozen benchmark protocol",
+                    )
+                )
+            if expectation is not None and item.executor != expectation.executor:
+                arm_blockers.append(
+                    BenchmarkExecutorReadinessBlocker(
+                        arm=arm,
+                        code=BenchmarkExecutorBlockerCode.EXECUTOR_IDENTITY_MISMATCH,
+                        detail="readiness evidence does not bind the trusted executor identity",
+                    )
+                )
+
             missing_capabilities = _REQUIRED_CAPABILITIES[arm] - item.capabilities
             arm_blockers.extend(
                 BenchmarkExecutorReadinessBlocker(
@@ -208,6 +272,36 @@ def assess_benchmark_executor_readiness_v0(
         blocked_arms=tuple(blocked_arms),
         blockers=tuple(blockers),
     )
+
+
+def _index_expectations(
+    expectations: tuple[BenchmarkExecutorExpectation, ...],
+    *,
+    required_arms: set[ObservatoryArm],
+) -> dict[ObservatoryArm, BenchmarkExecutorExpectation]:
+    indexed: dict[ObservatoryArm, BenchmarkExecutorExpectation] = {}
+    for item in expectations:
+        if item.arm not in required_arms:
+            raise ValueError("executor expectation contains a non-V0 benchmark arm")
+        if item.arm in indexed:
+            raise ValueError("executor expectation contains a duplicate benchmark arm")
+        indexed[item.arm] = item
+    return indexed
+
+
+def _index_evidence(
+    evidence: tuple[BenchmarkExecutorReadinessEvidence, ...],
+    *,
+    required_arms: set[ObservatoryArm],
+) -> dict[ObservatoryArm, BenchmarkExecutorReadinessEvidence]:
+    indexed: dict[ObservatoryArm, BenchmarkExecutorReadinessEvidence] = {}
+    for item in evidence:
+        if item.arm not in required_arms:
+            raise ValueError("executor readiness evidence contains a non-V0 benchmark arm")
+        if item.arm in indexed:
+            raise ValueError("executor readiness evidence contains a duplicate benchmark arm")
+        indexed[item.arm] = item
+    return indexed
 
 
 def _ordinary_source_blockers(
@@ -241,6 +335,7 @@ __all__ = [
     "BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS",
     "BenchmarkExecutorBlockerCode",
     "BenchmarkExecutorCapability",
+    "BenchmarkExecutorExpectation",
     "BenchmarkExecutorReadinessAssessment",
     "BenchmarkExecutorReadinessBlocker",
     "BenchmarkExecutorReadinessEvidence",
