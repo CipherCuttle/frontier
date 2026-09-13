@@ -31,8 +31,12 @@ def _require_aware(value: datetime, label: str) -> None:
         raise ValueError(f"{label} must be timezone-aware")
 
 
+def _as_utc(value: datetime) -> datetime:
+    return value.astimezone(UTC)
+
+
 def _require_aligned_utc_boundary(value: datetime) -> None:
-    utc_value = value.astimezone(UTC)
+    utc_value = _as_utc(value)
     if (
         utc_value.hour not in _BENCHMARK_CAPTURE_V0_BOUNDARY_HOURS
         or utc_value.minute != 0
@@ -87,6 +91,7 @@ def validate_benchmark_capture_v0_dry_run(
     """
 
     knowledge_horizon = population.knowledge_horizon
+    knowledge_horizon_utc = _as_utc(knowledge_horizon)
     required_arms = set(BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
 
     _require_aligned_utc_boundary(knowledge_horizon)
@@ -99,14 +104,14 @@ def validate_benchmark_capture_v0_dry_run(
     if set(evidence_by_arm) != required_arms:
         raise ValueError("dry-run evidence must contain exactly the four frozen benchmark arms")
 
-    first_arm_start = min(item.started_at for item in arm_evidence)
-    if population.recorded_at >= first_arm_start:
+    first_arm_start_utc = min(_as_utc(item.started_at) for item in arm_evidence)
+    if _as_utc(population.recorded_at) >= first_arm_start_utc:
         raise ValueError("population manifest must be frozen before any benchmark arm starts")
-    if any(item.recorded_at >= first_arm_start for item in opportunities):
+    if any(_as_utc(item.recorded_at) >= first_arm_start_utc for item in opportunities):
         raise ValueError("all opportunities must be preregistered before any benchmark arm starts")
 
-    deadline = knowledge_horizon + BENCHMARK_CAPTURE_V0_CAPTURE_DEADLINE
-    window_start = knowledge_horizon - BENCHMARK_CAPTURE_V0_SELECTION_WINDOW
+    deadline_utc = knowledge_horizon_utc + BENCHMARK_CAPTURE_V0_CAPTURE_DEADLINE
+    window_start_utc = knowledge_horizon_utc - BENCHMARK_CAPTURE_V0_SELECTION_WINDOW
 
     complete_arms: list[ObservatoryArm] = []
     failed_arms: list[ObservatoryArm] = []
@@ -119,9 +124,9 @@ def validate_benchmark_capture_v0_dry_run(
             capture=capture,
             evidence=evidence,
             protocol_digest=protocol_digest,
-            knowledge_horizon=knowledge_horizon,
-            window_start=window_start,
-            deadline=deadline,
+            knowledge_horizon_utc=knowledge_horizon_utc,
+            window_start_utc=window_start_utc,
+            deadline_utc=deadline_utc,
         )
         capture_ids.append(capture.capture_id)
         if capture.status is CaptureStatus.COMPLETE:
@@ -166,13 +171,17 @@ def _validate_capture_contract(
     capture: ValueObservatoryCapture,
     evidence: BenchmarkArmDryRunEvidence,
     protocol_digest: Digest,
-    knowledge_horizon: datetime,
-    window_start: datetime,
-    deadline: datetime,
+    knowledge_horizon_utc: datetime,
+    window_start_utc: datetime,
+    deadline_utc: datetime,
 ) -> None:
+    capture_horizon_utc = _as_utc(capture.knowledge_horizon)
+    evidence_started_utc = _as_utc(evidence.started_at)
+    capture_captured_utc = _as_utc(capture.captured_at)
+
     if capture.arm is not evidence.arm:
         raise ValueError("dry-run capture arm does not match its execution evidence")
-    if capture.knowledge_horizon != knowledge_horizon:
+    if capture_horizon_utc != knowledge_horizon_utc:
         raise ValueError("dry-run capture knowledge horizon does not match the frozen population")
     if capture.protocol_digest != protocol_digest:
         raise ValueError("dry-run capture protocol digest does not match BENCHMARK_CAPTURE_V0")
@@ -180,25 +189,28 @@ def _validate_capture_contract(
         raise ValueError("dry-run capture must use the frozen K=5 alert budget")
     if capture.domain_scope != BENCHMARK_CAPTURE_V0_DOMAIN_SCOPE:
         raise ValueError("dry-run capture must use the frozen GLOBAL domain scope")
-    if capture.selection_window_start != window_start:
+    if _as_utc(capture.selection_window_start) != window_start_utc:
         raise ValueError(
             "dry-run capture selection window start is not the frozen 24-hour boundary"
         )
-    if capture.selection_window_end != knowledge_horizon:
+    if _as_utc(capture.selection_window_end) != knowledge_horizon_utc:
         raise ValueError("dry-run capture selection window must end at the knowledge horizon")
-    if evidence.started_at < knowledge_horizon:
+    if evidence_started_utc < knowledge_horizon_utc:
         raise ValueError("dry-run arm cannot start before the aligned knowledge horizon")
-    if evidence.started_at > deadline:
+    if evidence_started_utc > deadline_utc:
         raise ValueError("dry-run arm start exceeds the frozen 30-minute capture deadline")
-    if capture.captured_at < evidence.started_at:
+    if capture_captured_utc < evidence_started_utc:
         raise ValueError("dry-run capture cannot complete before its arm starts")
-    if capture.captured_at > deadline:
+    if capture_captured_utc > deadline_utc:
         raise ValueError("dry-run capture exceeds the frozen 30-minute capture deadline")
 
     if capture.status is CaptureStatus.COMPLETE:
         if not evidence.horizon_enforced:
             raise ValueError("complete dry-run arm requires enforced point-in-time source state")
-        if evidence.source_state_horizon != knowledge_horizon:
+        if (
+            evidence.source_state_horizon is None
+            or _as_utc(evidence.source_state_horizon) != knowledge_horizon_utc
+        ):
             raise ValueError(
                 "complete dry-run arm source state must bind the exact knowledge horizon"
             )
