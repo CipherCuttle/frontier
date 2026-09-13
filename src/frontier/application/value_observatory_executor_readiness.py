@@ -49,13 +49,13 @@ class BenchmarkExecutorCapability(StrEnum):
 
 
 class BenchmarkExecutorReadinessStatus(StrEnum):
-    READY = "READY"
+    EVIDENCE_COMPLETE_PENDING_AUTHORITY = "EVIDENCE_COMPLETE_PENDING_AUTHORITY"
     BLOCKED = "BLOCKED"
 
 
 class BenchmarkExecutorBlockerCode(StrEnum):
     ARM_EVIDENCE_MISSING = "ARM_EVIDENCE_MISSING"
-    EXECUTOR_EXPECTATION_MISSING = "EXECUTOR_EXPECTATION_MISSING"
+    EXECUTOR_CANDIDATE_MISSING = "EXECUTOR_CANDIDATE_MISSING"
     EXECUTOR_IDENTITY_MISMATCH = "EXECUTOR_IDENTITY_MISMATCH"
     PROTOCOL_DIGEST_MISMATCH = "PROTOCOL_DIGEST_MISMATCH"
     MISSING_CAPABILITY = "MISSING_CAPABILITY"
@@ -132,8 +132,8 @@ def _require_web_llm_identity(
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkExecutorExpectation:
-    """Trusted expected executor identity for one frozen arm."""
+class BenchmarkExecutorCandidate:
+    """Candidate executor identity only; this object carries no activation authority."""
 
     arm: ObservatoryArm
     executor: BenchmarkExecutorIdentity
@@ -144,7 +144,7 @@ class BenchmarkExecutorExpectation:
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkExecutorReadinessEvidence:
-    """Diagnostic capability evidence bound to one exact executor and proof artifact."""
+    """Unverified diagnostic evidence claim for one exact executor candidate."""
 
     arm: ObservatoryArm
     executor: BenchmarkExecutorIdentity
@@ -179,41 +179,48 @@ class BenchmarkExecutorReadinessBlocker:
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkExecutorReadinessAssessment:
-    """Pure fail-closed readiness result; never a scored capture or activation receipt."""
+    """Pure evidence-completeness result; never activation readiness or a scored receipt."""
 
     status: BenchmarkExecutorReadinessStatus
-    ready_arms: tuple[ObservatoryArm, ...]
+    evidence_complete_arms: tuple[ObservatoryArm, ...]
     blocked_arms: tuple[ObservatoryArm, ...]
     blockers: tuple[BenchmarkExecutorReadinessBlocker, ...]
 
 
 def assess_benchmark_executor_readiness_v0(
     *,
-    protocol_digest: Digest,
-    expected_executors: tuple[BenchmarkExecutorExpectation, ...],
+    candidate_protocol_digest: Digest,
+    candidate_executors: tuple[BenchmarkExecutorCandidate, ...],
     evidence: tuple[BenchmarkExecutorReadinessEvidence, ...],
 ) -> BenchmarkExecutorReadinessAssessment:
-    """Assess whether all four exact frozen executors satisfy their activation contract."""
+    """Validate candidate evidence without granting executor activation readiness.
+
+    All inputs are caller-supplied and therefore cannot establish trusted authority. Even when
+    every candidate claim is internally complete, the strongest result is
+    EVIDENCE_COMPLETE_PENDING_AUTHORITY. A later separately reviewed phase must bind real executor
+    identities and the protocol digest to immutable trusted authority and verify the referenced
+    proof artifacts before BENCHMARK_CAPTURE_V0 activation can treat any arm as ready.
+    """
 
     required_arms: set[ObservatoryArm] = set(BENCHMARK_CAPTURE_V0_REQUIRED_ARMS)
-    expected_by_arm = _index_expectations(expected_executors, required_arms=required_arms)
+    candidate_by_arm = _index_candidates(candidate_executors, required_arms=required_arms)
     evidence_by_arm = _index_evidence(evidence, required_arms=required_arms)
 
     blockers: list[BenchmarkExecutorReadinessBlocker] = []
-    ready_arms: list[ObservatoryArm] = []
+    evidence_complete_arms: list[ObservatoryArm] = []
     blocked_arms: list[ObservatoryArm] = []
 
     for arm in BENCHMARK_CAPTURE_V0_REQUIRED_ARMS:
-        expectation = expected_by_arm.get(arm)
+        candidate = candidate_by_arm.get(arm)
         item = evidence_by_arm.get(arm)
         arm_blockers: list[BenchmarkExecutorReadinessBlocker] = []
 
-        if expectation is None:
+        if candidate is None:
             arm_blockers.append(
                 BenchmarkExecutorReadinessBlocker(
                     arm=arm,
-                    code=BenchmarkExecutorBlockerCode.EXECUTOR_EXPECTATION_MISSING,
-                    detail="no trusted exact executor identity supplied for frozen arm",
+                    code=BenchmarkExecutorBlockerCode.EXECUTOR_CANDIDATE_MISSING,
+                    detail="no executor candidate identity supplied for frozen arm",
                 )
             )
 
@@ -222,24 +229,24 @@ def assess_benchmark_executor_readiness_v0(
                 BenchmarkExecutorReadinessBlocker(
                     arm=arm,
                     code=BenchmarkExecutorBlockerCode.ARM_EVIDENCE_MISSING,
-                    detail="no executor readiness evidence supplied for frozen arm",
+                    detail="no executor readiness evidence claim supplied for frozen arm",
                 )
             )
         else:
-            if item.protocol_digest != protocol_digest:
+            if item.protocol_digest != candidate_protocol_digest:
                 arm_blockers.append(
                     BenchmarkExecutorReadinessBlocker(
                         arm=arm,
                         code=BenchmarkExecutorBlockerCode.PROTOCOL_DIGEST_MISMATCH,
-                        detail="readiness evidence does not bind the frozen benchmark protocol",
+                        detail="evidence claim does not bind the candidate benchmark protocol",
                     )
                 )
-            if expectation is not None and item.executor != expectation.executor:
+            if candidate is not None and item.executor != candidate.executor:
                 arm_blockers.append(
                     BenchmarkExecutorReadinessBlocker(
                         arm=arm,
                         code=BenchmarkExecutorBlockerCode.EXECUTOR_IDENTITY_MISMATCH,
-                        detail="readiness evidence does not bind the trusted executor identity",
+                        detail="evidence claim does not bind the executor candidate identity",
                     )
                 )
 
@@ -259,32 +266,32 @@ def assess_benchmark_executor_readiness_v0(
             blocked_arms.append(arm)
             blockers.extend(arm_blockers)
         else:
-            ready_arms.append(arm)
+            evidence_complete_arms.append(arm)
 
     status = (
-        BenchmarkExecutorReadinessStatus.READY
+        BenchmarkExecutorReadinessStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
         if not blockers
         else BenchmarkExecutorReadinessStatus.BLOCKED
     )
     return BenchmarkExecutorReadinessAssessment(
         status=status,
-        ready_arms=tuple(ready_arms),
+        evidence_complete_arms=tuple(evidence_complete_arms),
         blocked_arms=tuple(blocked_arms),
         blockers=tuple(blockers),
     )
 
 
-def _index_expectations(
-    expectations: tuple[BenchmarkExecutorExpectation, ...],
+def _index_candidates(
+    candidates: tuple[BenchmarkExecutorCandidate, ...],
     *,
     required_arms: set[ObservatoryArm],
-) -> dict[ObservatoryArm, BenchmarkExecutorExpectation]:
-    indexed: dict[ObservatoryArm, BenchmarkExecutorExpectation] = {}
-    for item in expectations:
+) -> dict[ObservatoryArm, BenchmarkExecutorCandidate]:
+    indexed: dict[ObservatoryArm, BenchmarkExecutorCandidate] = {}
+    for item in candidates:
         if item.arm not in required_arms:
-            raise ValueError("executor expectation contains a non-V0 benchmark arm")
+            raise ValueError("executor candidate contains a non-V0 benchmark arm")
         if item.arm in indexed:
-            raise ValueError("executor expectation contains a duplicate benchmark arm")
+            raise ValueError("executor candidate contains a duplicate benchmark arm")
         indexed[item.arm] = item
     return indexed
 
@@ -334,8 +341,8 @@ def _ordinary_source_blockers(
 __all__ = [
     "BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS",
     "BenchmarkExecutorBlockerCode",
+    "BenchmarkExecutorCandidate",
     "BenchmarkExecutorCapability",
-    "BenchmarkExecutorExpectation",
     "BenchmarkExecutorReadinessAssessment",
     "BenchmarkExecutorReadinessBlocker",
     "BenchmarkExecutorReadinessEvidence",
