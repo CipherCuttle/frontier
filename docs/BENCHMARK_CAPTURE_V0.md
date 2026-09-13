@@ -98,7 +98,7 @@ Rules:
 
 Outcome reporting may later aggregate by opportunity, but the raw alert burden must remain recoverable.
 
-## 6. Capture deadline
+## 6. Capture deadline and point-in-time rule
 
 Execution may start at the aligned boundary and must finish within 30 minutes.
 
@@ -106,7 +106,11 @@ The frozen `knowledge_horizon` remains the aligned boundary even when `captured_
 
 Evidence with a publication/observation timestamp later than the knowledge horizon is ineligible for that capture.
 
-If an executor cannot enforce the knowledge-horizon filter, that arm must be recorded `FAILED` for the boundary.
+Item timestamps alone are not sufficient to prove point-in-time eligibility when a source's collection membership, ordering, ranking, or page state can change after the horizon. The executor must also prove that the collection state it used was available at or reconstructable for the exact `knowledge_horizon`.
+
+A post-horizon fetch of mutable source state may not be treated as horizon-safe merely because an included item has an older publication timestamp.
+
+If an executor cannot enforce the knowledge-horizon rule for its actual retrieval state, that arm must be recorded `FAILED` for the boundary.
 
 There is no scored retry after a failed boundary.
 
@@ -133,14 +137,17 @@ No experimental emergence feature or PEF score may influence this arm.
 
 Purpose: observe existing frozen experimental output without mutating its authority.
 
-V0 uses the latest valid PEF_V1 output whose own knowledge boundary is at or before the benchmark knowledge horizon.
+V0 uses only a valid frozen PEF_V1 output whose own boundary exactly equals the benchmark `knowledge_horizon`.
 
 Rules:
 
+- do not carry forward a prior PEF_V1 boundary;
 - do not recompute PEF_V1 with later code or data;
 - do not change its candidate or threshold;
 - do not fill missing output from another model;
-- if no valid frozen output is available by the capture deadline, record `FAILED`.
+- if no exact-boundary valid frozen output is available by the capture deadline, record `FAILED`.
+
+A stale prior PEF output is never substituted for the exact benchmark boundary, including after the frozen PEF_V1 run has ended.
 
 This arm is observational evidence only.
 
@@ -160,14 +167,18 @@ Frozen source set:
 
 Execution:
 
-- perform one current public retrieval attempt per frozen source;
+- perform one horizon-safe public retrieval attempt per frozen source;
 - do not query the FRONTIER database, historical observation ledger, grouping state, projections, PEF state, or observatory feature ledger;
 - preserve each source's returned raw payload digest and attempt status;
+- for mutable collection/list/ranking sources, use only a source-native historical/as-of query or a previously captured immutable snapshot whose collection state is bound to the exact knowledge horizon;
+- a post-horizon current-state fetch is ineligible when the collection membership or ordering may have changed after the horizon, even if the individual item's publication timestamp is older;
 - merge eligible items by source-declared publication/update time descending;
 - exclude items whose eligible time cannot be established at or before the knowledge horizon;
 - break equal timestamps by canonical `item_key`.
 
-An individual source transport failure is retained as source-health/failure evidence and does not by itself convert the whole arm to `FAILED` if the aggregation executor completed all source attempts. An executor-level failure that prevents the frozen attempt set from completing is `FAILED`.
+An individual source transport failure is retained as source-health/failure evidence and does not by itself convert the whole arm to `FAILED` if the aggregation executor completed all source attempts under the frozen failure policy.
+
+By contrast, inability to establish horizon-safe collection state for any frozen source is a protocol-execution failure for `ORDINARY_AGGREGATION`; the arm is recorded `FAILED` for that boundary rather than silently using future public-feed state or weakening the frozen source set.
 
 ### 7.4 WEB_LLM_BENCHMARK
 
@@ -192,10 +203,11 @@ Rules:
 
 - the LLM receives no FRONTIER private database state or hidden historical features;
 - it may use only its ordinary web-connected retrieval capability;
-- returned evidence must be filterable to the benchmark knowledge horizon;
+- the retrieval mechanism itself must enforce the benchmark knowledge cutoff so the model cannot consume post-horizon web state;
+- filtering cited items only by their displayed publication timestamps is not sufficient if the model or retrieval tool could observe post-horizon pages, rankings, summaries, or updates;
 - output beyond five items is truncated deterministically to the first five returned eligible items;
 - fewer than five eligible items remain underfilled;
-- provider refusal, tool failure, missing citations when required, or inability to enforce the horizon is `FAILED`;
+- provider refusal, tool failure, missing citations when required, inability to enforce the retrieval knowledge cutoff, or inability to prove the horizon is `FAILED`;
 - no silent provider or model fallback is permitted.
 
 A provider/model/version change starts a new benchmark series segment. Results from materially different model identities must be reported separately before any pooled view.
@@ -207,6 +219,8 @@ The canonical prompt is stored verbatim in `experiments/value_observatory_v0/ben
 The prompt asks for up to five consequential emerging public developments from the preceding 24 hours, constrained to evidence available by the supplied UTC knowledge horizon, with source URLs and source timestamps.
 
 The prompt must not mention FRONTIER's own surfaced items or ask the model to validate a FRONTIER candidate.
+
+The prompt text does not itself establish point-in-time safety. The underlying retrieval mechanism must independently enforce the same knowledge cutoff required by Section 7.4.
 
 ## 9. Failure semantics
 
@@ -225,6 +239,8 @@ Failure rules:
 - there is no scored retry or backfill.
 
 A population-manifest/completeness failure invalidates the whole scored boundary rather than allowing any arm to define the denominator from its own surfaced results.
+
+A missing exact PEF_V1 boundary, a horizon-unsafe ordinary-aggregation source, or a web-LLM retrieval path that cannot enforce the knowledge cutoff fails the relevant arm; none may be repaired with a stale or post-horizon substitute.
 
 ## 10. Equal-budget comparison rule
 
@@ -270,11 +286,13 @@ The following require a new protocol identity before scored use:
 - benchmark failure-policy change;
 - population-protocol change;
 - scored outcome-definition-set change;
-- outcome coverage acceptance-policy change.
+- outcome coverage acceptance-policy change;
+- knowledge-horizon enforcement change;
+- PEF exact-boundary policy change.
 
 Executor bug fixes that do not change protocol semantics must still record a new executor version.
 
-A web-LLM provider/model update does not rewrite this protocol, but starts a new explicitly reported series segment.
+A web-LLM provider/model update does not rewrite this protocol, but starts a new explicitly reported series segment only if the replacement execution still satisfies the frozen knowledge-horizon enforcement policy.
 
 ## 14. Activation preconditions
 
@@ -287,8 +305,10 @@ The first scored V0 boundary is forbidden until:
 5. the arm-independent population executor can emit a manifest at the exact scored knowledge horizon and prove exact opportunity completeness;
 6. every scored opportunity can be bound before outcome maturity to the exact frozen outcome definition(s), horizon(s), coverage requirements, and accepted health states;
 7. all four executors can emit the immutable capture artifact shape without mutating PEF_V1;
-8. Web-LLM execution can bind provider, exact model, prompt digest, executor version, raw response digest, and citations without silent fallback;
-9. one independent hostile review for this bounded phase is complete.
+8. the PEF arm can require exact-boundary frozen PEF_V1 output and fail cleanly when that boundary is absent;
+9. every frozen ordinary-aggregation source has a proven horizon-safe collection-state path for the benchmark boundary;
+10. Web-LLM execution can bind provider, exact model, prompt digest, executor version, raw response digest, and citations without silent fallback and can enforce the retrieval knowledge cutoff rather than merely filtering displayed timestamps;
+11. one independent hostile review for this bounded phase is complete.
 
 ## 15. Verification and reporting
 
@@ -304,6 +324,9 @@ Before activation, implementation must prove:
 - deterministic item ordering;
 - failed-arm persistence;
 - no future-timestamp item acceptance;
+- no prior PEF_V1 boundary can substitute for a missing exact boundary;
+- no post-horizon mutable collection/list/ranking state can enter `ORDINARY_AGGREGATION`;
+- Web-LLM retrieval cannot consume post-horizon web state and cannot claim PIT safety from citation timestamps alone;
 - exact Web-LLM provider/model/prompt identity;
 - no PEF_V1 mutation;
 - no canonical public-ranking mutation;
