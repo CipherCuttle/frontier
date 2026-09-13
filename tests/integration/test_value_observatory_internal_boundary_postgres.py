@@ -551,10 +551,9 @@ def test_resolver_counts_dangling_exact_run_before_binding_lookup() -> None:
     assert DB_URL is not None
     horizon = datetime(2032, 9, 1, 0, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
-        freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
-        artifact, receipt, run = _pef_boundary(horizon, "ab", freeze_receipt_id=freeze_receipt_id)
+        artifact, receipt, run = _pef_boundary(horizon, "ab")
         _persist_pef_boundary(conn, artifact, receipt, run)
-        _, _, dangling_run = _pef_boundary(horizon, "cd", freeze_receipt_id=freeze_receipt_id)
+        _, _, dangling_run = _pef_boundary(horizon, "cd")
         _persist_pef_run_only(conn, dangling_run)
 
         with pytest.raises(RuntimeError, match="ambiguous exact PEF_V1"):
