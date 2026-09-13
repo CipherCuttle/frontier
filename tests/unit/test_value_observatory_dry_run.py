@@ -360,9 +360,7 @@ def test_complete_comparator_requires_exact_horizon_safe_source_state(
 
 def test_horizon_unsafe_arm_is_valid_only_when_persisted_as_failed() -> None:
     source_population, opportunities, captures, evidence = valid_boundary()
-    index = BENCHMARK_CAPTURE_V0_REQUIRED_ARMS.index(
-        ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL
-    )
+    index = BENCHMARK_CAPTURE_V0_REQUIRED_ARMS.index(ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL)
     failed = capture(
         ObservatoryArm.FRONTIER_EXISTING_EXPERIMENTAL,
         status=CaptureStatus.FAILED,
