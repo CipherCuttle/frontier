@@ -549,7 +549,7 @@ def test_resolver_rejects_missing_pef_freeze_authority() -> None:
 
 def test_resolver_counts_dangling_exact_run_before_binding_lookup() -> None:
     assert DB_URL is not None
-    horizon = datetime(2031, 9, 1, 0, 0, tzinfo=UTC)
+    horizon = datetime(2032, 9, 1, 0, 0, tzinfo=UTC)
     with psycopg.connect(DB_URL) as conn:
         freeze_receipt_id = _persist_pef_freeze_authority(conn, horizon)
         artifact, receipt, run = _pef_boundary(horizon, "ab", freeze_receipt_id=freeze_receipt_id)
