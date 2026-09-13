@@ -63,7 +63,7 @@ It fails closed unless:
 - receipt output digest binds the exact snapshot canonical payload;
 - source ranks are contiguous from one.
 
-It then emits at most the frozen K=5 items in existing baseline rank order. The adapter does not recompute the baseline and does not read the database.
+The retained baseline rank is validated as source-artifact integrity but is not the benchmark comparator order. The adapter applies the frozen `BENCHMARK_CAPTURE_V0` naive-arm ordering directly: newest `last_observed_at` first, then canonical episode/item key lexical order, and emits at most K=5 items. The adapter does not recompute the baseline and does not read the database.
 
 ## PEF_V1 adapter
 
@@ -76,7 +76,11 @@ It fails closed unless:
 - receipt is COMPLETE and carries the matching receipt family/projection/schema/algorithm/ranking/configuration identities;
 - source-registry identity agrees;
 - receipt output digest binds the exact PEF_V1 artifact;
+- artifact and receipt generation timestamps agree;
+- the frozen output was generated no later than the claimed capture time and no later than the frozen 30-minute capture deadline;
 - source ranks are contiguous from one.
+
+Complete internal captures also fail closed when `captured_at` itself exceeds the frozen 30-minute capture deadline.
 
 The adapter consumes the supplied frozen artifact directly. It performs no PEF recomputation and provides no prior-boundary fallback.
 
