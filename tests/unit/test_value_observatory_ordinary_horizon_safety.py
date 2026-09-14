@@ -74,15 +74,16 @@ def test_frozen_manifest_is_fail_closed_and_currently_blocks_executor_implementa
     assert raw["benchmark_protocol_id"] == "frontier-benchmark-capture-v0"
     assert raw["overall_verdict"] == "BLOCKED"
     assert raw["executor_implementation_authorized"] is False
-    assert raw["proven_source_count"] == 1
+    assert raw["evidence_complete_source_count"] == 0
     assert raw["required_source_count"] == 7
 
     assessment = assess_ordinary_horizon_safety_v0(_proofs_from_manifest(raw))
 
     assert assessment.verdict is OrdinaryHorizonSafetyVerdict.BLOCKED
-    assert assessment.proven_source_ids == ("cisa.kev",)
+    assert assessment.evidence_complete_source_ids == ()
     assert assessment.blocked_source_ids == (
         "arxiv.cs-ai",
+        "cisa.kev",
         "gdelt.frontier",
         "github.ml-repos",
         "hf.models",
@@ -94,22 +95,22 @@ def test_frozen_manifest_is_fail_closed_and_currently_blocks_executor_implementa
     )
 
 
-def test_gate_requires_every_frozen_source_to_be_proven() -> None:
+def test_all_complete_caller_claims_remain_pending_trusted_authority() -> None:
     proofs = _proofs_from_manifest(_load_manifest())
-    all_proven = tuple(
+    all_claimed_complete = tuple(
         replace(
             proof,
-            status=OrdinaryHorizonSafetyStatus.PROVEN_HORIZON_SAFE,
+            status=OrdinaryHorizonSafetyStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY,
             mechanism=OrdinaryHorizonSafetyMechanism.SOURCE_NATIVE_AS_OF,
         )
         for proof in proofs
     )
 
-    assessment = assess_ordinary_horizon_safety_v0(all_proven)
+    assessment = assess_ordinary_horizon_safety_v0(all_claimed_complete)
 
-    assert assessment.verdict is OrdinaryHorizonSafetyVerdict.READY_FOR_EXECUTOR_IMPLEMENTATION
+    assert assessment.verdict is OrdinaryHorizonSafetyVerdict.EVIDENCE_COMPLETE_PENDING_AUTHORITY
     assert assessment.blocked_source_ids == ()
-    assert len(assessment.proven_source_ids) == 7
+    assert len(assessment.evidence_complete_source_ids) == 7
 
 
 def test_gate_rejects_missing_extra_and_duplicate_source_proofs() -> None:
@@ -130,7 +131,7 @@ def test_source_proof_cannot_claim_inconsistent_status_and_mechanism() -> None:
     with pytest.raises(ValueError, match="requires an explicit mechanism"):
         OrdinarySourceHorizonSafetyProof(
             source_id="cisa.kev",
-            status=OrdinaryHorizonSafetyStatus.PROVEN_HORIZON_SAFE,
+            status=OrdinaryHorizonSafetyStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY,
             mechanism=OrdinaryHorizonSafetyMechanism.NONE,
             evidence_refs=("evidence",),
             detail="detail",
