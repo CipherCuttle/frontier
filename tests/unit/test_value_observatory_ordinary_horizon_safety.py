@@ -26,9 +26,12 @@ def _require_str(value: object, label: str) -> str:
 
 
 def _require_str_tuple(value: object, label: str) -> tuple[str, ...]:
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+    if not isinstance(value, list):
         raise AssertionError(f"{label} must be a string list")
-    return tuple(cast(str, item) for item in value)
+    items = cast(list[object], value)
+    if not all(isinstance(item, str) for item in items):
+        raise AssertionError(f"{label} must be a string list")
+    return tuple(item for item in items if isinstance(item, str))
 
 
 def _load_manifest() -> dict[str, object]:
@@ -36,9 +39,10 @@ def _load_manifest() -> dict[str, object]:
 
 
 def _proofs_from_manifest(raw: dict[str, object]) -> tuple[OrdinarySourceHorizonSafetyProof, ...]:
-    rows = raw.get("sources")
-    if not isinstance(rows, list):
+    rows_value = raw.get("sources")
+    if not isinstance(rows_value, list):
         raise AssertionError("sources must be a list")
+    rows = cast(list[object], rows_value)
 
     proofs: list[OrdinarySourceHorizonSafetyProof] = []
     for index, row_value in enumerate(rows):
