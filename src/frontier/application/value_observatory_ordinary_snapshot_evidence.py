@@ -8,7 +8,8 @@ from enum import StrEnum
 from frontier.application.value_observatory_executor_readiness import (
     BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS,
 )
-from frontier.domain.digests import Digest
+from frontier.domain.canonical_json import canonical_json_bytes, canonical_timestamp
+from frontier.domain.digests import Digest, sha256_digest
 
 BENCHMARK_ORDINARY_SNAPSHOT_ARTIFACT_REPOSITORY = "CipherCuttle/frontier"
 _GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -34,7 +35,7 @@ def _require_utc(value: datetime, label: str) -> None:
 
 @dataclass(frozen=True, slots=True)
 class OrdinarySnapshotSourceClaim:
-    """Caller-supplied claim for one source inside a prospective comparator snapshot."""
+    """Caller-supplied claim for one source inside an uploadable snapshot payload."""
 
     source_id: str
     knowledge_horizon: datetime
@@ -55,8 +56,54 @@ class OrdinarySnapshotSourceClaim:
 
 
 @dataclass(frozen=True, slots=True)
-class OrdinarySnapshotArtifactClaim:
-    """Unverified external-artifact metadata claim; not trusted publication authority."""
+class OrdinarySnapshotPayloadClaim:
+    """Uploadable snapshot payload created before GitHub assigns artifact metadata."""
+
+    snapshot_id: str
+    knowledge_horizon: datetime
+    benchmark_protocol_digest: Digest
+    source_registry_version: Digest
+    sources: tuple[OrdinarySnapshotSourceClaim, ...]
+
+    def __post_init__(self) -> None:
+        if not self.snapshot_id.strip():
+            raise ValueError("ordinary snapshot_id must be non-empty")
+        _require_utc(self.knowledge_horizon, "ordinary snapshot payload knowledge_horizon")
+
+
+def ordinary_snapshot_payload_digest_v0(payload: OrdinarySnapshotPayloadClaim) -> Digest:
+    """Canonical digest of the uploadable payload, excluding post-upload metadata."""
+
+    sources = [
+        {
+            "knowledge_horizon": canonical_timestamp(source.knowledge_horizon),
+            "normalized_collection_digest": source.normalized_collection_digest.value,
+            "raw_body_retained": source.raw_body_retained,
+            "raw_payload_digest": source.raw_payload_digest.value,
+            "request_identity_digest": source.request_identity_digest.value,
+            "retrieval_completed_at": canonical_timestamp(source.retrieval_completed_at),
+            "source_contract_digest": source.source_contract_digest.value,
+            "source_id": source.source_id,
+        }
+        for source in sorted(payload.sources, key=lambda item: item.source_id)
+    ]
+    return sha256_digest(
+        canonical_json_bytes(
+            {
+                "benchmark_protocol_digest": payload.benchmark_protocol_digest.value,
+                "knowledge_horizon": canonical_timestamp(payload.knowledge_horizon),
+                "schema_version": "frontier-ordinary-snapshot-payload-v0",
+                "snapshot_id": payload.snapshot_id,
+                "source_registry_version": payload.source_registry_version.value,
+                "sources": sources,
+            }
+        )
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class OrdinarySnapshotReceiptClaim:
+    """Post-upload metadata claim binding one externally stored artifact to one payload digest."""
 
     repository_full_name: str
     artifact_id: int
@@ -64,6 +111,7 @@ class OrdinarySnapshotArtifactClaim:
     artifact_created_at: datetime
     workflow_run_id: int
     workflow_head_sha: str
+    snapshot_payload_digest: Digest
     attestation_ref: str
     attestation_digest: Digest
 
@@ -83,19 +131,10 @@ class OrdinarySnapshotArtifactClaim:
 
 @dataclass(frozen=True, slots=True)
 class OrdinarySnapshotEvidenceBundle:
-    """One caller-supplied candidate snapshot bundle targeting one exact benchmark horizon."""
+    """Uploadable payload plus a separately created post-upload receipt claim."""
 
-    snapshot_id: str
-    knowledge_horizon: datetime
-    benchmark_protocol_digest: Digest
-    source_registry_version: Digest
-    artifact: OrdinarySnapshotArtifactClaim
-    sources: tuple[OrdinarySnapshotSourceClaim, ...]
-
-    def __post_init__(self) -> None:
-        if not self.snapshot_id.strip():
-            raise ValueError("ordinary snapshot_id must be non-empty")
-        _require_utc(self.knowledge_horizon, "ordinary snapshot bundle knowledge_horizon")
+    payload: OrdinarySnapshotPayloadClaim
+    receipt: OrdinarySnapshotReceiptClaim
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,18 +156,21 @@ class OrdinarySnapshotEvidenceAssessment:
 def assess_ordinary_snapshot_evidence_v0(
     bundle: OrdinarySnapshotEvidenceBundle,
 ) -> OrdinarySnapshotEvidenceAssessment:
-    """Assess a claimed pre-horizon snapshot without trusting caller-supplied authority metadata.
+    """Assess payload/receipt consistency without trusting external authority claims.
 
-    This function can establish only internal evidence completeness. GitHub artifact timestamps,
-    digests, workflow identity, attestations, protocol identity, and source-contract identity are
-    still caller supplied here. Even a structurally complete bundle therefore tops out at
-    EVIDENCE_COMPLETE_PENDING_AUTHORITY. A later independently reviewed verifier must retrieve and
-    bind the external authority material before any executor implementation or scored use is
-    authorized.
+    The payload can exist before upload because it contains no server-assigned artifact metadata.
+    The receipt is created afterward and carries the GitHub artifact and attestation claims plus a
+    canonical digest of the payload. All receipt authority fields are still caller supplied here,
+    so even a structurally complete bundle tops out at EVIDENCE_COMPLETE_PENDING_AUTHORITY. A later
+    verifier must independently retrieve the artifact/attestation, verify the artifact digest, and
+    verify that the sealed payload has exactly the receipt's snapshot_payload_digest.
     """
 
+    payload = bundle.payload
+    receipt = bundle.receipt
+
     by_source: dict[str, OrdinarySnapshotSourceClaim] = {}
-    for source in bundle.sources:
+    for source in payload.sources:
         if source.source_id in by_source:
             raise ValueError(f"duplicate ordinary snapshot source claim for {source.source_id}")
         by_source[source.source_id] = source
@@ -142,11 +184,15 @@ def assess_ordinary_snapshot_evidence_v0(
         )
 
     for source in by_source.values():
-        if source.knowledge_horizon != bundle.knowledge_horizon:
+        if source.knowledge_horizon != payload.knowledge_horizon:
             raise ValueError("ordinary snapshot source knowledge_horizon mismatch")
 
+    expected_payload_digest = ordinary_snapshot_payload_digest_v0(payload)
+    if receipt.snapshot_payload_digest != expected_payload_digest:
+        raise ValueError("ordinary snapshot receipt payload digest mismatch")
+
     blockers: list[OrdinarySnapshotEvidenceBlocker] = []
-    if bundle.artifact.artifact_created_at > bundle.knowledge_horizon:
+    if receipt.artifact_created_at > payload.knowledge_horizon:
         blockers.append(
             OrdinarySnapshotEvidenceBlocker(
                 code=OrdinarySnapshotEvidenceBlockerCode.ARTIFACT_CREATED_AFTER_HORIZON,
@@ -156,7 +202,7 @@ def assess_ordinary_snapshot_evidence_v0(
 
     for source_id in sorted(by_source):
         source = by_source[source_id]
-        if source.retrieval_completed_at > bundle.knowledge_horizon:
+        if source.retrieval_completed_at > payload.knowledge_horizon:
             blockers.append(
                 OrdinarySnapshotEvidenceBlocker(
                     code=OrdinarySnapshotEvidenceBlockerCode.SOURCE_RETRIEVAL_AFTER_HORIZON,
@@ -164,7 +210,7 @@ def assess_ordinary_snapshot_evidence_v0(
                     detail="source retrieval completed after the benchmark knowledge horizon",
                 )
             )
-        if source.retrieval_completed_at > bundle.artifact.artifact_created_at:
+        if source.retrieval_completed_at > receipt.artifact_created_at:
             blockers.append(
                 OrdinarySnapshotEvidenceBlocker(
                     code=OrdinarySnapshotEvidenceBlockerCode.SOURCE_RETRIEVAL_AFTER_ARTIFACT,
@@ -187,12 +233,14 @@ def assess_ordinary_snapshot_evidence_v0(
 
 __all__ = [
     "BENCHMARK_ORDINARY_SNAPSHOT_ARTIFACT_REPOSITORY",
-    "OrdinarySnapshotArtifactClaim",
     "OrdinarySnapshotEvidenceAssessment",
     "OrdinarySnapshotEvidenceBlocker",
     "OrdinarySnapshotEvidenceBlockerCode",
     "OrdinarySnapshotEvidenceBundle",
     "OrdinarySnapshotEvidenceVerdict",
+    "OrdinarySnapshotPayloadClaim",
+    "OrdinarySnapshotReceiptClaim",
     "OrdinarySnapshotSourceClaim",
     "assess_ordinary_snapshot_evidence_v0",
+    "ordinary_snapshot_payload_digest_v0",
 ]
