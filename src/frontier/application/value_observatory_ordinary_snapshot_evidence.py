@@ -138,8 +138,7 @@ def assess_ordinary_snapshot_evidence_v0(
         missing = sorted(BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS - supplied_source_ids)
         extra = sorted(supplied_source_ids - BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS)
         raise ValueError(
-            "ordinary snapshot source set mismatch: "
-            f"missing={missing!r} extra={extra!r}"
+            f"ordinary snapshot source set mismatch: missing={missing!r} extra={extra!r}"
         )
 
     for source in by_source.values():
