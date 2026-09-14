@@ -58,7 +58,10 @@ def _bundle() -> OrdinarySnapshotEvidenceBundle:
         benchmark_protocol_digest=_digest("7"),
         source_registry_version=_digest("8"),
         artifact=_artifact(),
-        sources=tuple(_source(source_id) for source_id in sorted(BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS)),
+        sources=tuple(
+            _source(source_id)
+            for source_id in sorted(BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS)
+        ),
     )
 
 
@@ -94,7 +97,9 @@ def test_gate_rejects_mixed_knowledge_horizons() -> None:
     )
 
     with pytest.raises(ValueError, match="knowledge_horizon mismatch"):
-        assess_ordinary_snapshot_evidence_v0(replace(bundle, sources=(changed, *bundle.sources[1:])))
+        assess_ordinary_snapshot_evidence_v0(
+            replace(bundle, sources=(changed, *bundle.sources[1:]))
+        )
 
 
 def test_artifact_created_after_horizon_blocks_evidence() -> None:
