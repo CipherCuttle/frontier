@@ -85,7 +85,9 @@ def test_frozen_manifest_is_fail_closed_and_currently_blocks_executor_implementa
         "hn.frontpage",
         "pypi.updates",
     )
-    assert tuple(blocker.source_id for blocker in assessment.blockers) == assessment.blocked_source_ids
+    assert (
+        tuple(blocker.source_id for blocker in assessment.blockers) == assessment.blocked_source_ids
+    )
 
 
 def test_gate_requires_every_frozen_source_to_be_proven() -> None:
