@@ -394,7 +394,7 @@ async def run_ordinary_snapshot_probe_v0(
     )
     payload: OrdinarySnapshotPayloadClaim | None = None
     if complete:
-        claims = []
+        claims: list[OrdinarySnapshotSourceClaim] = []
         for source in source_results:
             assert source.raw_payload_digest is not None
             assert source.normalized_collection_digest is not None
