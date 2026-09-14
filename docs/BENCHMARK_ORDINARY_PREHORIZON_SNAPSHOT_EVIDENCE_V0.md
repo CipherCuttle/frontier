@@ -15,7 +15,7 @@ Base SHA: `2cde7d180cf94499849090360cc262f6eacdbde3`.
 
 Define and hostile-test the smallest credible prospective evidence route for the frozen seven-source `ORDINARY_AGGREGATION` comparator without implementing the comparator, scheduler, scored persistence, or activation.
 
-The predecessor phase established that none of the seven frozen sources currently has sufficient trusted retrospective collection-state evidence. This phase does not weaken that result. Instead, it specifies what a prospectively captured immutable snapshot would have to bind before a later phase may attempt a real snapshot producer.
+The predecessor phase established that none of the seven frozen sources currently has sufficient trusted retrospective collection-state evidence. This phase does not weaken that result. It specifies what a prospectively captured immutable snapshot would have to bind before a later phase may attempt a real snapshot producer.
 
 Current scientific state remains:
 
@@ -97,34 +97,73 @@ These properties make GitHub artifact metadata plus an attestation a stronger pr
 
 This phase does **not** trust caller-supplied copies of those fields. A later separately reviewed authority verifier must query and bind the external GitHub/Sigstore evidence independently.
 
-## Pure evidence envelope
+## P1 repair: payload first, receipt second
 
-`OrdinarySnapshotEvidenceBundle` targets one exact `knowledge_horizon` and binds:
+The hostile review correctly identified a circular design in the first draft: an uploadable snapshot cannot honestly contain its own GitHub artifact ID, GitHub creation time, GitHub artifact digest, or later attestation because those values exist only after upload. Embedding them in the uploaded artifact would also make the artifact digest self-referential.
 
-- the frozen benchmark protocol digest;
-- the frozen source-registry version;
-- exactly one row for each frozen ordinary source;
-- one source-contract digest per source;
-- one request-identity digest per source;
-- one raw-payload digest per source;
-- one canonical normalized-collection digest per source;
-- the source retrieval completion time;
-- the external artifact digest and GitHub server-side creation-time claim;
-- workflow run ID and workflow head SHA;
-- an artifact-attestation reference and digest.
+The repaired contract therefore has two distinct objects.
 
-Raw response bodies are explicitly forbidden in this evidence artifact. The current source policy requires `raw_artifact_retention == NONE`; this phase does not create a hidden raw-response archive to work around that policy.
+### 1. `OrdinarySnapshotPayloadClaim`
+
+This is the object that can actually exist **before upload**. It contains:
+
+- snapshot ID;
+- exact target `knowledge_horizon`;
+- frozen benchmark protocol digest;
+- frozen source-registry version;
+- exactly one source row for each of the seven frozen ordinary sources;
+- source-contract digest per source;
+- request-identity digest per source;
+- raw-payload digest per source;
+- canonical normalized-collection digest per source;
+- retrieval-completion timestamp per source.
+
+It contains **no** server-assigned artifact metadata and no attestation fields.
+
+`ordinary_snapshot_payload_digest_v0` deterministically canonicalizes this payload and computes its SHA-256 digest. Source tuple order is normalized so equivalent payload content cannot receive a different digest merely by reordering the seven source rows.
+
+### 2. `OrdinarySnapshotReceiptClaim`
+
+This is a **separate post-upload receipt**. Only after GitHub has stored the artifact can it contain:
+
+- repository identity;
+- server-assigned artifact ID;
+- server-reported artifact creation time;
+- GitHub artifact digest;
+- workflow run ID;
+- workflow head SHA;
+- the canonical `snapshot_payload_digest` computed before upload;
+- attestation reference;
+- attestation digest.
+
+The pure gate requires the receipt's `snapshot_payload_digest` to equal a fresh canonical digest of the supplied payload. This removes the first-draft circularity and gives a later external verifier an explicit bridge:
+
+```text
+pre-upload canonical payload
+    -> snapshot_payload_digest
+    -> uploaded artifact
+    -> GitHub artifact metadata/digest
+    -> attestation
+    -> separate receipt binding snapshot_payload_digest
+```
+
+A future independent verifier must download the sealed artifact and prove that the canonical payload inside it has exactly the `snapshot_payload_digest` named by the externally verified receipt. The current pure gate cannot confer that authority because the receipt fields are still caller supplied.
+
+## Retention boundary
+
+Raw response bodies are explicitly forbidden in the uploadable payload. The current source policy requires `raw_artifact_retention == NONE`; this phase does not create a hidden raw-response archive to work around that policy.
 
 The normalized collection retained by a future producer must contain only the public metadata necessary to reproduce the frozen comparator's deterministic later selection/merge, plus provenance/digests. That sufficiency is not assumed by this phase; it must be proved by the future producer phase.
 
 ## Fail-closed structural rules
 
-`assess_ordinary_snapshot_evidence_v0` rejects malformed or substitution-prone bundles when:
+`assess_ordinary_snapshot_evidence_v0` rejects malformed or substitution-prone evidence when:
 
 - a frozen source row is missing;
 - an extra source row is supplied;
 - a source appears twice;
 - source rows target different knowledge horizons;
+- the receipt's `snapshot_payload_digest` does not equal the canonical digest of the supplied uploadable payload;
 - the artifact repository is not the frozen expected repository;
 - the workflow head is not an exact 40-hex Git SHA;
 - the external attestation reference is absent;
@@ -136,7 +175,7 @@ It returns `BLOCKED` when:
 - any source retrieval completed after the knowledge horizon;
 - any source retrieval completion time is later than the claimed artifact creation time.
 
-Even a structurally perfect bundle returns only:
+Even a structurally perfect payload plus receipt returns only:
 
 `EVIDENCE_COMPLETE_PENDING_AUTHORITY`
 
@@ -204,11 +243,12 @@ That probe should:
 3. require each successful body to be fully read before recording `retrieval_completed_at` and its raw payload digest;
 4. normalize/canonicalize only the metadata required for later ordinary-comparator replay;
 5. discard raw bodies;
-6. emit one candidate snapshot bundle;
-7. upload it as an immutable GitHub Actions artifact;
-8. generate an artifact attestation;
-9. independently verify the artifact metadata/attestation in a later authority step;
-10. remain manual/non-scored until freshness and authority gates are closed.
+6. construct the uploadable canonical snapshot payload and its `snapshot_payload_digest`;
+7. upload **only that payload** as an immutable GitHub Actions artifact;
+8. obtain GitHub's server-assigned artifact metadata/digest and generate the artifact attestation;
+9. create a **separate post-upload receipt** binding those external fields to the precomputed `snapshot_payload_digest`;
+10. independently verify the artifact metadata, attestation, downloaded artifact, and contained payload digest in a later authority step;
+11. remain manual/non-scored until freshness and authority gates are closed.
 
 The probe must fail rather than silently omit a frozen source.
 
@@ -233,4 +273,4 @@ The intended bounded phase verdict is:
 
 `SNAPSHOT_EVIDENCE_CONTRACT_DEFINED / RUNTIME_PROOF_MISSING / HORIZON_SAFETY_REMAINS_0_OF_7 / NO_EXECUTOR_AUTHORITY`
 
-Engineering success here means the future route is harder to substitute or backdate. It does not mean any of the seven source blockers has been scientifically closed yet.
+Engineering success here means the future route is implementable and harder to substitute or backdate. It does not mean any of the seven source blockers has been scientifically closed yet.
