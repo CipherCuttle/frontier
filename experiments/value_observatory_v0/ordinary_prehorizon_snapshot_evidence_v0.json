@@ -1,0 +1,139 @@
+{
+  "schema_version": "frontier-ordinary-prehorizon-snapshot-evidence-v0",
+  "phase_id": "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_EVIDENCE_V0",
+  "base_main_sha": "2cde7d180cf94499849090360cc262f6eacdbde3",
+  "benchmark_protocol_id": "frontier-benchmark-capture-v0",
+  "mechanism": "IMMUTABLE_PRECAPTURE_SNAPSHOT",
+  "current_verdict": "CANDIDATE_ROUTE_DEFINED_RUNTIME_PROOF_MISSING",
+  "horizon_safety_evidence_complete_source_count": 0,
+  "required_source_count": 7,
+  "executor_implementation_authorized": false,
+  "scored_execution_authorized": false,
+  "candidate_snapshot_authority": {
+    "repository": "CipherCuttle/frontier",
+    "artifact_metadata": "GitHub Actions artifact metadata with server-side created_at, artifact digest, workflow run id, and workflow head SHA",
+    "attestation": "GitHub artifact attestation backed by Sigstore; public-repository attestations are recorded in a public immutable transparency log",
+    "authority_status": "CALLER_SUPPLIED_CLAIM_ONLY_IN_THIS_PHASE",
+    "independent_verifier_required": true
+  },
+  "snapshot_payload_rules": {
+    "post_upload_metadata_embedded": false,
+    "raw_response_body_retention": false,
+    "raw_payload_digest_required": true,
+    "normalized_collection_digest_required": true,
+    "source_contract_digest_required": true,
+    "request_identity_digest_required": true,
+    "source_registry_version_required": true,
+    "benchmark_protocol_digest_required": true,
+    "target_knowledge_horizon_required": true,
+    "retrieval_completed_at_required": true,
+    "canonical_payload_digest_required": true
+  },
+  "post_upload_receipt_rules": {
+    "separate_from_uploaded_payload": true,
+    "server_assigned_artifact_id_required": true,
+    "server_reported_artifact_created_at_required": true,
+    "artifact_digest_required": true,
+    "workflow_run_id_required": true,
+    "workflow_head_sha_required": true,
+    "snapshot_payload_digest_required": true,
+    "attestation_ref_required": true,
+    "attestation_digest_required": true,
+    "receipt_payload_digest_must_equal_canonical_payload_digest": true,
+    "independent_external_verification_required": true
+  },
+  "sources": [
+    {
+      "source_id": "arxiv.cs-ai",
+      "source_native_historical_state": "NOT_ESTABLISHED",
+      "snapshot_route": "CANDIDATE_PENDING_RUNTIME_PROOF",
+      "evidence_refs": [
+        "repo:sources/registry/arxiv.cs-ai.v0.json",
+        "https://info.arxiv.org/help/api/"
+      ],
+      "detail": "The frozen current Atom query can be captured prospectively before the horizon. This does not convert later submittedDate filtering into historical index-state proof. Any future source-native OAI/incremental mechanism is supplemental unless separately shown to preserve the frozen arm semantics."
+    },
+    {
+      "source_id": "cisa.kev",
+      "source_native_historical_state": "NOT_ESTABLISHED_WITH_TRUSTED_PUBLICATION_TIME",
+      "snapshot_route": "CANDIDATE_PENDING_RUNTIME_PROOF",
+      "evidence_refs": [
+        "repo:sources/registry/cisa.kev.v0.json",
+        "https://github.com/cisagov/kev-data"
+      ],
+      "detail": "A prospectively completed and externally timestamped snapshot avoids relying on Git commit author/committer timestamps as public-availability proof. Same-authority mirror history alone remains insufficient."
+    },
+    {
+      "source_id": "gdelt.frontier",
+      "source_native_historical_state": "NOT_ESTABLISHED",
+      "snapshot_route": "CANDIDATE_PENDING_RUNTIME_PROOF",
+      "evidence_refs": [
+        "repo:sources/registry/gdelt.frontier.v0.json",
+        "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/"
+      ],
+      "detail": "The frozen DOC query can be captured prospectively. STARTDATETIME/ENDDATETIME publication bounds are not substituted for collection-state proof because GDELT documents that scoring changes may be applied retroactively to its backfile."
+    },
+    {
+      "source_id": "github.ml-repos",
+      "source_native_historical_state": "NOT_ESTABLISHED",
+      "snapshot_route": "CANDIDATE_PENDING_RUNTIME_PROOF",
+      "evidence_refs": [
+        "repo:sources/registry/github.ml-repos.v0.json",
+        "https://docs.github.com/en/rest/search/search"
+      ],
+      "detail": "The frozen mutable repository-search result can be captured prospectively before the horizon. Current repository metadata or date qualifiers remain insufficient to reconstruct historical result membership and ordering later."
+    },
+    {
+      "source_id": "hf.models",
+      "source_native_historical_state": "NOT_ESTABLISHED",
+      "snapshot_route": "CANDIDATE_PENDING_RUNTIME_PROOF",
+      "evidence_refs": [
+        "repo:sources/registry/hf.models.v0.json",
+        "https://huggingface.co/docs/hub/api"
+      ],
+      "detail": "The frozen current model-list query can be captured prospectively. Hub list/search and repo webhooks provide current or incremental information but do not establish an arbitrary historical global-model ranking for later reconstruction."
+    },
+    {
+      "source_id": "hn.frontpage",
+      "source_native_historical_state": "NOT_ESTABLISHED",
+      "snapshot_route": "CANDIDATE_PENDING_RUNTIME_PROOF",
+      "evidence_refs": [
+        "repo:sources/registry/hn.frontpage.v0.json",
+        "https://github.com/HackerNews/API"
+      ],
+      "detail": "The frozen current front-page RSS collection can be captured prospectively before the horizon. The official Firebase API exposes live ranking/change state but no reviewed arbitrary historical front-page membership/ranking query."
+    },
+    {
+      "source_id": "pypi.updates",
+      "source_native_historical_state": "NOT_ESTABLISHED_FOR_FROZEN_RSS_COLLECTION",
+      "snapshot_route": "CANDIDATE_PENDING_RUNTIME_PROOF",
+      "evidence_refs": [
+        "repo:sources/registry/pypi.updates.v0.json",
+        "https://docs.pypi.org/api/feeds/",
+        "https://docs.pypi.org/api/index-api/"
+      ],
+      "detail": "The frozen Latest Updates RSS can be captured prospectively. PyPI's Index API exposes monotonic X-PyPI-Last-Serial metadata that can strengthen snapshot diagnostics, but it does not silently replace the frozen RSS arm definition."
+    }
+  ],
+  "unresolved_before_runtime_authority": [
+    "implement the snapshot producer without ordinary-executor scoring or FRONTIER-private history",
+    "upload only the canonical pre-horizon payload, then create a separate post-upload receipt from server-assigned artifact metadata and the later attestation",
+    "independently verify GitHub artifact metadata and attestation rather than trusting caller-supplied receipt fields",
+    "download the sealed artifact and prove its contained canonical payload digest equals the receipt snapshot_payload_digest",
+    "prove the artifact was fully created no later than the target knowledge horizon",
+    "bind the exact frozen source registry and benchmark protocol digests",
+    "decide under explicit authority whether existing frozen source-health/cadence semantics are sufficient to judge pre-horizon snapshot freshness; do not invent a new lag tolerance inside implementation",
+    "prove canonical normalized snapshot content is sufficient to reproduce the ordinary arm's later deterministic merge without retaining raw response bodies"
+  ],
+  "non_escalation": {
+    "ordinary_executor_implemented": false,
+    "network_snapshot_runtime_implemented": false,
+    "scheduler_implemented": false,
+    "source_registry_mutated": false,
+    "benchmark_protocol_mutated": false,
+    "source_set_mutated": false,
+    "scored_persistence_implemented": false,
+    "pef_v1_mutated": false,
+    "canonical_public_ranking_mutated": false
+  }
+}
