@@ -6,7 +6,7 @@
   "reviewed_at_utc": "2026-09-14T00:13:15Z",
   "overall_verdict": "BLOCKED",
   "executor_implementation_authorized": false,
-  "proven_source_count": 1,
+  "evidence_complete_source_count": 0,
   "required_source_count": 7,
   "sources": [
     {
@@ -21,13 +21,13 @@
     },
     {
       "source_id": "cisa.kev",
-      "status": "PROVEN_HORIZON_SAFE",
-      "mechanism": "AUTHORITY_MIRROR_HISTORY",
+      "status": "BLOCKED_UNPROVEN",
+      "mechanism": "NONE",
       "evidence_refs": [
         "repo:sources/registry/cisa.kev.v0.json",
         "https://github.com/cisagov/kev-data"
       ],
-      "detail": "The frozen source contract already authorizes cisagov/kev-data as a SAME_AUTHORITY_MIRROR. CISA documents that repository as its KEV data mirror and explicitly notes git commit history for tracking historical changes. A comparator can select the latest mirror commit not later than the knowledge horizon and bind the exact file blob/commit identity without consuming post-horizon state."
+      "detail": "The frozen source contract authorizes cisagov/kev-data as a SAME_AUTHORITY_MIRROR and git history binds immutable content and ancestry, but an embedded commit timestamp does not prove when GitHub received or publicly exposed that commit. Without a trustworthy publication/receipt-time anchor or an authorized pre-horizon immutable snapshot, exact collection-state availability at the knowledge horizon remains unproven."
     },
     {
       "source_id": "gdelt.frontier",
