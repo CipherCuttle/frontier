@@ -9,7 +9,7 @@ from frontier.application.value_observatory_executor_readiness import (
 
 
 class OrdinaryHorizonSafetyStatus(StrEnum):
-    PROVEN_HORIZON_SAFE = "PROVEN_HORIZON_SAFE"
+    EVIDENCE_COMPLETE_PENDING_AUTHORITY = "EVIDENCE_COMPLETE_PENDING_AUTHORITY"
     BLOCKED_UNPROVEN = "BLOCKED_UNPROVEN"
 
 
@@ -21,12 +21,14 @@ class OrdinaryHorizonSafetyMechanism(StrEnum):
 
 
 class OrdinaryHorizonSafetyVerdict(StrEnum):
-    READY_FOR_EXECUTOR_IMPLEMENTATION = "READY_FOR_EXECUTOR_IMPLEMENTATION"
+    EVIDENCE_COMPLETE_PENDING_AUTHORITY = "EVIDENCE_COMPLETE_PENDING_AUTHORITY"
     BLOCKED = "BLOCKED"
 
 
 @dataclass(frozen=True, slots=True)
 class OrdinarySourceHorizonSafetyProof:
+    """Caller-supplied horizon-safety evidence claim; never trusted authority."""
+
     source_id: str
     status: OrdinaryHorizonSafetyStatus
     mechanism: OrdinaryHorizonSafetyMechanism
@@ -40,11 +42,11 @@ class OrdinarySourceHorizonSafetyProof:
             raise ValueError("ordinary horizon-safety detail must be non-empty")
         if not self.evidence_refs or any(not ref.strip() for ref in self.evidence_refs):
             raise ValueError("ordinary horizon-safety evidence_refs must be non-empty")
-        if self.status is OrdinaryHorizonSafetyStatus.PROVEN_HORIZON_SAFE:
+        if self.status is OrdinaryHorizonSafetyStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY:
             if self.mechanism is OrdinaryHorizonSafetyMechanism.NONE:
-                raise ValueError("proven horizon-safe source requires an explicit mechanism")
+                raise ValueError("evidence-complete source claim requires an explicit mechanism")
         elif self.mechanism is not OrdinaryHorizonSafetyMechanism.NONE:
-            raise ValueError("blocked source cannot claim a proven horizon-safety mechanism")
+            raise ValueError("blocked source cannot claim a horizon-safety mechanism")
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,8 +57,10 @@ class OrdinaryHorizonSafetyBlocker:
 
 @dataclass(frozen=True, slots=True)
 class OrdinaryHorizonSafetyAssessment:
+    """Pure evidence-completeness result; never implementation or activation authority."""
+
     verdict: OrdinaryHorizonSafetyVerdict
-    proven_source_ids: tuple[str, ...]
+    evidence_complete_source_ids: tuple[str, ...]
     blocked_source_ids: tuple[str, ...]
     blockers: tuple[OrdinaryHorizonSafetyBlocker, ...]
 
@@ -64,12 +68,13 @@ class OrdinaryHorizonSafetyAssessment:
 def assess_ordinary_horizon_safety_v0(
     proofs: tuple[OrdinarySourceHorizonSafetyProof, ...],
 ) -> OrdinaryHorizonSafetyAssessment:
-    """Assess source-by-source PIT feasibility without granting executor authority.
+    """Assess source-by-source PIT evidence without granting executor authority.
 
-    The frozen ordinary-aggregation source set is all-or-nothing for implementation readiness.
-    Missing, extra, or duplicate source proofs are integrity failures rather than partial success.
-    A source is counted as horizon-safe only when the proof explicitly records a validated
-    mechanism; item timestamps or current mutable collection state are insufficient.
+    All proof rows are caller supplied. Missing, extra, or duplicate source claims are integrity
+    failures rather than partial success. Even when every claim is internally complete, the
+    strongest possible verdict is EVIDENCE_COMPLETE_PENDING_AUTHORITY. A later separately reviewed
+    authority phase must bind the exact approved proof artifact and independently verify its
+    evidence before executor implementation can be authorized.
     """
 
     by_source: dict[str, OrdinarySourceHorizonSafetyProof] = {}
@@ -87,10 +92,11 @@ def assess_ordinary_horizon_safety_v0(
             f"missing={missing!r} extra={extra!r}"
         )
 
-    proven = tuple(
+    evidence_complete = tuple(
         source_id
         for source_id in sorted(by_source)
-        if by_source[source_id].status is OrdinaryHorizonSafetyStatus.PROVEN_HORIZON_SAFE
+        if by_source[source_id].status
+        is OrdinaryHorizonSafetyStatus.EVIDENCE_COMPLETE_PENDING_AUTHORITY
     )
     blocked = tuple(
         source_id
@@ -103,13 +109,13 @@ def assess_ordinary_horizon_safety_v0(
     )
 
     verdict = (
-        OrdinaryHorizonSafetyVerdict.READY_FOR_EXECUTOR_IMPLEMENTATION
+        OrdinaryHorizonSafetyVerdict.EVIDENCE_COMPLETE_PENDING_AUTHORITY
         if not blocked
         else OrdinaryHorizonSafetyVerdict.BLOCKED
     )
     return OrdinaryHorizonSafetyAssessment(
         verdict=verdict,
-        proven_source_ids=proven,
+        evidence_complete_source_ids=evidence_complete,
         blocked_source_ids=blocked,
         blockers=blockers,
     )
