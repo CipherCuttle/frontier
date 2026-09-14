@@ -1,0 +1,76 @@
+{
+  "schema_version": "frontier-ordinary-prehorizon-snapshot-probe-v0",
+  "phase_id": "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_V0",
+  "base_main_sha": "342afebed24410a528e6079bacac665fd0f6e967",
+  "predecessor_phase": "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_EVIDENCE_V0",
+  "mechanism": "IMMUTABLE_PRECAPTURE_SNAPSHOT",
+  "execution_mode": "MANUAL_NON_SCORED",
+  "current_status": "IMPLEMENTED_NOT_YET_RUNTIME_PROVEN",
+  "required_source_count": 7,
+  "required_source_ids": [
+    "arxiv.cs-ai",
+    "cisa.kev",
+    "gdelt.frontier",
+    "github.ml-repos",
+    "hf.models",
+    "hn.frontpage",
+    "pypi.updates"
+  ],
+  "runtime_rules": {
+    "source_attempts_per_probe": 7,
+    "one_primary_request_per_source": true,
+    "requests_concurrent": true,
+    "automatic_retry": false,
+    "fallback_mirror_use": false,
+    "frontier_private_state_access": false,
+    "raw_response_body_persisted": false,
+    "normalized_replay_content_persisted": true,
+    "source_failure_policy": "FAIL_CLOSED_NO_SEVEN_SOURCE_PAYLOAD",
+    "scheduler_present": false,
+    "scored_execution": false
+  },
+  "artifact_sequence": [
+    "FETCH_AND_NORMALIZE_SEVEN_SOURCES",
+    "COMPUTE_SOURCE_DIGESTS",
+    "CONSTRUCT_PREUPLOAD_PAYLOAD",
+    "COMPUTE_CANONICAL_PAYLOAD_DIGEST",
+    "UPLOAD_IMMUTABLE_GITHUB_ACTIONS_ARTIFACT",
+    "ATTEST_UPLOADED_ARTIFACT_DIGEST",
+    "RETRIEVE_SERVER_ARTIFACT_METADATA",
+    "CONSTRUCT_SEPARATE_POSTUPLOAD_RECEIPT",
+    "RUN_PURE_PENDING_AUTHORITY_ASSESSMENT"
+  ],
+  "timing_policy": {
+    "new_freshness_tolerance_defined": false,
+    "retrieval_after_horizon_is_blocker": true,
+    "artifact_created_after_horizon_is_blocker": true,
+    "observed_margin_is_measurement_not_authority": true
+  },
+  "authority": {
+    "horizon_safety_granted": false,
+    "ordinary_executor_authorized": false,
+    "scored_execution_authorized": false,
+    "activation_authorized": false,
+    "independent_external_verifier_still_required": true,
+    "merge_authority": false
+  },
+  "runtime_acceptance": {
+    "success_label": "FEASIBILITY_OBSERVED",
+    "requires_all_seven_sources": true,
+    "requires_artifact_receipt": true,
+    "requires_attestation": true,
+    "success_does_not_mean_horizon_safe": true,
+    "success_does_not_mean_executor_ready": true
+  },
+  "non_escalation": {
+    "ordinary_executor_implemented": false,
+    "scheduler_implemented": false,
+    "source_registry_mutated": false,
+    "benchmark_protocol_mutated": false,
+    "source_set_mutated": false,
+    "freshness_threshold_invented": false,
+    "scored_persistence_implemented": false,
+    "pef_v1_mutated": false,
+    "canonical_public_ranking_mutated": false
+  }
+}
