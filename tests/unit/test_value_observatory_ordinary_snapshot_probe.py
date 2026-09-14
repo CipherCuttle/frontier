@@ -108,8 +108,39 @@ def _normalized_batch(
     )
 
 
-def _run(monkeypatch: pytest.MonkeyPatch, fetcher: StubFetcher) -> OrdinarySnapshotProbeResult:
-    monkeypatch.setattr(probe_module, "normalize_source", _normalized_batch)
+def _run(
+    monkeypatch: pytest.MonkeyPatch,
+    fetcher: StubFetcher,
+    *,
+    degraded_source_id: str | None = None,
+    degraded_records_rejected: int = 0,
+    degraded_schema_health: HealthValue = HealthValue.OK,
+) -> OrdinarySnapshotProbeResult:
+    def normalizer(
+        source_id: str,
+        body: bytes,
+        *,
+        retrieved_at: datetime,
+        fetch_digest: Digest,
+    ) -> NormalizedBatch:
+        batch = _normalized_batch(
+            source_id,
+            body,
+            retrieved_at=retrieved_at,
+            fetch_digest=fetch_digest,
+        )
+        if source_id != degraded_source_id:
+            return batch
+        return NormalizedBatch(
+            candidates=batch.candidates,
+            records_received=batch.records_received + degraded_records_rejected,
+            records_rejected=degraded_records_rejected,
+            schema_health=degraded_schema_health,
+            details=batch.details,
+            completeness_health=batch.completeness_health,
+        )
+
+    monkeypatch.setattr(probe_module, "normalize_source", normalizer)
     registry = load_source_registry(ROOT)
     policy = load_fetch_policy(ROOT)
     return asyncio.run(
@@ -164,3 +195,33 @@ def test_probe_fails_closed_when_one_frozen_source_fails(
     assert failed.failure_code == "HTTP_503"
     with pytest.raises(ValueError, match="no uploadable snapshot payload"):
         ordinary_snapshot_probe_artifact_v0(result)
+
+
+@pytest.mark.parametrize(
+    ("records_rejected", "schema_health", "expected_failure_code"),
+    [
+        (1, HealthValue.DEGRADED, "NORMALIZED_RECORDS_REJECTED"),
+        (0, HealthValue.DEGRADED, "NORMALIZED_SCHEMA_DEGRADED"),
+    ],
+)
+def test_probe_fails_closed_on_partial_or_degraded_normalization(
+    monkeypatch: pytest.MonkeyPatch,
+    records_rejected: int,
+    schema_health: HealthValue,
+    expected_failure_code: str,
+) -> None:
+    failed_source = "pypi.updates"
+    result = _run(
+        monkeypatch,
+        StubFetcher(),
+        degraded_source_id=failed_source,
+        degraded_records_rejected=records_rejected,
+        degraded_schema_health=schema_health,
+    )
+
+    assert result.status is OrdinarySnapshotProbeStatus.FAILED
+    assert result.payload is None
+    failed = next(source for source in result.sources if source.source_id == failed_source)
+    assert failed.status is OrdinarySnapshotProbeStatus.FAILED
+    assert failed.failure_code == expected_failure_code
+    assert failed.normalized_collection is None
