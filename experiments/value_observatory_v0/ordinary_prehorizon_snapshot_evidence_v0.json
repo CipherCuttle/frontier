@@ -17,6 +17,7 @@
     "independent_verifier_required": true
   },
   "snapshot_payload_rules": {
+    "post_upload_metadata_embedded": false,
     "raw_response_body_retention": false,
     "raw_payload_digest_required": true,
     "normalized_collection_digest_required": true,
@@ -25,7 +26,21 @@
     "source_registry_version_required": true,
     "benchmark_protocol_digest_required": true,
     "target_knowledge_horizon_required": true,
-    "retrieval_completed_at_required": true
+    "retrieval_completed_at_required": true,
+    "canonical_payload_digest_required": true
+  },
+  "post_upload_receipt_rules": {
+    "separate_from_uploaded_payload": true,
+    "server_assigned_artifact_id_required": true,
+    "server_reported_artifact_created_at_required": true,
+    "artifact_digest_required": true,
+    "workflow_run_id_required": true,
+    "workflow_head_sha_required": true,
+    "snapshot_payload_digest_required": true,
+    "attestation_ref_required": true,
+    "attestation_digest_required": true,
+    "receipt_payload_digest_must_equal_canonical_payload_digest": true,
+    "independent_external_verification_required": true
   },
   "sources": [
     {
@@ -102,7 +117,9 @@
   ],
   "unresolved_before_runtime_authority": [
     "implement the snapshot producer without ordinary-executor scoring or FRONTIER-private history",
-    "independently verify GitHub artifact metadata and attestation rather than trusting caller-supplied fields",
+    "upload only the canonical pre-horizon payload, then create a separate post-upload receipt from server-assigned artifact metadata and the later attestation",
+    "independently verify GitHub artifact metadata and attestation rather than trusting caller-supplied receipt fields",
+    "download the sealed artifact and prove its contained canonical payload digest equals the receipt snapshot_payload_digest",
     "prove the artifact was fully created no later than the target knowledge horizon",
     "bind the exact frozen source registry and benchmark protocol digests",
     "decide under explicit authority whether existing frozen source-health/cadence semantics are sufficient to judge pre-horizon snapshot freshness; do not invent a new lag tolerance inside implementation",
