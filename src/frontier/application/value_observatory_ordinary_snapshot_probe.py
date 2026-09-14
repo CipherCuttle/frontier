@@ -6,7 +6,11 @@ from datetime import datetime
 from enum import StrEnum
 
 from frontier.adapters.acquisition.config import FetchPolicy, RegisteredSource, SourceRegistry
-from frontier.adapters.acquisition.normalizers import NormalizedBatch, NormalizationError, normalize_source
+from frontier.adapters.acquisition.normalizers import (
+    NormalizedBatch,
+    NormalizationError,
+    normalize_source,
+)
 from frontier.application.ports.fetcher import FetcherPort
 from frontier.application.value_observatory_executor_readiness import (
     BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS,
@@ -211,7 +215,9 @@ def ordinary_snapshot_probe_report_v0(
                     else None
                 ),
                 "raw_payload_digest": (
-                    source.raw_payload_digest.value if source.raw_payload_digest is not None else None
+                    source.raw_payload_digest.value
+                    if source.raw_payload_digest is not None
+                    else None
                 ),
                 "request_identity_digest": source.request_identity_digest.value,
                 "retrieval_completed_at": canonical_timestamp(source.retrieval_completed_at),
@@ -364,7 +370,9 @@ async def run_ordinary_snapshot_probe_v0(
 
     source_ids = frozenset(registry.sources)
     if source_ids != BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS:
-        raise ValueError("ordinary snapshot probe registry source set differs from frozen benchmark arm")
+        raise ValueError(
+            "ordinary snapshot probe registry source set differs from frozen benchmark arm"
+        )
 
     ordered_ids = tuple(sorted(BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS))
     source_results = tuple(
