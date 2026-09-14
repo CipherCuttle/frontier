@@ -1,0 +1,92 @@
+{
+  "schema_version": "frontier-ordinary-horizon-safety-proof-v0",
+  "phase_id": "BENCHMARK_ORDINARY_HORIZON_SAFETY_PROOF_V0",
+  "benchmark_protocol_id": "frontier-benchmark-capture-v0",
+  "evaluated_against_main_sha": "5ab9b413876ad4f4c90594e0578a0c72f06ba137",
+  "reviewed_at_utc": "2026-09-14T00:13:15Z",
+  "overall_verdict": "BLOCKED",
+  "executor_implementation_authorized": false,
+  "proven_source_count": 1,
+  "required_source_count": 7,
+  "sources": [
+    {
+      "source_id": "arxiv.cs-ai",
+      "status": "BLOCKED_UNPROVEN",
+      "mechanism": "NONE",
+      "evidence_refs": [
+        "repo:sources/registry/arxiv.cs-ai.v0.json",
+        "https://github.com/arXiv/arxiv-docs/blob/develop/source/help/api/user-manual.md"
+      ],
+      "detail": "The public API documents submittedDate range filtering, but that filters current indexed records by submission time; it does not by itself prove what collection state was publicly available at the exact knowledge horizon. Availability/indexing semantics remain unproven for BENCHMARK_CAPTURE_V0 PIT use."
+    },
+    {
+      "source_id": "cisa.kev",
+      "status": "PROVEN_HORIZON_SAFE",
+      "mechanism": "AUTHORITY_MIRROR_HISTORY",
+      "evidence_refs": [
+        "repo:sources/registry/cisa.kev.v0.json",
+        "https://github.com/cisagov/kev-data"
+      ],
+      "detail": "The frozen source contract already authorizes cisagov/kev-data as a SAME_AUTHORITY_MIRROR. CISA documents that repository as its KEV data mirror and explicitly notes git commit history for tracking historical changes. A comparator can select the latest mirror commit not later than the knowledge horizon and bind the exact file blob/commit identity without consuming post-horizon state."
+    },
+    {
+      "source_id": "gdelt.frontier",
+      "status": "BLOCKED_UNPROVEN",
+      "mechanism": "NONE",
+      "evidence_refs": [
+        "repo:sources/registry/gdelt.frontier.v0.json",
+        "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/"
+      ],
+      "detail": "GDELT DOC supports STARTDATETIME/ENDDATETIME publication-time filtering, but the reviewed documentation does not establish an index-state or ingestion-time as-of boundary. A later query could therefore discover an article ingested after the horizon whose publication timestamp predates it. Exact collection-state PIT safety is unproven."
+    },
+    {
+      "source_id": "github.ml-repos",
+      "status": "BLOCKED_UNPROVEN",
+      "mechanism": "NONE",
+      "evidence_refs": [
+        "repo:sources/registry/github.ml-repos.v0.json",
+        "https://docs.github.com/en/rest/search/search"
+      ],
+      "detail": "The frozen lane is a mutable repository search ordered by current updated state. Date qualifiers can restrict repository metadata values but do not prove the exact historical search membership, topic/archive state, or ordering visible at the knowledge horizon. No source-native historical result-set state is established."
+    },
+    {
+      "source_id": "hf.models",
+      "status": "BLOCKED_UNPROVEN",
+      "mechanism": "NONE",
+      "evidence_refs": [
+        "repo:sources/registry/hf.models.v0.json",
+        "https://huggingface.co/docs/hub/api",
+        "https://huggingface.co/docs/huggingface_hub/package_reference/hf_api"
+      ],
+      "detail": "The reviewed Hub API exposes current model listing/filter/sort metadata including lastModified, but no documented historical collection-state/as-of query for the global recently-updated model list. Filtering current metadata by timestamps would not establish exact horizon membership."
+    },
+    {
+      "source_id": "hn.frontpage",
+      "status": "BLOCKED_UNPROVEN",
+      "mechanism": "NONE",
+      "evidence_refs": [
+        "repo:sources/registry/hn.frontpage.v0.json",
+        "https://github.com/HackerNews/API"
+      ],
+      "detail": "The official HN API exposes live top/new/best story lists and live change notifications, while the frozen lane uses the current front-page RSS collection. The reviewed public interface does not provide a historical front-page membership/ranking query for an arbitrary exact knowledge horizon."
+    },
+    {
+      "source_id": "pypi.updates",
+      "status": "BLOCKED_UNPROVEN",
+      "mechanism": "NONE",
+      "evidence_refs": [
+        "repo:sources/registry/pypi.updates.v0.json",
+        "https://docs.pypi.org/api/feeds/"
+      ],
+      "detail": "PyPI documents the Latest Updates RSS feed as the latest newly created releases. The reviewed feed/API documentation does not establish a historical/as-of representation of that global feed collection for an arbitrary exact knowledge horizon."
+    }
+  ],
+  "non_escalation": {
+    "source_set_change_allowed": false,
+    "timestamp_only_horizon_proof_allowed": false,
+    "post_horizon_mutable_collection_fetch_allowed": false,
+    "frontier_private_history_allowed": false,
+    "executor_runtime_authorized": false,
+    "scheduler_or_scored_capture_authorized": false
+  }
+}
