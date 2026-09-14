@@ -150,7 +150,7 @@ def assess_ordinary_snapshot_evidence_v0(
         blockers.append(
             OrdinarySnapshotEvidenceBlocker(
                 code=OrdinarySnapshotEvidenceBlockerCode.ARTIFACT_CREATED_AFTER_HORIZON,
-                detail="claimed immutable artifact was created after the benchmark knowledge horizon",
+                detail="claimed immutable artifact was created after the knowledge horizon",
             )
         )
 
