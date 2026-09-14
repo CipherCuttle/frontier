@@ -37,11 +37,14 @@ jobs:
       - name: Run seven-source non-scored probe
         id: produce
         shell: bash
+        env:
+          KNOWLEDGE_HORIZON: ${{ inputs.knowledge_horizon }}
+          SNAPSHOT_ID: ${{ inputs.snapshot_id }}
         run: |
           set +e
           uv run python scripts/run_ordinary_snapshot_probe_v0.py produce \
-            --knowledge-horizon '${{ inputs.knowledge_horizon }}' \
-            --snapshot-id '${{ inputs.snapshot_id }}' \
+            --knowledge-horizon "$KNOWLEDGE_HORIZON" \
+            --snapshot-id "$SNAPSHOT_ID" \
             --output-dir probe-output
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
