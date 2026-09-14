@@ -7,8 +7,8 @@ from enum import StrEnum
 
 from frontier.adapters.acquisition.config import FetchPolicy, RegisteredSource, SourceRegistry
 from frontier.adapters.acquisition.normalizers import (
-    NormalizedBatch,
     NormalizationError,
+    NormalizedBatch,
     normalize_source,
 )
 from frontier.application.ports.fetcher import FetcherPort
