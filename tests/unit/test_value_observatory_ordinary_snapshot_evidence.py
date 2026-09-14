@@ -173,9 +173,7 @@ def test_post_horizon_source_retrieval_blocks_evidence() -> None:
         artifact_created_at=_HORIZON + timedelta(seconds=2),
     )
 
-    assessment = assess_ordinary_snapshot_evidence_v0(
-        replace(changed_bundle, receipt=receipt)
-    )
+    assessment = assess_ordinary_snapshot_evidence_v0(replace(changed_bundle, receipt=receipt))
 
     blocker_codes = {blocker.code for blocker in assessment.blockers}
     assert OrdinarySnapshotEvidenceBlockerCode.ARTIFACT_CREATED_AFTER_HORIZON in blocker_codes
