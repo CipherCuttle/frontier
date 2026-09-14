@@ -23,6 +23,7 @@ from frontier.application.value_observatory_ordinary_snapshot_evidence import (
 from frontier.contracts.fetch import FetchOutcome, FetchRequest
 from frontier.domain.canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
 from frontier.domain.digests import Digest, sha256_digest
+from frontier.domain.health import HealthValue
 from frontier.domain.observation import ObservationCandidate
 
 ORDINARY_SNAPSHOT_PROBE_ARTIFACT_SCHEMA = "frontier-ordinary-snapshot-probe-artifact-v0"
@@ -325,6 +326,31 @@ async def _probe_source(
             source_contract_digest=contract_digest,
             normalized_collection=None,
             failure_code=exc.code,
+        )
+
+    if batch.records_rejected > 0:
+        return OrdinarySnapshotProbeSourceResult(
+            source_id=source.contract.source_id,
+            status=OrdinarySnapshotProbeStatus.FAILED,
+            retrieval_completed_at=retrieved_at,
+            request_identity_digest=request_digest,
+            raw_payload_digest=trusted_digest,
+            normalized_collection_digest=None,
+            source_contract_digest=contract_digest,
+            normalized_collection=None,
+            failure_code="NORMALIZED_RECORDS_REJECTED",
+        )
+    if batch.schema_health is not HealthValue.OK:
+        return OrdinarySnapshotProbeSourceResult(
+            source_id=source.contract.source_id,
+            status=OrdinarySnapshotProbeStatus.FAILED,
+            retrieval_completed_at=retrieved_at,
+            request_identity_digest=request_digest,
+            raw_payload_digest=trusted_digest,
+            normalized_collection_digest=None,
+            source_contract_digest=contract_digest,
+            normalized_collection=None,
+            failure_code="NORMALIZED_SCHEMA_DEGRADED",
         )
 
     normalized = normalized_collection_material_v0(
