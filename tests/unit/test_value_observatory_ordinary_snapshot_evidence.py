@@ -59,8 +59,7 @@ def _bundle() -> OrdinarySnapshotEvidenceBundle:
         source_registry_version=_digest("8"),
         artifact=_artifact(),
         sources=tuple(
-            _source(source_id)
-            for source_id in sorted(BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS)
+            _source(source_id) for source_id in sorted(BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS)
         ),
     )
 
