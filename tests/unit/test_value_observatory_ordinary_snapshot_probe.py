@@ -133,7 +133,9 @@ def test_probe_builds_seven_source_replayable_artifact_without_raw_body(
 
     assert result.status is OrdinarySnapshotProbeStatus.COMPLETE
     assert result.payload is not None
-    assert {source.source_id for source in result.sources} == BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS
+    assert {
+        source.source_id for source in result.sources
+    } == BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS
     assert len(fetcher.requests) == 7
     assert len({request.source_id for request in fetcher.requests}) == 7
 
