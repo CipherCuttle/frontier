@@ -13,13 +13,14 @@ from frontier.application.value_observatory_executor_readiness import (
     BENCHMARK_CAPTURE_V0_ORDINARY_SOURCE_IDS,
 )
 from frontier.application.value_observatory_ordinary_snapshot_probe import (
+    OrdinarySnapshotProbeResult,
     OrdinarySnapshotProbeStatus,
     ordinary_snapshot_probe_artifact_v0,
     run_ordinary_snapshot_probe_v0,
 )
 from frontier.contracts.fetch import BoundedFetchResult, FetchFailure, FetchOutcome, FetchRequest
 from frontier.domain.canonical_json import canonical_json_bytes
-from frontier.domain.digests import sha256_digest
+from frontier.domain.digests import Digest, sha256_digest
 from frontier.domain.health import HealthValue
 from frontier.domain.observation import DocumentPayload, ObservationCandidate, ObservationKind
 
@@ -80,7 +81,7 @@ def _normalized_batch(
     body: bytes,
     *,
     retrieved_at: datetime,
-    fetch_digest: object,
+    fetch_digest: Digest,
 ) -> NormalizedBatch:
     assert body == RAW_SENTINEL
     return NormalizedBatch(
@@ -107,7 +108,7 @@ def _normalized_batch(
     )
 
 
-def _run(monkeypatch: pytest.MonkeyPatch, fetcher: StubFetcher):
+def _run(monkeypatch: pytest.MonkeyPatch, fetcher: StubFetcher) -> OrdinarySnapshotProbeResult:
     monkeypatch.setattr(probe_module, "normalize_source", _normalized_batch)
     registry = load_source_registry(ROOT)
     policy = load_fetch_policy(ROOT)
@@ -139,7 +140,9 @@ def test_probe_builds_seven_source_replayable_artifact_without_raw_body(
     artifact = ordinary_snapshot_probe_artifact_v0(result)
     encoded = canonical_json_bytes(artifact)
     assert RAW_SENTINEL not in encoded
-    assert len(artifact["normalized_collections"]) == 7
+    collections = artifact["normalized_collections"]
+    assert isinstance(collections, list)
+    assert len(collections) == 7
     for source in result.sources:
         assert source.normalized_collection is not None
         assert source.normalized_collection_digest == sha256_digest(
