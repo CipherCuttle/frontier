@@ -43,6 +43,17 @@ class SequentialMethod(StrEnum):
     OTHER_REPEATED_LOOK_VALID = "OTHER_REPEATED_LOOK_VALID"
 
 
+class SequentialSidedness(StrEnum):
+    TWO_SIDED = "TWO_SIDED"
+    UPPER = "UPPER"
+    LOWER = "LOWER"
+
+
+class SequentialFutilityPolicy(StrEnum):
+    NONE = "NONE"
+    BOUND_RULE = "BOUND_RULE"
+
+
 class CommercialOutcomeKind(StrEnum):
     OFFER_DECLINED = "OFFER_DECLINED"
     OFFER_EXPIRED = "OFFER_EXPIRED"
@@ -123,12 +134,17 @@ def _digest_set(values: tuple[Digest, ...], *, field: str) -> tuple[str, ...]:
 class SequentialValidityEvidenceV0:
     evidence_id: str
     frozen_at: datetime
+    stopping_plan_digest: Digest
     method: SequentialMethod
     method_version: str
     max_sample_size: int
     look_schedule: tuple[int, ...]
     error_target_ppm: int
+    sidedness: SequentialSidedness
+    boundary_specification_digest: Digest
     operating_characteristic_validation_digest: Digest
+    futility_policy: SequentialFutilityPolicy = SequentialFutilityPolicy.NONE
+    futility_rule_digest: Digest | None = None
     schema_version: str = "sequential-validity-evidence-v0"
 
     def __post_init__(self) -> None:
@@ -147,6 +163,11 @@ class SequentialValidityEvidenceV0:
             raise ValueError("final sequential look must equal max_sample_size")
         if not 1 <= self.error_target_ppm < 1_000_000:
             raise ValueError("error_target_ppm must be between 1 and 999999")
+        if self.futility_policy is SequentialFutilityPolicy.NONE:
+            if self.futility_rule_digest is not None:
+                raise ValueError("no-futility policy cannot carry futility_rule_digest")
+        elif self.futility_rule_digest is None:
+            raise ValueError("bound futility policy requires futility_rule_digest")
         if self.schema_version != "sequential-validity-evidence-v0":
             raise ValueError("sequential validity evidence schema mismatch")
 
@@ -160,9 +181,14 @@ class SequentialValidityEvidenceV0:
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
         return {
+            "boundary_specification_digest": str(self.boundary_specification_digest),
             "error_target_ppm": self.error_target_ppm,
             "evidence_id": self.evidence_id,
             "frozen_at": canonical_timestamp(self.frozen_at),
+            "futility_policy": self.futility_policy.value,
+            "futility_rule_digest": (
+                None if self.futility_rule_digest is None else str(self.futility_rule_digest)
+            ),
             "look_schedule": list(self.look_schedule),
             "max_sample_size": self.max_sample_size,
             "method": self.method.value,
@@ -171,6 +197,8 @@ class SequentialValidityEvidenceV0:
                 self.operating_characteristic_validation_digest
             ),
             "schema_version": self.schema_version,
+            "sidedness": self.sidedness.value,
+            "stopping_plan_digest": str(self.stopping_plan_digest),
         }
 
 
@@ -196,10 +224,26 @@ class RandomizationBlockV0:
 
 
 @dataclass(frozen=True, slots=True)
+class ParticipantBlockAssignmentV0:
+    participant_id_digest: Digest
+    block_id: str
+
+    def __post_init__(self) -> None:
+        _require_stable_id(self.block_id, "block_id")
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {
+            "block_id": self.block_id,
+            "participant_id_digest": str(self.participant_id_digest),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class RandomizationPlanV0:
     plan_id: str
     frozen_at: datetime
     blocks: tuple[RandomizationBlockV0, ...]
+    participant_block_assignments: tuple[ParticipantBlockAssignmentV0, ...]
     algorithm: str = "SHA256_THRESHOLD_V0"
     schema_version: str = "randomization-plan-v0"
 
@@ -211,6 +255,19 @@ class RandomizationPlanV0:
         block_ids = [block.block_id for block in self.blocks]
         if len(set(block_ids)) != len(block_ids):
             raise ValueError("randomization plan block IDs must be unique")
+        if not self.participant_block_assignments:
+            raise ValueError("randomization plan requires frozen participant block assignments")
+        participant_ids = [
+            assignment.participant_id_digest for assignment in self.participant_block_assignments
+        ]
+        if len(set(participant_ids)) != len(participant_ids):
+            raise ValueError("participant block assignments must be unique by participant")
+        authorized_blocks = set(block_ids)
+        if any(
+            assignment.block_id not in authorized_blocks
+            for assignment in self.participant_block_assignments
+        ):
+            raise ValueError("participant block assignment references unknown block")
         if self.algorithm != "SHA256_THRESHOLD_V0":
             raise ValueError("unsupported randomization algorithm")
         if self.schema_version != "randomization-plan-v0":
@@ -226,24 +283,50 @@ class RandomizationPlanV0:
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
         ordered_blocks = sorted(self.blocks, key=lambda block: block.block_id)
+        ordered_assignments = sorted(
+            self.participant_block_assignments,
+            key=lambda assignment: str(assignment.participant_id_digest),
+        )
         return {
             "algorithm": self.algorithm,
             "blocks": [block.to_canonical() for block in ordered_blocks],
             "frozen_at": canonical_timestamp(self.frozen_at),
+            "participant_block_assignments": [
+                assignment.to_canonical() for assignment in ordered_assignments
+            ],
             "plan_id": self.plan_id,
             "schema_version": self.schema_version,
         }
+
+
+def expected_assignment_block(
+    plan: RandomizationPlanV0,
+    *,
+    participant_id_digest: Digest,
+) -> str:
+    assignment = next(
+        (
+            item
+            for item in plan.participant_block_assignments
+            if item.participant_id_digest == participant_id_digest
+        ),
+        None,
+    )
+    if assignment is None:
+        raise ValueError("participant is not in frozen randomization block assignments")
+    return assignment.block_id
 
 
 def expected_packet_variant(
     plan: RandomizationPlanV0,
     *,
     participant_id_digest: Digest,
-    block_id: str,
 ) -> PacketVariant:
-    block = next((item for item in plan.blocks if item.block_id == block_id), None)
-    if block is None:
-        raise ValueError("participant assignment block is not in frozen randomization plan")
+    block_id = expected_assignment_block(
+        plan,
+        participant_id_digest=participant_id_digest,
+    )
+    block = next(item for item in plan.blocks if item.block_id == block_id)
     draw_input: dict[str, CanonicalValue] = {
         "block_id": block_id,
         "participant_id_digest": str(participant_id_digest),
@@ -297,6 +380,8 @@ class DecisionCohortActivationV0:
                 raise ValueError("sequential monitoring requires validated sequential evidence")
             if self.sequential_validity_evidence.frozen_at > self.activated_at:
                 raise ValueError("sequential evidence must be frozen before cohort activation")
+            if self.sequential_validity_evidence.stopping_plan_digest != self.stopping_plan_digest:
+                raise ValueError("sequential evidence does not bind activation stopping plan")
         elif self.sequential_validity_evidence is not None:
             raise ValueError("fixed-sample activation cannot carry sequential validity evidence")
         if self.schema_version != "decision-cohort-activation-v0":
@@ -619,6 +704,8 @@ class PriceScheduleV0:
                 )
             if self.sequential_validity_evidence.frozen_at > self.frozen_at:
                 raise ValueError("sequential evidence must be frozen before price schedule")
+            if self.sequential_validity_evidence.stopping_plan_digest != self.stopping_plan_digest:
+                raise ValueError("sequential evidence does not bind price stopping plan")
             if self.target_offer_count_per_cell is not None:
                 raise ValueError("sequential schedule cannot also declare fixed target offer count")
         else:
@@ -871,18 +958,64 @@ def payment_evidence_set_digest(evidence: tuple[PaymentEvidenceV0, ...]) -> Dige
 
 
 @dataclass(frozen=True, slots=True)
+class CommercialSourceEventInventoryV0:
+    schedule_digest: Digest
+    coverage_cutoff_at: datetime
+    exported_at: datetime
+    source_system: str
+    source_export_digest: Digest
+    source_export_attestation_digest: Digest
+    complete_source_event_digests: tuple[Digest, ...]
+    schema_version: str = "commercial-source-event-inventory-v0"
+
+    def __post_init__(self) -> None:
+        _require_aware(self.coverage_cutoff_at, "coverage_cutoff_at")
+        _require_aware(self.exported_at, "exported_at")
+        _require_text(self.source_system, "source_system")
+        if self.exported_at < self.coverage_cutoff_at:
+            raise ValueError("source event inventory cannot be exported before coverage cutoff")
+        _digest_set(self.complete_source_event_digests, field="complete_source_event_digests")
+        if self.schema_version != "commercial-source-event-inventory-v0":
+            raise ValueError("commercial source event inventory schema mismatch")
+
+    @property
+    def artifact_digest(self) -> Digest:
+        return _artifact_digest(self.to_canonical())
+
+    @property
+    def artifact_id(self) -> str:
+        return _artifact_id("commercialsourceinventory_", self.to_canonical())
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {
+            "complete_source_event_digests": list(
+                _digest_set(
+                    self.complete_source_event_digests,
+                    field="complete_source_event_digests",
+                )
+            ),
+            "coverage_cutoff_at": canonical_timestamp(self.coverage_cutoff_at),
+            "exported_at": canonical_timestamp(self.exported_at),
+            "schedule_digest": str(self.schedule_digest),
+            "schema_version": self.schema_version,
+            "source_export_attestation_digest": str(self.source_export_attestation_digest),
+            "source_export_digest": str(self.source_export_digest),
+            "source_system": self.source_system,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class CommercialOutcomeManifestV0:
     schedule_digest: Digest
     reporting_cutoff_at: datetime
     offer_set_digest: Digest
     outcome_set_digest: Digest
     payment_evidence_set_digest: Digest
-    complete_source_event_digests: tuple[Digest, ...]
+    source_event_inventory_digest: Digest
     schema_version: str = "commercial-outcome-manifest-v0"
 
     def __post_init__(self) -> None:
         _require_aware(self.reporting_cutoff_at, "reporting_cutoff_at")
-        _digest_set(self.complete_source_event_digests, field="complete_source_event_digests")
         if self.schema_version != "commercial-outcome-manifest-v0":
             raise ValueError("commercial outcome manifest schema mismatch")
 
@@ -896,18 +1029,13 @@ class CommercialOutcomeManifestV0:
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
         return {
-            "complete_source_event_digests": list(
-                _digest_set(
-                    self.complete_source_event_digests,
-                    field="complete_source_event_digests",
-                )
-            ),
             "offer_set_digest": str(self.offer_set_digest),
             "outcome_set_digest": str(self.outcome_set_digest),
             "payment_evidence_set_digest": str(self.payment_evidence_set_digest),
             "reporting_cutoff_at": canonical_timestamp(self.reporting_cutoff_at),
             "schedule_digest": str(self.schedule_digest),
             "schema_version": self.schema_version,
+            "source_event_inventory_digest": str(self.source_event_inventory_digest),
         }
 
 
@@ -928,10 +1056,15 @@ def validate_decision_response(
         raise ValueError("decision response does not bind to decision case")
     if response.action not in case.action_set:
         raise ValueError("decision response action is outside frozen action set")
+    expected_block = expected_assignment_block(
+        activation.randomization_plan,
+        participant_id_digest=response.participant_id_digest,
+    )
+    if response.assignment_block_id != expected_block:
+        raise ValueError("decision response block does not match frozen participant assignment")
     expected_variant = expected_packet_variant(
         activation.randomization_plan,
         participant_id_digest=response.participant_id_digest,
-        block_id=response.assignment_block_id,
     )
     if response.assigned_variant is not expected_variant:
         raise ValueError("decision response variant does not match frozen randomization plan")
@@ -1077,6 +1210,8 @@ def validate_payment_evidence(
         raise ValueError("payment evidence amount does not match frozen offer/outcome")
     if evidence.currency != outcome.currency or evidence.currency != offer.currency:
         raise ValueError("payment evidence currency does not match frozen offer/outcome")
+    if evidence.observed_at < offer.offered_at:
+        raise ValueError("payment evidence predates commercial offer")
     if evidence.observed_at > outcome.recorded_at:
         raise ValueError("payment evidence cannot be observed after recorded payment outcome")
 
@@ -1099,6 +1234,7 @@ def qualifies_as_revealed_wtp(
 def validate_commercial_reporting_manifest(
     manifest: CommercialOutcomeManifestV0,
     *,
+    source_event_inventory: CommercialSourceEventInventoryV0,
     schedule: PriceScheduleV0,
     offers: tuple[CommercialOfferReceiptV0, ...],
     outcomes: tuple[CommercialOutcomeReceiptV0, ...],
@@ -1106,6 +1242,12 @@ def validate_commercial_reporting_manifest(
 ) -> None:
     if manifest.schedule_digest != schedule.artifact_digest:
         raise ValueError("commercial manifest does not bind to frozen price schedule")
+    if source_event_inventory.schedule_digest != schedule.artifact_digest:
+        raise ValueError("source event inventory does not bind to frozen price schedule")
+    if manifest.source_event_inventory_digest != source_event_inventory.artifact_digest:
+        raise ValueError("commercial manifest does not bind source event inventory")
+    if source_event_inventory.coverage_cutoff_at != manifest.reporting_cutoff_at:
+        raise ValueError("source event inventory cutoff does not match reporting cutoff")
     if manifest.offer_set_digest != commercial_offer_set_digest(offers):
         raise ValueError("commercial manifest offer set digest mismatch")
     if manifest.outcome_set_digest != commercial_outcome_set_digest(outcomes):
@@ -1117,10 +1259,10 @@ def validate_commercial_reporting_manifest(
         outcome_source_events,
         field="outcome source event digests",
     ) != _digest_set(
-        manifest.complete_source_event_digests,
+        source_event_inventory.complete_source_event_digests,
         field="complete_source_event_digests",
     ):
-        raise ValueError("commercial manifest omits or adds source events")
+        raise ValueError("commercial reporting omits or adds independently inventoried source events")
 
     validate_unique_primary_offers(offers)
     offer_by_digest = {offer.artifact_digest: offer for offer in offers}
