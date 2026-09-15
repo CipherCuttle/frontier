@@ -58,11 +58,13 @@ def test_selector_requires_exactly_one_new_request_file() -> None:
     with pytest.raises(ValueError, match="exactly one changed request file"):
         select_new_repository_request_v0(())
     with pytest.raises(ValueError, match="exactly one changed request file"):
-        select_new_repository_request_v0((("A", path), ("A", path.replace("request", "other"))))
+        select_new_repository_request_v0(
+            (("A", path), ("A", path.replace("request", "other")))
+        )
 
 
-@pytest.mark.parametrize("status", ["M", "D", "T"])
-def test_selector_rejects_existing_request_mutation(status: str) -> None:
+@pytest.mark.parametrize("status", ["M", "D", "T", "R100"])
+def test_selector_rejects_existing_request_mutation_or_rename(status: str) -> None:
     path = ".github/probe-requests/ordinary-prehorizon-v0/request.json"
     with pytest.raises(ValueError, match="newly added immutable request file"):
         select_new_repository_request_v0(((status, path),))
@@ -70,10 +72,7 @@ def test_selector_rejects_existing_request_mutation(status: str) -> None:
 
 def test_selector_ignores_unrelated_files_but_fails_on_any_second_request_change() -> None:
     path = ".github/probe-requests/ordinary-prehorizon-v0/request.json"
-    assert (
-        select_new_repository_request_v0((("M", "README.md"), ("A", path)))
-        == path
-    )
+    assert select_new_repository_request_v0((("M", "README.md"), ("A", path))) == path
     with pytest.raises(ValueError, match="exactly one changed request file"):
         select_new_repository_request_v0(
             (
@@ -81,3 +80,10 @@ def test_selector_ignores_unrelated_files_but_fails_on_any_second_request_change
                 ("M", ".github/probe-requests/ordinary-prehorizon-v0/old.json"),
             )
         )
+
+
+def test_selector_rejects_rename_between_request_paths() -> None:
+    first = ".github/probe-requests/ordinary-prehorizon-v0/old.json"
+    second = ".github/probe-requests/ordinary-prehorizon-v0/new.json"
+    with pytest.raises(ValueError, match="exactly one changed request file"):
+        select_new_repository_request_v0((("R100", first), ("R100", second)))
