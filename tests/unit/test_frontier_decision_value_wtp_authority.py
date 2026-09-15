@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 AUTHORITY_PATH = Path("docs/FRONTIER_DECISION_VALUE_WTP_V0.md")
 PREREG_PATH = Path("experiments/value_observatory_v0/decision_value_wtp_v0.json")
@@ -13,8 +14,9 @@ def _prereg() -> dict[str, object]:
 
 def _string_list(value: object) -> list[str]:
     assert isinstance(value, list)
+    items = cast(list[object], value)
     result: list[str] = []
-    for item in value:
+    for item in items:
         assert isinstance(item, str)
         result.append(item)
     return result
