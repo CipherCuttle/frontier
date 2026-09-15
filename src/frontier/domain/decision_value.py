@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from .canonical_json import CanonicalValue, canonical_json_bytes, canonical_timestamp
@@ -37,6 +37,12 @@ class DecisionOutcomeStatus(StrEnum):
     PROTOCOL_FAILURE = "PROTOCOL_FAILURE"
 
 
+class SequentialMethod(StrEnum):
+    ERROR_SPENDING = "ERROR_SPENDING"
+    CONFIDENCE_SEQUENCE = "CONFIDENCE_SEQUENCE"
+    OTHER_REPEATED_LOOK_VALID = "OTHER_REPEATED_LOOK_VALID"
+
+
 class CommercialOutcomeKind(StrEnum):
     OFFER_DECLINED = "OFFER_DECLINED"
     OFFER_EXPIRED = "OFFER_EXPIRED"
@@ -50,6 +56,31 @@ class CommercialOutcomeKind(StrEnum):
     CANCELLATION = "CANCELLATION"
     RENEWAL = "RENEWAL"
     NONRENEWAL = "NONRENEWAL"
+
+
+class PaymentEvidenceKind(StrEnum):
+    PAYMENT_AUTHORIZED = "PAYMENT_AUTHORIZED"
+    PAYMENT_SETTLED = "PAYMENT_SETTLED"
+
+
+_PRIMARY_WINDOW_KINDS = {
+    CommercialOutcomeKind.OFFER_DECLINED,
+    CommercialOutcomeKind.PAYMENT_AUTHORIZED,
+    CommercialOutcomeKind.PAYMENT_SETTLED,
+    CommercialOutcomeKind.PAYMENT_FAILED,
+}
+_PAYMENT_AMOUNT_KINDS = {
+    CommercialOutcomeKind.PAYMENT_AUTHORIZED,
+    CommercialOutcomeKind.PAYMENT_SETTLED,
+    CommercialOutcomeKind.PAYMENT_FAILED,
+    CommercialOutcomeKind.REFUND,
+    CommercialOutcomeKind.CHARGEBACK,
+    CommercialOutcomeKind.RENEWAL,
+}
+_REVEALED_WTP_OUTCOME_KINDS = {
+    CommercialOutcomeKind.PAYMENT_AUTHORIZED,
+    CommercialOutcomeKind.PAYMENT_SETTLED,
+}
 
 
 def _require_aware(value: datetime, field: str) -> None:
@@ -82,6 +113,148 @@ def _artifact_id(prefix: str, canonical: dict[str, CanonicalValue]) -> str:
     return prefix + sha256_hex(canonical_json_bytes(canonical))
 
 
+def _digest_set(values: tuple[Digest, ...], *, field: str) -> tuple[str, ...]:
+    if len(set(values)) != len(values):
+        raise ValueError(f"{field} must not contain duplicate digests")
+    return tuple(sorted(str(value) for value in values))
+
+
+@dataclass(frozen=True, slots=True)
+class SequentialValidityEvidenceV0:
+    evidence_id: str
+    frozen_at: datetime
+    method: SequentialMethod
+    method_version: str
+    max_sample_size: int
+    look_schedule: tuple[int, ...]
+    error_target_ppm: int
+    operating_characteristic_validation_digest: Digest
+    schema_version: str = "sequential-validity-evidence-v0"
+
+    def __post_init__(self) -> None:
+        _require_stable_id(self.evidence_id, "evidence_id")
+        _require_aware(self.frozen_at, "frozen_at")
+        _require_text(self.method_version, "method_version")
+        if self.max_sample_size <= 0:
+            raise ValueError("max_sample_size must be positive")
+        if not self.look_schedule:
+            raise ValueError("sequential evidence requires at least one planned look")
+        if any(look <= 0 for look in self.look_schedule):
+            raise ValueError("sequential look sizes must be positive")
+        if tuple(sorted(set(self.look_schedule))) != self.look_schedule:
+            raise ValueError("sequential look schedule must be strictly increasing and unique")
+        if self.look_schedule[-1] != self.max_sample_size:
+            raise ValueError("final sequential look must equal max_sample_size")
+        if not 1 <= self.error_target_ppm < 1_000_000:
+            raise ValueError("error_target_ppm must be between 1 and 999999")
+        if self.schema_version != "sequential-validity-evidence-v0":
+            raise ValueError("sequential validity evidence schema mismatch")
+
+    @property
+    def artifact_digest(self) -> Digest:
+        return _artifact_digest(self.to_canonical())
+
+    @property
+    def artifact_id(self) -> str:
+        return _artifact_id("sequentialvalidity_", self.to_canonical())
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {
+            "error_target_ppm": self.error_target_ppm,
+            "evidence_id": self.evidence_id,
+            "frozen_at": canonical_timestamp(self.frozen_at),
+            "look_schedule": list(self.look_schedule),
+            "max_sample_size": self.max_sample_size,
+            "method": self.method.value,
+            "method_version": self.method_version,
+            "operating_characteristic_validation_digest": str(
+                self.operating_characteristic_validation_digest
+            ),
+            "schema_version": self.schema_version,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RandomizationBlockV0:
+    block_id: str
+    baseline_weight_bps: int
+    frontier_weight_bps: int
+
+    def __post_init__(self) -> None:
+        _require_stable_id(self.block_id, "block_id")
+        if self.baseline_weight_bps <= 0 or self.frontier_weight_bps <= 0:
+            raise ValueError("both randomization arms require positive weight")
+        if self.baseline_weight_bps + self.frontier_weight_bps != 10_000:
+            raise ValueError("randomization arm weights must sum to 10000 bps")
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {
+            "baseline_weight_bps": self.baseline_weight_bps,
+            "block_id": self.block_id,
+            "frontier_weight_bps": self.frontier_weight_bps,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RandomizationPlanV0:
+    plan_id: str
+    frozen_at: datetime
+    blocks: tuple[RandomizationBlockV0, ...]
+    algorithm: str = "SHA256_THRESHOLD_V0"
+    schema_version: str = "randomization-plan-v0"
+
+    def __post_init__(self) -> None:
+        _require_stable_id(self.plan_id, "plan_id")
+        _require_aware(self.frozen_at, "frozen_at")
+        if not self.blocks:
+            raise ValueError("randomization plan requires at least one block")
+        block_ids = [block.block_id for block in self.blocks]
+        if len(set(block_ids)) != len(block_ids):
+            raise ValueError("randomization plan block IDs must be unique")
+        if self.algorithm != "SHA256_THRESHOLD_V0":
+            raise ValueError("unsupported randomization algorithm")
+        if self.schema_version != "randomization-plan-v0":
+            raise ValueError("randomization plan schema mismatch")
+
+    @property
+    def artifact_digest(self) -> Digest:
+        return _artifact_digest(self.to_canonical())
+
+    @property
+    def artifact_id(self) -> str:
+        return _artifact_id("randomizationplan_", self.to_canonical())
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        ordered_blocks = sorted(self.blocks, key=lambda block: block.block_id)
+        return {
+            "algorithm": self.algorithm,
+            "blocks": [block.to_canonical() for block in ordered_blocks],
+            "frozen_at": canonical_timestamp(self.frozen_at),
+            "plan_id": self.plan_id,
+            "schema_version": self.schema_version,
+        }
+
+
+def expected_packet_variant(
+    plan: RandomizationPlanV0,
+    *,
+    participant_id_digest: Digest,
+    block_id: str,
+) -> PacketVariant:
+    block = next((item for item in plan.blocks if item.block_id == block_id), None)
+    if block is None:
+        raise ValueError("participant assignment block is not in frozen randomization plan")
+    draw_input: dict[str, CanonicalValue] = {
+        "block_id": block_id,
+        "participant_id_digest": str(participant_id_digest),
+        "plan_digest": str(plan.artifact_digest),
+    }
+    draw = int(sha256_hex(canonical_json_bytes(draw_input))[:16], 16) % 10_000
+    if draw < block.baseline_weight_bps:
+        return PacketVariant.BASELINE_PACKET
+    return PacketVariant.FRONTIER_PACKET
+
+
 @dataclass(frozen=True, slots=True)
 class DecisionCohortActivationV0:
     cohort_id: str
@@ -91,13 +264,13 @@ class DecisionCohortActivationV0:
     packet_schema_digest: Digest
     primary_estimand_digest: Digest
     multiplicity_policy_digest: Digest
-    randomization_plan_digest: Digest
+    randomization_plan: RandomizationPlanV0
     participant_rules_digest: Digest
     case_order_policy_digest: Digest
     failure_semantics_digest: Digest
     stopping_plan_digest: Digest
     sequential_monitoring: bool = False
-    sequential_validity_evidence_digest: Digest | None = None
+    sequential_validity_evidence: SequentialValidityEvidenceV0 | None = None
     assignment: str = "RANDOMIZED_BLOCKED_PARTICIPANT_LEVEL"
     primary_analysis: str = "INTENTION_TO_TREAT_BY_PARTICIPANT_ASSIGNMENT"
     participant_exposure_to_both_variants: bool = False
@@ -107,6 +280,8 @@ class DecisionCohortActivationV0:
         _require_stable_id(self.cohort_id, "cohort_id")
         _require_aware(self.activated_at, "activated_at")
         _require_protocol_digest(self.protocol_digest)
+        if self.randomization_plan.frozen_at > self.activated_at:
+            raise ValueError("randomization plan must be frozen before cohort activation")
         if self.assignment != "RANDOMIZED_BLOCKED_PARTICIPANT_LEVEL":
             raise ValueError("confirmatory decision cohorts require participant-level assignment")
         if self.primary_analysis != "INTENTION_TO_TREAT_BY_PARTICIPANT_ASSIGNMENT":
@@ -117,9 +292,12 @@ class DecisionCohortActivationV0:
             raise ValueError(
                 "confirmatory participants may not cross packet variants within a cohort"
             )
-        if self.sequential_monitoring and self.sequential_validity_evidence_digest is None:
-            raise ValueError("sequential monitoring requires repeated-look-valid evidence")
-        if not self.sequential_monitoring and self.sequential_validity_evidence_digest is not None:
+        if self.sequential_monitoring:
+            if self.sequential_validity_evidence is None:
+                raise ValueError("sequential monitoring requires validated sequential evidence")
+            if self.sequential_validity_evidence.frozen_at > self.activated_at:
+                raise ValueError("sequential evidence must be frozen before cohort activation")
+        elif self.sequential_validity_evidence is not None:
             raise ValueError("fixed-sample activation cannot carry sequential validity evidence")
         if self.schema_version != "decision-cohort-activation-v0":
             raise ValueError("decision cohort activation schema mismatch")
@@ -147,13 +325,13 @@ class DecisionCohortActivationV0:
             "primary_analysis": self.primary_analysis,
             "primary_estimand_digest": str(self.primary_estimand_digest),
             "protocol_digest": str(self.protocol_digest),
-            "randomization_plan_digest": str(self.randomization_plan_digest),
+            "randomization_plan_digest": str(self.randomization_plan.artifact_digest),
             "schema_version": self.schema_version,
             "sequential_monitoring": self.sequential_monitoring,
             "sequential_validity_evidence_digest": (
                 None
-                if self.sequential_validity_evidence_digest is None
-                else str(self.sequential_validity_evidence_digest)
+                if self.sequential_validity_evidence is None
+                else str(self.sequential_validity_evidence.artifact_digest)
             ),
             "stopping_plan_digest": str(self.stopping_plan_digest),
         }
@@ -247,6 +425,7 @@ class DecisionResponseReceiptV0:
     cohort_id: str
     case_id: str
     participant_id_digest: Digest
+    assignment_block_id: str
     assigned_variant: PacketVariant
     presented_packet_digest: Digest
     action: str
@@ -258,6 +437,7 @@ class DecisionResponseReceiptV0:
     def __post_init__(self) -> None:
         _require_stable_id(self.cohort_id, "cohort_id")
         _require_stable_id(self.case_id, "case_id")
+        _require_stable_id(self.assignment_block_id, "assignment_block_id")
         _require_text(self.action, "action")
         _require_aware(self.responded_at, "responded_at")
         if self.elapsed_ms < 0:
@@ -279,6 +459,7 @@ class DecisionResponseReceiptV0:
         return {
             "action": self.action,
             "assigned_variant": self.assigned_variant.value,
+            "assignment_block_id": self.assignment_block_id,
             "case_id": self.case_id,
             "cohort_id": self.cohort_id,
             "confidence_bps": self.confidence_bps,
@@ -386,7 +567,7 @@ class PriceScheduleV0:
     renewal_terms: str
     refund_terms: str
     conversion_definition: str
-    conversion_window: str
+    conversion_window_seconds: int
     participant_rules_digest: Digest
     segment_assignment_rules_digest: Digest
     primary_commercial_estimand_digest: Digest
@@ -395,7 +576,7 @@ class PriceScheduleV0:
     target_offer_count_per_cell: int | None = None
     two_price_exception_authority_digest: Digest | None = None
     sequential_monitoring: bool = False
-    sequential_validity_evidence_digest: Digest | None = None
+    sequential_validity_evidence: SequentialValidityEvidenceV0 | None = None
     schema_version: str = "price-schedule-v0"
 
     def __post_init__(self) -> None:
@@ -411,9 +592,10 @@ class PriceScheduleV0:
             ("renewal_terms", self.renewal_terms),
             ("refund_terms", self.refund_terms),
             ("conversion_definition", self.conversion_definition),
-            ("conversion_window", self.conversion_window),
         ):
             _require_text(value, field_name)
+        if self.conversion_window_seconds <= 0:
+            raise ValueError("conversion_window_seconds must be positive")
         if not self.cells:
             raise ValueError("price schedule requires price cells")
         grouped: dict[str, list[PriceCellV0]] = {}
@@ -431,14 +613,14 @@ class PriceScheduleV0:
             if sum(cell.assignment_weight_bps for cell in cells) != 10_000:
                 raise ValueError(f"segment {segment_id} assignment weights must sum to 10000 bps")
         if self.sequential_monitoring:
-            if self.sequential_validity_evidence_digest is None:
-                raise ValueError(
-                    "sequential price monitoring requires repeated-look-valid evidence"
-                )
+            if self.sequential_validity_evidence is None:
+                raise ValueError("sequential price monitoring requires validated sequential evidence")
+            if self.sequential_validity_evidence.frozen_at > self.frozen_at:
+                raise ValueError("sequential evidence must be frozen before price schedule")
             if self.target_offer_count_per_cell is not None:
                 raise ValueError("sequential schedule cannot also declare fixed target offer count")
         else:
-            if self.sequential_validity_evidence_digest is not None:
+            if self.sequential_validity_evidence is not None:
                 raise ValueError("fixed-offer schedule cannot carry sequential validity evidence")
             if self.target_offer_count_per_cell is None or self.target_offer_count_per_cell <= 0:
                 raise ValueError(
@@ -464,7 +646,7 @@ class PriceScheduleV0:
             "billing_period": self.billing_period,
             "cells": [cell.to_canonical() for cell in ordered_cells],
             "conversion_definition": self.conversion_definition,
-            "conversion_window": self.conversion_window,
+            "conversion_window_seconds": self.conversion_window_seconds,
             "currency": self.currency,
             "entitlement_digest": str(self.entitlement_digest),
             "entitlement_id": self.entitlement_id,
@@ -480,8 +662,8 @@ class PriceScheduleV0:
             "sequential_monitoring": self.sequential_monitoring,
             "sequential_validity_evidence_digest": (
                 None
-                if self.sequential_validity_evidence_digest is None
-                else str(self.sequential_validity_evidence_digest)
+                if self.sequential_validity_evidence is None
+                else str(self.sequential_validity_evidence.artifact_digest)
             ),
             "stopping_plan_digest": str(self.stopping_plan_digest),
             "target_offer_count_per_cell": self.target_offer_count_per_cell,
@@ -503,17 +685,18 @@ class CommercialOfferReceiptV0:
     offered_at: datetime
     price_minor: int
     currency: str
-    conversion_window: str
+    conversion_window_seconds: int
     schema_version: str = "commercial-offer-receipt-v0"
 
     def __post_init__(self) -> None:
         _require_stable_id(self.segment_id, "segment_id")
         _require_aware(self.offered_at, "offered_at")
-        _require_text(self.conversion_window, "conversion_window")
         if self.price_minor <= 0:
             raise ValueError("commercial offer price_minor must be positive")
         if not _CURRENCY_RE.fullmatch(self.currency):
             raise ValueError("commercial offer currency must be uppercase three-letter code")
+        if self.conversion_window_seconds <= 0:
+            raise ValueError("commercial offer conversion window must be positive")
         if self.schema_version != "commercial-offer-receipt-v0":
             raise ValueError("commercial offer receipt schema mismatch")
 
@@ -525,9 +708,13 @@ class CommercialOfferReceiptV0:
     def artifact_id(self) -> str:
         return _artifact_id("commercialoffer_", self.to_canonical())
 
+    @property
+    def conversion_deadline(self) -> datetime:
+        return self.offered_at + timedelta(seconds=self.conversion_window_seconds)
+
     def to_canonical(self) -> dict[str, CanonicalValue]:
         return {
-            "conversion_window": self.conversion_window,
+            "conversion_window_seconds": self.conversion_window_seconds,
             "currency": self.currency,
             "entitlement_digest": str(self.entitlement_digest),
             "offered_at": canonical_timestamp(self.offered_at),
@@ -539,19 +726,10 @@ class CommercialOfferReceiptV0:
         }
 
 
-_PAYMENT_AMOUNT_KINDS = {
-    CommercialOutcomeKind.PAYMENT_AUTHORIZED,
-    CommercialOutcomeKind.PAYMENT_SETTLED,
-    CommercialOutcomeKind.PAYMENT_FAILED,
-    CommercialOutcomeKind.REFUND,
-    CommercialOutcomeKind.CHARGEBACK,
-    CommercialOutcomeKind.RENEWAL,
-}
-
-
 @dataclass(frozen=True, slots=True)
 class CommercialOutcomeReceiptV0:
     offer_receipt_digest: Digest
+    source_event_digest: Digest
     recorded_at: datetime
     kind: CommercialOutcomeKind
     amount_minor: int | None = None
@@ -576,13 +754,6 @@ class CommercialOutcomeReceiptV0:
             raise ValueError("commercial outcome receipt schema mismatch")
 
     @property
-    def revealed_wtp(self) -> bool:
-        return self.kind in {
-            CommercialOutcomeKind.PAYMENT_AUTHORIZED,
-            CommercialOutcomeKind.PAYMENT_SETTLED,
-        }
-
-    @property
     def artifact_digest(self) -> Digest:
         return _artifact_digest(self.to_canonical())
 
@@ -599,6 +770,142 @@ class CommercialOutcomeReceiptV0:
             "offer_receipt_digest": str(self.offer_receipt_digest),
             "recorded_at": canonical_timestamp(self.recorded_at),
             "schema_version": self.schema_version,
+            "source_event_digest": str(self.source_event_digest),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PaymentEvidenceV0:
+    outcome_receipt_digest: Digest
+    offer_receipt_digest: Digest
+    participant_id_digest: Digest
+    processor_name: str
+    processor_transaction_id_digest: Digest
+    processor_receipt_digest: Digest
+    observed_at: datetime
+    kind: PaymentEvidenceKind
+    amount_minor: int
+    currency: str
+    live_mode: bool
+    test_charge: bool = False
+    internal_team_payment: bool = False
+    manual_comp: bool = False
+    barter_or_credit: bool = False
+    coupon_or_discount: bool = False
+    founder_favor: bool = False
+    schema_version: str = "payment-evidence-v0"
+
+    def __post_init__(self) -> None:
+        _require_text(self.processor_name, "processor_name")
+        _require_aware(self.observed_at, "observed_at")
+        if self.amount_minor <= 0:
+            raise ValueError("payment evidence amount_minor must be positive")
+        if not _CURRENCY_RE.fullmatch(self.currency):
+            raise ValueError("payment evidence currency must be uppercase three-letter code")
+        if self.schema_version != "payment-evidence-v0":
+            raise ValueError("payment evidence schema mismatch")
+
+    @property
+    def artifact_digest(self) -> Digest:
+        return _artifact_digest(self.to_canonical())
+
+    @property
+    def artifact_id(self) -> str:
+        return _artifact_id("paymentevidence_", self.to_canonical())
+
+    @property
+    def excluded_from_revealed_wtp(self) -> bool:
+        return (
+            not self.live_mode
+            or self.test_charge
+            or self.internal_team_payment
+            or self.manual_comp
+            or self.barter_or_credit
+            or self.coupon_or_discount
+            or self.founder_favor
+        )
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {
+            "amount_minor": self.amount_minor,
+            "barter_or_credit": self.barter_or_credit,
+            "coupon_or_discount": self.coupon_or_discount,
+            "currency": self.currency,
+            "founder_favor": self.founder_favor,
+            "internal_team_payment": self.internal_team_payment,
+            "kind": self.kind.value,
+            "live_mode": self.live_mode,
+            "manual_comp": self.manual_comp,
+            "observed_at": canonical_timestamp(self.observed_at),
+            "offer_receipt_digest": str(self.offer_receipt_digest),
+            "outcome_receipt_digest": str(self.outcome_receipt_digest),
+            "participant_id_digest": str(self.participant_id_digest),
+            "processor_name": self.processor_name,
+            "processor_receipt_digest": str(self.processor_receipt_digest),
+            "processor_transaction_id_digest": str(self.processor_transaction_id_digest),
+            "schema_version": self.schema_version,
+            "test_charge": self.test_charge,
+        }
+
+
+def commercial_offer_set_digest(offers: tuple[CommercialOfferReceiptV0, ...]) -> Digest:
+    if not offers:
+        raise ValueError("commercial offer set cannot be empty")
+    return sha256_digest(
+        canonical_json_bytes(sorted(str(offer.artifact_digest) for offer in offers))
+    )
+
+
+def commercial_outcome_set_digest(outcomes: tuple[CommercialOutcomeReceiptV0, ...]) -> Digest:
+    return sha256_digest(
+        canonical_json_bytes(sorted(str(outcome.artifact_digest) for outcome in outcomes))
+    )
+
+
+def payment_evidence_set_digest(evidence: tuple[PaymentEvidenceV0, ...]) -> Digest:
+    return sha256_digest(
+        canonical_json_bytes(sorted(str(item.artifact_digest) for item in evidence))
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class CommercialOutcomeManifestV0:
+    schedule_digest: Digest
+    reporting_cutoff_at: datetime
+    offer_set_digest: Digest
+    outcome_set_digest: Digest
+    payment_evidence_set_digest: Digest
+    complete_source_event_digests: tuple[Digest, ...]
+    schema_version: str = "commercial-outcome-manifest-v0"
+
+    def __post_init__(self) -> None:
+        _require_aware(self.reporting_cutoff_at, "reporting_cutoff_at")
+        _digest_set(self.complete_source_event_digests, field="complete_source_event_digests")
+        if self.schema_version != "commercial-outcome-manifest-v0":
+            raise ValueError("commercial outcome manifest schema mismatch")
+
+    @property
+    def artifact_digest(self) -> Digest:
+        return _artifact_digest(self.to_canonical())
+
+    @property
+    def artifact_id(self) -> str:
+        return _artifact_id("commercialmanifest_", self.to_canonical())
+
+    def to_canonical(self) -> dict[str, CanonicalValue]:
+        return {
+            "complete_source_event_digests": list(
+                _digest_set(
+                    self.complete_source_event_digests,
+                    field="complete_source_event_digests",
+                )
+            ),
+            "offer_set_digest": str(self.offer_set_digest),
+            "outcome_set_digest": str(self.outcome_set_digest),
+            "payment_evidence_set_digest": str(self.payment_evidence_set_digest),
+            "reporting_cutoff_at": canonical_timestamp(self.reporting_cutoff_at),
+            "schedule_digest": str(self.schedule_digest),
+            "schema_version": self.schema_version,
         }
 
 
@@ -606,17 +913,29 @@ def validate_decision_response(
     response: DecisionResponseReceiptV0,
     *,
     case: DecisionCaseV0,
+    case_set: tuple[DecisionCaseV0, ...],
     activation: DecisionCohortActivationV0,
 ) -> None:
+    validate_case_set_against_activation(case_set, activation=activation)
+    case_digests = {item.artifact_digest for item in case_set}
+    if case.artifact_digest not in case_digests:
+        raise ValueError("decision response case is outside the activated case set")
     if response.cohort_id != activation.cohort_id or case.cohort_id != activation.cohort_id:
         raise ValueError("decision response/case does not bind to activation cohort")
     if response.case_id != case.case_id:
         raise ValueError("decision response does not bind to decision case")
     if response.action not in case.action_set:
         raise ValueError("decision response action is outside frozen action set")
+    expected_variant = expected_packet_variant(
+        activation.randomization_plan,
+        participant_id_digest=response.participant_id_digest,
+        block_id=response.assignment_block_id,
+    )
+    if response.assigned_variant is not expected_variant:
+        raise ValueError("decision response variant does not match frozen randomization plan")
     expected_packet = (
         case.baseline_packet_digest
-        if response.assigned_variant is PacketVariant.BASELINE_PACKET
+        if expected_variant is PacketVariant.BASELINE_PACKET
         else case.frontier_packet_digest
     )
     if response.presented_packet_digest != expected_packet:
@@ -629,6 +948,7 @@ def validate_decision_response(
 
 def validate_decision_response_set(responses: tuple[DecisionResponseReceiptV0, ...]) -> None:
     participant_variants: dict[tuple[str, Digest], PacketVariant] = {}
+    participant_blocks: dict[tuple[str, Digest], str] = {}
     participant_cases: set[tuple[str, Digest, str]] = set()
     for response in responses:
         participant_key = (response.cohort_id, response.participant_id_digest)
@@ -637,6 +957,11 @@ def validate_decision_response_set(responses: tuple[DecisionResponseReceiptV0, .
         )
         if previous_variant is not response.assigned_variant:
             raise ValueError("participant crossed packet variants within confirmatory cohort")
+        previous_block = participant_blocks.setdefault(
+            participant_key, response.assignment_block_id
+        )
+        if previous_block != response.assignment_block_id:
+            raise ValueError("participant changed randomization block within confirmatory cohort")
         case_key = (response.cohort_id, response.participant_id_digest, response.case_id)
         if case_key in participant_cases:
             raise ValueError("participant has duplicate response for the same decision case")
@@ -667,7 +992,7 @@ def validate_offer_against_schedule(
         raise ValueError("commercial offer entitlement does not match frozen schedule")
     if offer.currency != schedule.currency:
         raise ValueError("commercial offer currency does not match frozen schedule")
-    if offer.conversion_window != schedule.conversion_window:
+    if offer.conversion_window_seconds != schedule.conversion_window_seconds:
         raise ValueError("commercial offer conversion window does not match frozen schedule")
     if offer.offered_at < schedule.frozen_at:
         raise ValueError("commercial offer predates frozen schedule")
@@ -699,6 +1024,10 @@ def validate_commercial_outcome(
         raise ValueError("commercial outcome does not bind to offer receipt digest")
     if outcome.recorded_at < offer.offered_at:
         raise ValueError("commercial outcome predates offer")
+    if outcome.kind in _PRIMARY_WINDOW_KINDS and outcome.recorded_at > offer.conversion_deadline:
+        raise ValueError("primary commercial outcome is outside frozen conversion window")
+    if outcome.kind is CommercialOutcomeKind.OFFER_EXPIRED and outcome.recorded_at < offer.conversion_deadline:
+        raise ValueError("offer cannot expire before frozen conversion deadline")
     if outcome.kind in _PAYMENT_AMOUNT_KINDS:
         if outcome.currency != offer.currency:
             raise ValueError("commercial outcome currency does not match offer")
@@ -722,3 +1051,131 @@ def validate_commercial_outcome(
             and outcome.amount_minor > offer.price_minor
         ):
             raise ValueError("refund/chargeback cannot exceed frozen offer price")
+
+
+def validate_payment_evidence(
+    evidence: PaymentEvidenceV0,
+    *,
+    outcome: CommercialOutcomeReceiptV0,
+    offer: CommercialOfferReceiptV0,
+) -> None:
+    if evidence.outcome_receipt_digest != outcome.artifact_digest:
+        raise ValueError("payment evidence does not bind to commercial outcome")
+    if evidence.offer_receipt_digest != offer.artifact_digest:
+        raise ValueError("payment evidence does not bind to commercial offer")
+    if evidence.participant_id_digest != offer.participant_id_digest:
+        raise ValueError("payment evidence participant does not match commercial offer")
+    expected_kind = PaymentEvidenceKind(outcome.kind.value)
+    if evidence.kind is not expected_kind:
+        raise ValueError("payment evidence kind does not match commercial outcome")
+    if evidence.amount_minor != outcome.amount_minor or evidence.amount_minor != offer.price_minor:
+        raise ValueError("payment evidence amount does not match frozen offer/outcome")
+    if evidence.currency != outcome.currency or evidence.currency != offer.currency:
+        raise ValueError("payment evidence currency does not match frozen offer/outcome")
+    if evidence.observed_at > outcome.recorded_at:
+        raise ValueError("payment evidence cannot be observed after recorded payment outcome")
+
+
+def qualifies_as_revealed_wtp(
+    outcome: CommercialOutcomeReceiptV0,
+    *,
+    offer: CommercialOfferReceiptV0,
+    evidence: PaymentEvidenceV0,
+) -> bool:
+    if outcome.kind not in _REVEALED_WTP_OUTCOME_KINDS:
+        return False
+    validate_commercial_outcome(outcome, offer=offer)
+    validate_payment_evidence(evidence, outcome=outcome, offer=offer)
+    if evidence.observed_at > offer.conversion_deadline:
+        return False
+    return not evidence.excluded_from_revealed_wtp
+
+
+def validate_commercial_reporting_manifest(
+    manifest: CommercialOutcomeManifestV0,
+    *,
+    schedule: PriceScheduleV0,
+    offers: tuple[CommercialOfferReceiptV0, ...],
+    outcomes: tuple[CommercialOutcomeReceiptV0, ...],
+    payment_evidence: tuple[PaymentEvidenceV0, ...],
+) -> None:
+    if manifest.schedule_digest != schedule.artifact_digest:
+        raise ValueError("commercial manifest does not bind to frozen price schedule")
+    if manifest.offer_set_digest != commercial_offer_set_digest(offers):
+        raise ValueError("commercial manifest offer set digest mismatch")
+    if manifest.outcome_set_digest != commercial_outcome_set_digest(outcomes):
+        raise ValueError("commercial manifest outcome set digest mismatch")
+    if manifest.payment_evidence_set_digest != payment_evidence_set_digest(payment_evidence):
+        raise ValueError("commercial manifest payment evidence set digest mismatch")
+    outcome_source_events = tuple(outcome.source_event_digest for outcome in outcomes)
+    if _digest_set(
+        outcome_source_events,
+        field="outcome source event digests",
+    ) != _digest_set(
+        manifest.complete_source_event_digests,
+        field="complete_source_event_digests",
+    ):
+        raise ValueError("commercial manifest omits or adds source events")
+
+    validate_unique_primary_offers(offers)
+    offer_by_digest = {offer.artifact_digest: offer for offer in offers}
+    for offer in offers:
+        validate_offer_against_schedule(offer, schedule=schedule)
+        if offer.offered_at > manifest.reporting_cutoff_at:
+            raise ValueError("commercial manifest includes offer after reporting cutoff")
+
+    outcome_by_digest = {outcome.artifact_digest: outcome for outcome in outcomes}
+    if len(outcome_by_digest) != len(outcomes):
+        raise ValueError("commercial manifest contains duplicate outcome receipts")
+    outcomes_by_offer: dict[Digest, list[CommercialOutcomeReceiptV0]] = {}
+    for outcome in outcomes:
+        offer = offer_by_digest.get(outcome.offer_receipt_digest)
+        if offer is None:
+            raise ValueError("commercial manifest outcome references unlisted offer")
+        if outcome.recorded_at > manifest.reporting_cutoff_at:
+            raise ValueError("commercial manifest includes outcome after reporting cutoff")
+        validate_commercial_outcome(outcome, offer=offer)
+        outcomes_by_offer.setdefault(offer.artifact_digest, []).append(outcome)
+
+    evidence_by_outcome: dict[Digest, PaymentEvidenceV0] = {}
+    for evidence in payment_evidence:
+        outcome = outcome_by_digest.get(evidence.outcome_receipt_digest)
+        if outcome is None:
+            raise ValueError("payment evidence references unlisted commercial outcome")
+        offer = offer_by_digest[outcome.offer_receipt_digest]
+        if evidence.observed_at > manifest.reporting_cutoff_at:
+            raise ValueError("commercial manifest includes payment evidence after reporting cutoff")
+        if evidence.outcome_receipt_digest in evidence_by_outcome:
+            raise ValueError("commercial outcome has duplicate payment evidence")
+        validate_payment_evidence(evidence, outcome=outcome, offer=offer)
+        evidence_by_outcome[evidence.outcome_receipt_digest] = evidence
+
+    for outcome in outcomes:
+        if outcome.kind in _REVEALED_WTP_OUTCOME_KINDS and outcome.artifact_digest not in evidence_by_outcome:
+            raise ValueError("payment outcome is missing processor evidence")
+
+    for offer in offers:
+        history = sorted(
+            outcomes_by_offer.get(offer.artifact_digest, []),
+            key=lambda outcome: outcome.recorded_at,
+        )
+        if offer.conversion_deadline <= manifest.reporting_cutoff_at:
+            primary = [
+                outcome
+                for outcome in history
+                if outcome.kind in _PRIMARY_WINDOW_KINDS
+                or outcome.kind is CommercialOutcomeKind.OFFER_EXPIRED
+            ]
+            if not primary:
+                raise ValueError("matured commercial offer has no primary disposition")
+        paid_at = [
+            outcome.recorded_at
+            for outcome in history
+            if outcome.kind in _REVEALED_WTP_OUTCOME_KINDS
+        ]
+        for outcome in history:
+            if outcome.kind in {
+                CommercialOutcomeKind.REFUND,
+                CommercialOutcomeKind.CHARGEBACK,
+            } and not any(payment_time <= outcome.recorded_at for payment_time in paid_at):
+                raise ValueError("refund/chargeback has no preceding payment outcome")
