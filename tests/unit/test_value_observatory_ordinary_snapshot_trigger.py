@@ -58,9 +58,7 @@ def test_selector_requires_exactly_one_new_request_file() -> None:
     with pytest.raises(ValueError, match="exactly one changed request file"):
         select_new_repository_request_v0(())
     with pytest.raises(ValueError, match="exactly one changed request file"):
-        select_new_repository_request_v0(
-            (("A", path), ("A", path.replace("request", "other")))
-        )
+        select_new_repository_request_v0((("A", path), ("A", path.replace("request", "other"))))
 
 
 @pytest.mark.parametrize("status", ["M", "D", "T", "R100"])
