@@ -55,7 +55,7 @@ jobs:
           fi
 
           mapfile -t request_files < <(
-            git diff-tree --no-commit-id --name-only -r --first-parent "$GITHUB_SHA" \
+            git diff --name-only "$GITHUB_SHA^" "$GITHUB_SHA" \
               | grep -E '^\.github/probe-requests/ordinary-prehorizon-v0/[^/]+\.json$' \
               || true
           )
