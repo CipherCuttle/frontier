@@ -11,6 +11,16 @@ from .digests import Digest, sha256_digest, sha256_hex
 DECISION_VALUE_WTP_PREREGISTRATION_PATH = (
     "experiments/value_observatory_v0/decision_value_wtp_v0.json"
 )
+DECISION_VALUE_WTP_PROTOCOL_DIGEST = Digest(
+    "sha256:58887a83812b54248c5c7e7aa03684757719199804a2c08fefc1d830f56301c3"
+)
+INITIAL_MARKET_SEGMENTS = frozenset(
+    {
+        "AI_SOFTWARE_RESEARCH_STRATEGY",
+        "TECHNICAL_DILIGENCE_INVESTMENT_RESEARCH",
+        "DEVELOPER_SECURITY_ECOSYSTEM_MONITORING",
+    }
+)
 
 _STABLE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
@@ -35,6 +45,8 @@ class CommercialOutcomeKind(StrEnum):
     PAYMENT_FAILED = "PAYMENT_FAILED"
     REFUND = "REFUND"
     CHARGEBACK = "CHARGEBACK"
+    ACTIVE_USAGE = "ACTIVE_USAGE"
+    SUPPORT_INTERVENTION = "SUPPORT_INTERVENTION"
     CANCELLATION = "CANCELLATION"
     RENEWAL = "RENEWAL"
     NONRENEWAL = "NONRENEWAL"
@@ -53,6 +65,11 @@ def _require_stable_id(value: str, field: str) -> None:
 def _require_text(value: str, field: str) -> None:
     if not value.strip():
         raise ValueError(f"{field} must be non-empty")
+
+
+def _require_protocol_digest(value: Digest) -> None:
+    if value != DECISION_VALUE_WTP_PROTOCOL_DIGEST:
+        raise ValueError("artifact does not bind the frozen FRONTIER_DECISION_VALUE_WTP_V0 protocol")
 
 
 def _artifact_digest(canonical: dict[str, CanonicalValue]) -> Digest:
@@ -74,21 +91,24 @@ class DecisionCohortActivationV0:
     multiplicity_policy_digest: Digest
     randomization_plan_digest: Digest
     participant_rules_digest: Digest
+    case_order_policy_digest: Digest
+    failure_semantics_digest: Digest
     stopping_plan_digest: Digest
     sequential_monitoring: bool = False
     sequential_validity_evidence_digest: Digest | None = None
     assignment: str = "RANDOMIZED_BLOCKED_PARTICIPANT_LEVEL"
-    primary_analysis: str = "INTENTION_TO_TREAT"
+    primary_analysis: str = "INTENTION_TO_TREAT_BY_PARTICIPANT_ASSIGNMENT"
     participant_exposure_to_both_variants: bool = False
     schema_version: str = "decision-cohort-activation-v0"
 
     def __post_init__(self) -> None:
         _require_stable_id(self.cohort_id, "cohort_id")
         _require_aware(self.activated_at, "activated_at")
+        _require_protocol_digest(self.protocol_digest)
         if self.assignment != "RANDOMIZED_BLOCKED_PARTICIPANT_LEVEL":
             raise ValueError("confirmatory decision cohorts require participant-level assignment")
-        if self.primary_analysis != "INTENTION_TO_TREAT":
-            raise ValueError("confirmatory decision cohorts require intention-to-treat analysis")
+        if self.primary_analysis != "INTENTION_TO_TREAT_BY_PARTICIPANT_ASSIGNMENT":
+            raise ValueError("confirmatory decision cohorts require participant-level intention-to-treat")
         if self.participant_exposure_to_both_variants:
             raise ValueError("confirmatory participants may not cross packet variants within a cohort")
         if self.sequential_monitoring and self.sequential_validity_evidence_digest is None:
@@ -110,8 +130,10 @@ class DecisionCohortActivationV0:
         return {
             "activated_at": canonical_timestamp(self.activated_at),
             "assignment": self.assignment,
+            "case_order_policy_digest": str(self.case_order_policy_digest),
             "case_set_digest": str(self.case_set_digest),
             "cohort_id": self.cohort_id,
+            "failure_semantics_digest": str(self.failure_semantics_digest),
             "multiplicity_policy_digest": str(self.multiplicity_policy_digest),
             "packet_schema_digest": str(self.packet_schema_digest),
             "participant_exposure_to_both_variants": self.participant_exposure_to_both_variants,
@@ -191,6 +213,27 @@ class DecisionCaseV0:
             "schema_version": self.schema_version,
             "utility_rule_digest": str(self.utility_rule_digest),
         }
+
+
+def decision_case_set_digest(cases: tuple[DecisionCaseV0, ...]) -> Digest:
+    if not cases:
+        raise ValueError("decision case set cannot be empty")
+    ordered = sorted(cases, key=lambda case: (case.cohort_id, case.case_id))
+    identities = [(case.cohort_id, case.case_id) for case in ordered]
+    if len(set(identities)) != len(identities):
+        raise ValueError("decision case set contains duplicate cohort/case identity")
+    return sha256_digest(canonical_json_bytes([str(case.artifact_digest) for case in ordered]))
+
+
+def validate_case_set_against_activation(
+    cases: tuple[DecisionCaseV0, ...],
+    *,
+    activation: DecisionCohortActivationV0,
+) -> None:
+    if any(case.cohort_id != activation.cohort_id for case in cases):
+        raise ValueError("decision case set contains case from another cohort")
+    if decision_case_set_digest(cases) != activation.case_set_digest:
+        raise ValueError("decision case set digest does not match cohort activation")
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,6 +350,8 @@ class PriceCellV0:
 
     def __post_init__(self) -> None:
         _require_stable_id(self.segment_id, "segment_id")
+        if self.segment_id not in INITIAL_MARKET_SEGMENTS:
+            raise ValueError("price cell segment is not authorized by V0 market authority")
         if self.price_minor <= 0:
             raise ValueError("price_minor must be positive")
         if not 1 <= self.assignment_weight_bps <= 10_000:
@@ -335,8 +380,11 @@ class PriceScheduleV0:
     conversion_definition: str
     conversion_window: str
     participant_rules_digest: Digest
+    segment_assignment_rules_digest: Digest
+    primary_commercial_estimand_digest: Digest
     stopping_plan_digest: Digest
     cells: tuple[PriceCellV0, ...]
+    target_offer_count_per_cell: int | None = None
     two_price_exception_authority_digest: Digest | None = None
     sequential_monitoring: bool = False
     sequential_validity_evidence_digest: Digest | None = None
@@ -346,6 +394,7 @@ class PriceScheduleV0:
         _require_stable_id(self.schedule_id, "schedule_id")
         _require_stable_id(self.entitlement_id, "entitlement_id")
         _require_aware(self.frozen_at, "frozen_at")
+        _require_protocol_digest(self.protocol_digest)
         if not _CURRENCY_RE.fullmatch(self.currency):
             raise ValueError("currency must be an uppercase ISO-style three-letter code")
         for field_name, value in (
@@ -373,10 +422,16 @@ class PriceScheduleV0:
                 )
             if sum(cell.assignment_weight_bps for cell in cells) != 10_000:
                 raise ValueError(f"segment {segment_id} assignment weights must sum to 10000 bps")
-        if self.sequential_monitoring and self.sequential_validity_evidence_digest is None:
-            raise ValueError("sequential price monitoring requires repeated-look-valid evidence")
-        if not self.sequential_monitoring and self.sequential_validity_evidence_digest is not None:
-            raise ValueError("fixed-offer schedule cannot carry sequential validity evidence")
+        if self.sequential_monitoring:
+            if self.sequential_validity_evidence_digest is None:
+                raise ValueError("sequential price monitoring requires repeated-look-valid evidence")
+            if self.target_offer_count_per_cell is not None:
+                raise ValueError("sequential schedule cannot also declare fixed target offer count")
+        else:
+            if self.sequential_validity_evidence_digest is not None:
+                raise ValueError("fixed-offer schedule cannot carry sequential validity evidence")
+            if self.target_offer_count_per_cell is None or self.target_offer_count_per_cell <= 0:
+                raise ValueError("fixed-offer schedule requires positive target_offer_count_per_cell")
         if self.schema_version != "price-schedule-v0":
             raise ValueError("price schedule schema mismatch")
 
@@ -403,11 +458,13 @@ class PriceScheduleV0:
             "entitlement_id": self.entitlement_id,
             "frozen_at": canonical_timestamp(self.frozen_at),
             "participant_rules_digest": str(self.participant_rules_digest),
+            "primary_commercial_estimand_digest": str(self.primary_commercial_estimand_digest),
             "protocol_digest": str(self.protocol_digest),
             "refund_terms": self.refund_terms,
             "renewal_terms": self.renewal_terms,
             "schedule_id": self.schedule_id,
             "schema_version": self.schema_version,
+            "segment_assignment_rules_digest": str(self.segment_assignment_rules_digest),
             "sequential_monitoring": self.sequential_monitoring,
             "sequential_validity_evidence_digest": (
                 None
@@ -415,6 +472,7 @@ class PriceScheduleV0:
                 else str(self.sequential_validity_evidence_digest)
             ),
             "stopping_plan_digest": str(self.stopping_plan_digest),
+            "target_offer_count_per_cell": self.target_offer_count_per_cell,
             "tax_treatment": self.tax_treatment,
             "two_price_exception_authority_digest": (
                 None
@@ -433,11 +491,13 @@ class CommercialOfferReceiptV0:
     offered_at: datetime
     price_minor: int
     currency: str
+    conversion_window: str
     schema_version: str = "commercial-offer-receipt-v0"
 
     def __post_init__(self) -> None:
         _require_stable_id(self.segment_id, "segment_id")
         _require_aware(self.offered_at, "offered_at")
+        _require_text(self.conversion_window, "conversion_window")
         if self.price_minor <= 0:
             raise ValueError("commercial offer price_minor must be positive")
         if not _CURRENCY_RE.fullmatch(self.currency):
@@ -455,6 +515,7 @@ class CommercialOfferReceiptV0:
 
     def to_canonical(self) -> dict[str, CanonicalValue]:
         return {
+            "conversion_window": self.conversion_window,
             "currency": self.currency,
             "entitlement_digest": str(self.entitlement_digest),
             "offered_at": canonical_timestamp(self.offered_at),
@@ -483,10 +544,13 @@ class CommercialOutcomeReceiptV0:
     kind: CommercialOutcomeKind
     amount_minor: int | None = None
     currency: str | None = None
+    detail_code: str | None = None
     schema_version: str = "commercial-outcome-receipt-v0"
 
     def __post_init__(self) -> None:
         _require_aware(self.recorded_at, "recorded_at")
+        if self.detail_code is not None:
+            _require_stable_id(self.detail_code, "detail_code")
         if self.kind in _PAYMENT_AMOUNT_KINDS:
             if self.amount_minor is None or self.amount_minor <= 0:
                 raise ValueError("payment-related commercial outcome requires positive amount_minor")
@@ -516,6 +580,7 @@ class CommercialOutcomeReceiptV0:
         return {
             "amount_minor": self.amount_minor,
             "currency": self.currency,
+            "detail_code": self.detail_code,
             "kind": self.kind.value,
             "offer_receipt_digest": str(self.offer_receipt_digest),
             "recorded_at": canonical_timestamp(self.recorded_at),
@@ -544,6 +609,8 @@ def validate_decision_response(
         raise ValueError("decision response presented packet does not match assigned variant")
     if response.responded_at < case.knowledge_horizon:
         raise ValueError("decision response predates frozen case knowledge horizon")
+    if response.responded_at < activation.activated_at:
+        raise ValueError("decision response predates cohort activation")
 
 
 def validate_decision_response_set(responses: tuple[DecisionResponseReceiptV0, ...]) -> None:
@@ -584,6 +651,8 @@ def validate_offer_against_schedule(
         raise ValueError("commercial offer entitlement does not match frozen schedule")
     if offer.currency != schedule.currency:
         raise ValueError("commercial offer currency does not match frozen schedule")
+    if offer.conversion_window != schedule.conversion_window:
+        raise ValueError("commercial offer conversion window does not match frozen schedule")
     if offer.offered_at < schedule.frozen_at:
         raise ValueError("commercial offer predates frozen schedule")
     matching_cell = any(
