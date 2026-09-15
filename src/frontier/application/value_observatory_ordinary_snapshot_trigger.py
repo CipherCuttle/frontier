@@ -146,9 +146,9 @@ if __name__ == "__main__":
 
 
 __all__ = [
-    "OrdinarySnapshotProbeRequestV0",
     "REQUEST_DIRECTORY_V0",
     "REQUEST_SCHEMA_V0",
+    "OrdinarySnapshotProbeRequestV0",
     "parse_repository_request_v0",
     "resolve_repository_request_v0",
     "select_new_repository_request_v0",
