@@ -41,35 +41,19 @@ jobs:
           enable-cache: true
       - name: Sync frozen environment
         run: uv sync --all-extras --frozen
-      - name: Resolve manual non-scored probe request
-        id: request
-        shell: bash
-        env:
-          DISPATCH_KNOWLEDGE_HORIZON: ${{ inputs.knowledge_horizon }}
-          DISPATCH_SNAPSHOT_ID: ${{ inputs.snapshot_id }}
+      - name: Resolve repository request
+        if: github.event_name == 'push'
+        id: repo_request
         run: |
-          set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if [[ -z "${DISPATCH_KNOWLEDGE_HORIZON}" || -z "${DISPATCH_SNAPSHOT_ID}" ]]; then
-              echo "workflow_dispatch requires knowledge_horizon and snapshot_id" >&2
-              exit 1
-            fi
-            echo "knowledge_horizon=${DISPATCH_KNOWLEDGE_HORIZON}" >> "$GITHUB_OUTPUT"
-            echo "snapshot_id=${DISPATCH_SNAPSHOT_ID}" >> "$GITHUB_OUTPUT"
-          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            uv run python -m frontier.application.value_observatory_ordinary_snapshot_trigger \
-              --head-sha "$GITHUB_SHA" \
-              --github-output "$GITHUB_OUTPUT"
-          else
-            echo "unsupported ordinary snapshot probe trigger: ${GITHUB_EVENT_NAME}" >&2
-            exit 1
-          fi
+          uv run python -m frontier.application.value_observatory_ordinary_snapshot_trigger \
+            --head-sha "$GITHUB_SHA" \
+            --github-output "$GITHUB_OUTPUT"
       - name: Run seven-source non-scored probe
         id: produce
         shell: bash
         env:
-          KNOWLEDGE_HORIZON: ${{ steps.request.outputs.knowledge_horizon }}
-          SNAPSHOT_ID: ${{ steps.request.outputs.snapshot_id }}
+          KNOWLEDGE_HORIZON: ${{ github.event_name == 'workflow_dispatch' && inputs.knowledge_horizon || steps.repo_request.outputs.knowledge_horizon }}
+          SNAPSHOT_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.snapshot_id || steps.repo_request.outputs.snapshot_id }}
         run: |
           set +e
           uv run python scripts/run_ordinary_snapshot_probe_v0.py produce \
@@ -83,7 +67,7 @@ jobs:
         if: steps.produce.outputs.exit_code != '0'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ordinary-snapshot-probe-failure-${{ steps.request.outputs.snapshot_id }}
+          name: ordinary-snapshot-probe-failure-${{ github.event_name == 'workflow_dispatch' && inputs.snapshot_id || steps.repo_request.outputs.snapshot_id }}
           path: probe-output/probe_report_v0.json
           if-no-files-found: error
           retention-days: 30
@@ -95,7 +79,7 @@ jobs:
         id: payload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ordinary-snapshot-payload-v0-${{ steps.request.outputs.snapshot_id }}
+          name: ordinary-snapshot-payload-v0-${{ github.event_name == 'workflow_dispatch' && inputs.snapshot_id || steps.repo_request.outputs.snapshot_id }}
           path: probe-output/ordinary_snapshot_payload_v0.json
           if-no-files-found: error
           retention-days: 30
@@ -105,7 +89,7 @@ jobs:
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
-          subject-name: ordinary-snapshot-payload-v0-${{ steps.request.outputs.snapshot_id }}
+          subject-name: ordinary-snapshot-payload-v0-${{ github.event_name == 'workflow_dispatch' && inputs.snapshot_id || steps.repo_request.outputs.snapshot_id }}
           subject-digest: sha256:${{ steps.payload.outputs.artifact-digest }}
       - name: Retrieve server artifact metadata
         if: steps.produce.outputs.exit_code == '0'
@@ -134,7 +118,7 @@ jobs:
         if: steps.produce.outputs.exit_code == '0'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ordinary-snapshot-probe-receipt-${{ steps.request.outputs.snapshot_id }}
+          name: ordinary-snapshot-probe-receipt-${{ github.event_name == 'workflow_dispatch' && inputs.snapshot_id || steps.repo_request.outputs.snapshot_id }}
           path: |
             probe-output/ordinary_snapshot_receipt_v0.json
             probe-output/probe_report_v0.json
