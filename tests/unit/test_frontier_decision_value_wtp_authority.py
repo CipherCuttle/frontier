@@ -11,6 +11,15 @@ def _prereg() -> dict[str, object]:
     return json.loads(PREREG_PATH.read_text(encoding="utf-8"))
 
 
+def _string_list(value: object) -> list[str]:
+    assert isinstance(value, list)
+    result: list[str] = []
+    for item in value:
+        assert isinstance(item, str)
+        result.append(item)
+    return result
+
+
 def test_decision_value_wtp_preregistration_preserves_scientific_authority() -> None:
     prereg = _prereg()
 
@@ -28,7 +37,7 @@ def test_decision_value_wtp_preregistration_preserves_scientific_authority() -> 
     assert scientific_separation["historical_cases_confirmatory"] is False
     assert scientific_separation["user_reaction_as_scientific_outcome_label"] is False
 
-    forbidden = set(prereg["not_authorized"])
+    forbidden = set(_string_list(prereg["not_authorized"]))
     assert {
         "PEF_V1_MUTATION",
         "PERMANENT_NAIVE_BASELINE_MUTATION",
@@ -86,7 +95,7 @@ def test_protocol_keeps_prediction_decision_and_market_evidence_distinct() -> No
     prereg = _prereg()
     assert prereg["evidence_loops"] == ["SCIENTIFIC", "DECISION", "MARKET"]
 
-    negative_results = set(prereg["valid_negative_interpretations"])
+    negative_results = set(_string_list(prereg["valid_negative_interpretations"]))
     assert {
         "PREDICTIVE_VALUE_WITHOUT_DECISION_VALUE",
         "DECISION_VALUE_WITHOUT_REVEALED_WTP",
