@@ -95,9 +95,7 @@ def _plan(**overrides: object) -> RandomizationPlanV0:
         "plan_id": "randomization-001",
         "frozen_at": T0 - timedelta(hours=2),
         "blocks": (RandomizationBlockV0("default", 5000, 5000),),
-        "participant_block_assignments": (
-            ParticipantBlockAssignmentV0(_digest("f"), "default"),
-        ),
+        "participant_block_assignments": (ParticipantBlockAssignmentV0(_digest("f"), "default"),),
     }
     values.update(overrides)
     return RandomizationPlanV0(**values)  # type: ignore[arg-type]
