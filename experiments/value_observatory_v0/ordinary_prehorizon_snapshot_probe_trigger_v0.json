@@ -1,0 +1,74 @@
+{
+  "schema_version": "frontier-ordinary-prehorizon-snapshot-probe-trigger-v0",
+  "phase_id": "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_TRIGGER_V0",
+  "base_main_sha": "7add47f99e6e6e4fcbbc9d2097a49ba63de65b83",
+  "parent_phase": "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_V0",
+  "authority_scope": "TRIGGER_TRANSPORT_ONLY",
+  "supersedes": {
+    "parent_rule": "WORKFLOW_DISPATCH_ONLY",
+    "preserves_execution_mode": "MANUAL_NON_SCORED"
+  },
+  "allowed_trigger_transports": [
+    "WORKFLOW_DISPATCH",
+    "REPOSITORY_REQUEST_FILE"
+  ],
+  "repository_request": {
+    "path_glob": ".github/probe-requests/ordinary-prehorizon-v0/*.json",
+    "event_branch": "main",
+    "new_file_only": true,
+    "exactly_one_new_request_per_execution": true,
+    "modification_authorizes_execution": false,
+    "deletion_authorizes_execution": false,
+    "rename_authorizes_execution": false,
+    "schema_version": "frontier-ordinary-prehorizon-probe-request-v0",
+    "exact_fields": [
+      "schema_version",
+      "snapshot_id",
+      "knowledge_horizon",
+      "non_scored"
+    ],
+    "non_scored_must_equal": true,
+    "snapshot_id_policy": "LOWERCASE_STABLE_IDENTIFIER",
+    "knowledge_horizon_timezone": "UTC_Z",
+    "knowledge_horizon_allowed_hours": [
+      0,
+      6,
+      12,
+      18
+    ],
+    "knowledge_horizon_minute": 0,
+    "knowledge_horizon_second": 0,
+    "changed_files_compared_to": "TRIGGER_COMMIT_FIRST_PARENT",
+    "downstream_identity_source": "RESOLVED_REQUEST_OUTPUTS"
+  },
+  "shared_execution_path": {
+    "existing_probe_producer_reused": true,
+    "existing_receipt_path_reused": true,
+    "source_set_changed": false,
+    "fetch_policy_changed": false,
+    "normalization_changed": false,
+    "artifact_sequence_changed": false
+  },
+  "failure_policy": {
+    "invalid_request": "FAIL_CLOSED_NO_PROBE",
+    "multiple_new_requests": "FAIL_CLOSED_NO_PROBE",
+    "modified_or_deleted_request": "FAIL_CLOSED_NO_PROBE",
+    "unsupported_trigger": "FAIL_CLOSED_NO_PROBE",
+    "fallback_to_other_request": false,
+    "fallback_to_other_boundary": false,
+    "automatic_retry": false
+  },
+  "authority": {
+    "scheduler_authorized": false,
+    "recurring_execution_authorized": false,
+    "scored_execution_authorized": false,
+    "ordinary_executor_authorized": false,
+    "value_observatory_activation_authorized": false,
+    "horizon_safety_granted": false,
+    "executor_readiness_granted": false,
+    "independent_external_verifier_still_required": true
+  },
+  "promotion_rule": "MERGE_PROMOTES_THIS_TRIGGER_AUTHORITY_ONLY_TO_FROZEN_V0",
+  "implementation_rule": "REPOSITORY_REQUEST_TRIGGER_IMPLEMENTATION_MUST_OCCUR_IN_A_LATER_BOUNDED_PR_AFTER_THIS_AUTHORITY_MERGES",
+  "governance_merge_must_not_trigger_probe": true
+}

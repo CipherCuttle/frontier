@@ -48,6 +48,8 @@ This authority is deliberately observational during the active PEF_V1 confirmato
 
 `docs/FRONTIER_DECISION_VALUE_WTP_V0.md` is the candidate subordinate authority for extending product-value measurement from prospective lead-time into randomized decision utility and revealed willingness to pay. Its machine-readable preregistration is `experiments/value_observatory_v0/decision_value_wtp_v0.json`. It remains diagnostically separate from scientific outcome labels, may not mutate the frozen benchmark or ranking authorities, and may not expose active scored benchmark alerts before their registered outcome horizons mature. Merge of its governance PR promotes only this subordinate protocol to `FROZEN_V0`; it does not establish decision value or commercial demand.
 
+`docs/BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_TRIGGER_V0.md` is a narrowly scoped subordinate authority for the existing manual, non-scored ordinary pre-horizon snapshot probe. It supersedes only the parent's `workflow_dispatch`-only transport restriction by allowing a second explicit manual transport, `REPOSITORY_REQUEST_FILE`, under the machine-readable contract `experiments/value_observatory_v0/ordinary_prehorizon_snapshot_probe_trigger_v0.json`. It does not authorize schedules, recurring/scored execution, ordinary-executor implementation, Value Observatory activation, or any horizon-safety claim. Merge freezes only this trigger transport authority; implementation must occur in a later bounded PR.
+
 ## Implementation governance
 
 `IMPLEMENT -> TEST -> ONE independent hostile review -> repair Critical/High -> ONE targeted re-review only if Critical/High fixes were required -> COMMIT/CLOSE -> MOVE FORWARD`
