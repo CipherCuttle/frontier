@@ -64,7 +64,9 @@ def test_decision_study_prevents_treatment_carryover() -> None:
     assert decision["treatment_assignment_unit"] == "participant"
     assert decision["packet_variants"] == ["BASELINE_PACKET", "FRONTIER_PACKET"]
     assert decision["assignment"] == "RANDOMIZED_BLOCKED_PARTICIPANT_LEVEL"
-    assert decision["participant_exposure_to_both_packet_variants_within_confirmatory_cohort"] is False
+    assert (
+        decision["participant_exposure_to_both_packet_variants_within_confirmatory_cohort"] is False
+    )
     assert decision["same_case_seen_twice_by_participant"] is False
     assert decision["case_set_policy_equal_across_arms"] is True
     assert decision["case_order_policy_must_be_frozen_or_treatment_independent"] is True
@@ -96,11 +98,20 @@ def test_decision_confirmatory_estimand_and_multiplicity_are_frozen() -> None:
     } <= required_estimand
 
     assert multiplicity["one_primary_confirmatory_estimand_per_cohort"] is True
-    assert multiplicity["confirmatory_family_must_be_frozen_before_enrollment_or_first_offer"] is True
+    assert (
+        multiplicity["confirmatory_family_must_be_frozen_before_enrollment_or_first_offer"] is True
+    )
     assert multiplicity["unadjusted_secondary_results_are_exploratory"] is True
     assert multiplicity["post_hoc_primary_claim_selection"] is False
     family_scope = set(_string_list(multiplicity["family_scope_must_cover_if_claimed"]))
-    assert {"domain", "segment", "cohort", "pooled", "direction", "alternate_metric"} <= family_scope
+    assert {
+        "domain",
+        "segment",
+        "cohort",
+        "pooled",
+        "direction",
+        "alternate_metric",
+    } <= family_scope
 
 
 def test_sequential_design_requires_repeated_look_valid_error_control() -> None:
@@ -109,7 +120,10 @@ def test_sequential_design_requires_repeated_look_valid_error_control() -> None:
     market = _object_dict(prereg["market_loop"])
 
     assert decision["fixed_sample_default"] is True
-    assert decision["sequential_rule_if_used_requires_repeated_look_valid_error_or_coverage_control"] is True
+    assert (
+        decision["sequential_rule_if_used_requires_repeated_look_valid_error_or_coverage_control"]
+        is True
+    )
     assert decision["repeated_fixed_sample_interval_peeking_allowed"] is False
     sequential_fields = set(_string_list(decision["sequential_design_required_fields"]))
     assert {
@@ -121,7 +135,10 @@ def test_sequential_design_requires_repeated_look_valid_error_control() -> None:
     } <= sequential_fields
 
     assert market["fixed_offer_count_default"] is True
-    assert market["sequential_price_monitoring_requires_repeated_look_valid_error_or_coverage_control"] is True
+    assert (
+        market["sequential_price_monitoring_requires_repeated_look_valid_error_or_coverage_control"]
+        is True
+    )
     assert market["repeated_fixed_sample_conversion_interval_peeking_allowed"] is False
 
 
