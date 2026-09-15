@@ -53,12 +53,13 @@ def test_request_rejects_extra_or_missing_fields() -> None:
 
 def test_selector_requires_exactly_one_new_request_file() -> None:
     path = ".github/probe-requests/ordinary-prehorizon-v0/request.json"
+    other = ".github/probe-requests/ordinary-prehorizon-v0/other.json"
     assert select_new_repository_request_v0((("A", path),)) == path
 
     with pytest.raises(ValueError, match="exactly one changed request file"):
         select_new_repository_request_v0(())
     with pytest.raises(ValueError, match="exactly one changed request file"):
-        select_new_repository_request_v0((("A", path), ("A", path.replace("request", "other"))))
+        select_new_repository_request_v0((("A", path), ("A", other)))
 
 
 @pytest.mark.parametrize("status", ["M", "D", "T", "R100"])
