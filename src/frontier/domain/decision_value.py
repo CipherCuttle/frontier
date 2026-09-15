@@ -69,7 +69,9 @@ def _require_text(value: str, field: str) -> None:
 
 def _require_protocol_digest(value: Digest) -> None:
     if value != DECISION_VALUE_WTP_PROTOCOL_DIGEST:
-        raise ValueError("artifact does not bind the frozen FRONTIER_DECISION_VALUE_WTP_V0 protocol")
+        raise ValueError(
+            "artifact does not bind the frozen FRONTIER_DECISION_VALUE_WTP_V0 protocol"
+        )
 
 
 def _artifact_digest(canonical: dict[str, CanonicalValue]) -> Digest:
@@ -108,9 +110,13 @@ class DecisionCohortActivationV0:
         if self.assignment != "RANDOMIZED_BLOCKED_PARTICIPANT_LEVEL":
             raise ValueError("confirmatory decision cohorts require participant-level assignment")
         if self.primary_analysis != "INTENTION_TO_TREAT_BY_PARTICIPANT_ASSIGNMENT":
-            raise ValueError("confirmatory decision cohorts require participant-level intention-to-treat")
+            raise ValueError(
+                "confirmatory decision cohorts require participant-level intention-to-treat"
+            )
         if self.participant_exposure_to_both_variants:
-            raise ValueError("confirmatory participants may not cross packet variants within a cohort")
+            raise ValueError(
+                "confirmatory participants may not cross packet variants within a cohort"
+            )
         if self.sequential_monitoring and self.sequential_validity_evidence_digest is None:
             raise ValueError("sequential monitoring requires repeated-look-valid evidence")
         if not self.sequential_monitoring and self.sequential_validity_evidence_digest is not None:
@@ -311,7 +317,9 @@ class DecisionOutcomeReceiptV0:
             if self.outcome_label is not None or self.utility_microunits is not None:
                 raise ValueError("unresolved decision outcome cannot carry resolved outcome values")
             if self.protocol_failure_reason is not None:
-                raise ValueError("unresolved decision outcome cannot carry a protocol failure reason")
+                raise ValueError(
+                    "unresolved decision outcome cannot carry a protocol failure reason"
+                )
         else:
             if self.protocol_failure_reason is None or not self.protocol_failure_reason.strip():
                 raise ValueError("protocol failure outcome requires an explicit reason")
@@ -424,14 +432,18 @@ class PriceScheduleV0:
                 raise ValueError(f"segment {segment_id} assignment weights must sum to 10000 bps")
         if self.sequential_monitoring:
             if self.sequential_validity_evidence_digest is None:
-                raise ValueError("sequential price monitoring requires repeated-look-valid evidence")
+                raise ValueError(
+                    "sequential price monitoring requires repeated-look-valid evidence"
+                )
             if self.target_offer_count_per_cell is not None:
                 raise ValueError("sequential schedule cannot also declare fixed target offer count")
         else:
             if self.sequential_validity_evidence_digest is not None:
                 raise ValueError("fixed-offer schedule cannot carry sequential validity evidence")
             if self.target_offer_count_per_cell is None or self.target_offer_count_per_cell <= 0:
-                raise ValueError("fixed-offer schedule requires positive target_offer_count_per_cell")
+                raise ValueError(
+                    "fixed-offer schedule requires positive target_offer_count_per_cell"
+                )
         if self.schema_version != "price-schedule-v0":
             raise ValueError("price schedule schema mismatch")
 
@@ -553,7 +565,9 @@ class CommercialOutcomeReceiptV0:
             _require_stable_id(self.detail_code, "detail_code")
         if self.kind in _PAYMENT_AMOUNT_KINDS:
             if self.amount_minor is None or self.amount_minor <= 0:
-                raise ValueError("payment-related commercial outcome requires positive amount_minor")
+                raise ValueError(
+                    "payment-related commercial outcome requires positive amount_minor"
+                )
             if self.currency is None or not _CURRENCY_RE.fullmatch(self.currency):
                 raise ValueError("payment-related commercial outcome requires valid currency")
         elif self.amount_minor is not None or self.currency is not None:
@@ -618,7 +632,9 @@ def validate_decision_response_set(responses: tuple[DecisionResponseReceiptV0, .
     participant_cases: set[tuple[str, Digest, str]] = set()
     for response in responses:
         participant_key = (response.cohort_id, response.participant_id_digest)
-        previous_variant = participant_variants.setdefault(participant_key, response.assigned_variant)
+        previous_variant = participant_variants.setdefault(
+            participant_key, response.assigned_variant
+        )
         if previous_variant is not response.assigned_variant:
             raise ValueError("participant crossed packet variants within confirmatory cohort")
         case_key = (response.cohort_id, response.participant_id_digest, response.case_id)
@@ -668,7 +684,9 @@ def validate_unique_primary_offers(offers: tuple[CommercialOfferReceiptV0, ...])
     for offer in offers:
         key = (offer.schedule_digest, offer.participant_id_digest, offer.entitlement_digest)
         if key in seen:
-            raise ValueError("participant received multiple primary offers for one entitlement/schedule")
+            raise ValueError(
+                "participant received multiple primary offers for one entitlement/schedule"
+            )
         seen.add(key)
 
 
@@ -685,14 +703,22 @@ def validate_commercial_outcome(
         if outcome.currency != offer.currency:
             raise ValueError("commercial outcome currency does not match offer")
         assert outcome.amount_minor is not None
-        if outcome.kind in {
-            CommercialOutcomeKind.PAYMENT_AUTHORIZED,
-            CommercialOutcomeKind.PAYMENT_SETTLED,
-            CommercialOutcomeKind.PAYMENT_FAILED,
-        } and outcome.amount_minor != offer.price_minor:
+        if (
+            outcome.kind
+            in {
+                CommercialOutcomeKind.PAYMENT_AUTHORIZED,
+                CommercialOutcomeKind.PAYMENT_SETTLED,
+                CommercialOutcomeKind.PAYMENT_FAILED,
+            }
+            and outcome.amount_minor != offer.price_minor
+        ):
             raise ValueError("primary payment outcome amount does not match frozen offer price")
-        if outcome.kind in {
-            CommercialOutcomeKind.REFUND,
-            CommercialOutcomeKind.CHARGEBACK,
-        } and outcome.amount_minor > offer.price_minor:
+        if (
+            outcome.kind
+            in {
+                CommercialOutcomeKind.REFUND,
+                CommercialOutcomeKind.CHARGEBACK,
+            }
+            and outcome.amount_minor > offer.price_minor
+        ):
             raise ValueError("refund/chargeback cannot exceed frozen offer price")
