@@ -1,0 +1,128 @@
+{
+  "schema_version": "frontier-decision-value-wtp-preregistration-v0",
+  "phase_id": "FRONTIER_DECISION_VALUE_WTP_V0",
+  "status": "CANDIDATE_SUBORDINATE_AUTHORITY_UNTIL_MERGE",
+  "parent_authority": "FRONTIER_VALUE_OBSERVATORY_V0",
+  "scientific_benchmark_authority": "BENCHMARK_CAPTURE_V0",
+  "authority_document": "docs/FRONTIER_DECISION_VALUE_WTP_V0.md",
+  "objective": "Measure separately whether FRONTIER improves user decisions and whether users reveal willingness to pay through real economic commitment, without mutating scientific benchmark or ranking authority.",
+  "evidence_loops": [
+    "SCIENTIFIC",
+    "DECISION",
+    "MARKET"
+  ],
+  "scientific_loop_external_authority": true,
+  "decision_loop": {
+    "unit": "decision_case",
+    "packet_variants": [
+      "BASELINE_PACKET",
+      "FRONTIER_PACKET"
+    ],
+    "assignment": "RANDOMIZED_BLOCKED_CASE_LEVEL",
+    "same_case_seen_twice_by_participant": false,
+    "primary_analysis": "INTENTION_TO_TREAT",
+    "primary_utility_metric_must_be_frozen_before_enrollment": true,
+    "packet_equal_knowledge_horizon_required": true,
+    "participant_blinded_to_treatment_label": true,
+    "required_reporting": [
+      "primary_utility_or_regret_delta",
+      "decision_change_rate",
+      "time_to_decision_distribution",
+      "false_action_burden",
+      "missed_action_burden",
+      "abstention_rate_and_quality",
+      "per_domain_results",
+      "pooled_results",
+      "protocol_failures",
+      "unresolved_outcomes"
+    ]
+  },
+  "frontier_packet_required_fields": [
+    "what_changed",
+    "why_unusual",
+    "knowledge_horizon",
+    "independent_provenance_roots_or_role_transitions",
+    "counter_evidence_or_coverage_limits",
+    "uncertainty_state",
+    "decision_class_including_abstain",
+    "expiry_or_reassessment_horizon",
+    "falsifier_or_material_weakener",
+    "audit_references_or_digests"
+  ],
+  "scientific_separation": {
+    "active_scored_alerts_may_be_exposed_before_longest_outcome_horizon": false,
+    "eligible_confirmatory_user_study_material": [
+      "MATURED_PREVIOUSLY_SHADOWED_OBSERVATORY_CASE",
+      "SEPARATE_NON_SCORED_PROSPECTIVE_PRODUCT_RESEARCH_CASE"
+    ],
+    "historical_cases_confirmatory": false,
+    "user_reaction_as_scientific_outcome_label": false
+  },
+  "market_loop": {
+    "revealed_wtp_requires_real_payment_commitment": true,
+    "stated_wtp_is_diagnostic_only": true,
+    "price_schedule_must_be_frozen_before_first_offer": true,
+    "price_schedule_minimum_nonzero_points_per_segment": 3,
+    "two_price_feasibility_exception_requires_documented_authority": true,
+    "price_assignment": "RANDOMIZED_WITHIN_PREREGISTERED_SEGMENT",
+    "participant_level_renegotiation_before_primary_conversion_outcome": false,
+    "personalized_pricing_using_participant_attributes_or_prior_response": false,
+    "refunds_and_chargebacks_must_remain_visible": true,
+    "required_reporting": [
+      "offer_count_by_segment_and_price",
+      "completed_real_payment_conversions_by_segment_and_price",
+      "conversion_probability_with_uncertainty",
+      "refunds_and_chargebacks",
+      "post_purchase_active_usage",
+      "renewal_or_continuation",
+      "cancellation_or_nonrenewal",
+      "support_or_manual_intervention_burden"
+    ]
+  },
+  "initial_market_segments": [
+    "AI_SOFTWARE_RESEARCH_STRATEGY",
+    "TECHNICAL_DILIGENCE_INVESTMENT_RESEARCH",
+    "DEVELOPER_SECURITY_ECOSYSTEM_MONITORING"
+  ],
+  "valid_negative_interpretations": [
+    "PREDICTIVE_VALUE_WITHOUT_DECISION_VALUE",
+    "DECISION_VALUE_WITHOUT_REVEALED_WTP",
+    "REVEALED_WTP_WITHOUT_SCIENTIFIC_SUPERIORITY",
+    "SEGMENT_SPECIFIC_VALUE_ONLY",
+    "NO_MATERIAL_VALUE_OBSERVED"
+  ],
+  "implementation_artifacts_required": [
+    "DecisionCaseV0",
+    "DecisionResponseReceiptV0",
+    "DecisionOutcomeReceiptV0",
+    "PriceScheduleV0",
+    "CommercialOfferReceiptV0",
+    "CommercialOutcomeReceiptV0"
+  ],
+  "activation_preconditions": [
+    "PROTOCOL_FROZEN",
+    "PACKET_AND_RECEIPT_IMPLEMENTATION_INDEPENDENTLY_REVIEWED",
+    "CASE_SET_OR_GENERATION_PROTOCOL_FROZEN",
+    "PRIMARY_DECISION_UTILITY_OR_REGRET_METRIC_FROZEN",
+    "PARTICIPANT_RULES_FROZEN",
+    "RANDOMIZATION_AND_FAILURE_SEMANTICS_FROZEN",
+    "PRICE_SCHEDULE_FROZEN_BEFORE_ANY_WTP_OFFER",
+    "SCIENTIFIC_EXPOSURE_CONTAMINATION_PROTECTED",
+    "BOUNDED_IMPLEMENTATION_HOSTILE_REVIEW_COMPLETE"
+  ],
+  "not_authorized": [
+    "PEF_V1_MUTATION",
+    "PERMANENT_NAIVE_BASELINE_MUTATION",
+    "BENCHMARK_CAPTURE_V0_MUTATION",
+    "CANONICAL_PUBLIC_RANKING_CHANGE",
+    "NEW_CANONICAL_RECOMMENDATION_SURFACE",
+    "LLM_TRUTH_IDENTITY_GROUPING_RANKING_OR_OUTCOME_AUTHORITY",
+    "ACTIVE_SCORED_ALERT_EXPOSURE_BEFORE_MATURATION",
+    "USER_REACTION_AS_SCIENTIFIC_OUTCOME_LABEL",
+    "VERBAL_WTP_AS_REVEALED_WTP",
+    "PARTICIPANT_LEVEL_PERSONALIZED_PRICING",
+    "POST_HOC_EXCLUSION_OF_LOSSES_NONPURCHASES_REFUNDS_OR_FAILURES",
+    "PRODUCT_SUPERIORITY_CLAIM_FROM_V0_ALONE"
+  ],
+  "completion_semantics": "Merge freezes the experiment design only. It does not establish predictive superiority, decision value, willingness to pay, price viability, segment viability, or ranking promotion authority."
+}
