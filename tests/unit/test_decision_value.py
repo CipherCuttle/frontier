@@ -45,7 +45,9 @@ def _digest(char: str) -> Digest:
 def _protocol_digest() -> Digest:
     raw = cast(
         object,
-        json.loads((REPO_ROOT / DECISION_VALUE_WTP_PREREGISTRATION_PATH).read_text(encoding="utf-8")),
+        json.loads(
+            (REPO_ROOT / DECISION_VALUE_WTP_PREREGISTRATION_PATH).read_text(encoding="utf-8")
+        ),
     )
     return sha256_digest(canonical_json_bytes(raw))
 
@@ -237,7 +239,9 @@ def test_decision_outcome_is_immutable_and_bound_to_response_digest() -> None:
     assert outcome.artifact_id.startswith("decisionoutcome_")
 
     with pytest.raises(ValueError, match="response receipt digest"):
-        validate_decision_outcome(replace(outcome, response_receipt_digest=_digest("0")), response=response)
+        validate_decision_outcome(
+            replace(outcome, response_receipt_digest=_digest("0")), response=response
+        )
 
 
 def test_unresolved_and_protocol_failure_outcomes_fail_closed() -> None:
