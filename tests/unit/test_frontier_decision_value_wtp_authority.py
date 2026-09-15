@@ -21,9 +21,10 @@ def test_decision_value_wtp_preregistration_preserves_scientific_authority() -> 
 
     scientific_separation = prereg["scientific_separation"]
     assert isinstance(scientific_separation, dict)
-    assert scientific_separation[
-        "active_scored_alerts_may_be_exposed_before_longest_outcome_horizon"
-    ] is False
+    assert (
+        scientific_separation["active_scored_alerts_may_be_exposed_before_longest_outcome_horizon"]
+        is False
+    )
     assert scientific_separation["historical_cases_confirmatory"] is False
     assert scientific_separation["user_reaction_as_scientific_outcome_label"] is False
 
@@ -78,5 +79,8 @@ def test_protocol_keeps_prediction_decision_and_market_evidence_distinct() -> No
     } <= negative_results
 
     text = AUTHORITY_PATH.read_text(encoding="utf-8")
-    assert "A scientific win with no decision impact is not automatically commercially valuable." in text
+    assert (
+        "A scientific win with no decision impact is not automatically commercially valuable."
+        in text
+    )
     assert "Merge proves only that the decision/WTP experiment is preregistered." in text
