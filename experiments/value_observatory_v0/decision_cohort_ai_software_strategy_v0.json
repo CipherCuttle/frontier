@@ -1,7 +1,7 @@
 {
   "schema_version": "frontier-decision-cohort-design-v0",
   "cohort_id": "decision-ai-software-strategy-v0",
-  "status": "DESIGN_FROZEN_PENDING_CASE_SET_AND_POWER",
+  "status": "CANDIDATE_DESIGN_PENDING_MERGE_AND_ACTIVATION_BLOCKERS",
   "parent_phase": "FRONTIER_DECISION_VALUE_WTP_V0",
   "parent_protocol_digest": "sha256:58887a83812b54248c5c7e7aa03684757719199804a2c08fefc1d830f56301c3",
   "parent_main_sha": "53591df4dfc0cc12c47db2c45abae805bfcebe87",
@@ -34,9 +34,24 @@
     "active_scored_alert_exposure_allowed": false,
     "knowledge_horizon_equal_across_packet_variants": true,
     "exact_case_set_required_before_activation": true,
+    "eligible_universe_rule": "At case-set freeze include every canonical Value Observatory case registered prospectively under BENCHMARK_CAPTURE_V0 that was shadowed before maturation, has valid matured outcome authority, has every required case binding, and was not exposed as an active scored alert. Eligibility is determined only from preregistered identity/provenance/knowledge-horizon/shadow-state/coverage fields plus structural completeness; outcome label, outcome magnitude, arm result, rank, score, packet content, treatment contrast, or commercial appeal may not enter eligibility.",
+    "eligible_universe_source_ids": [
+      "arxiv.cs-ai",
+      "cisa.kev",
+      "gdelt.frontier",
+      "github.ml-repos",
+      "hf.models",
+      "hn.frontpage",
+      "pypi.updates"
+    ],
+    "case_set_sampling_rule": "EXHAUSTIVE_INCLUDE_ALL_ELIGIBLE_CASES_NO_OUTCOME_CONDITIONING",
     "case_inclusion_must_not_condition_on": [
+      "OUTCOME_LABEL_OR_MAGNITUDE",
+      "BASELINE_DIFFICULTY_OR_BASELINE_OUTCOME",
+      "FRONTIER_PACKET_CONTENT",
       "FRONTIER_PACKET_PERFORMANCE",
       "FRONTIER_RANK_OR_SCORE_ADVANTAGE",
+      "ANY_ARM_OUTPUT_OR_ARM_DIFFERENCE",
       "PARTICIPANT_RESPONSE",
       "POST_HOC_COMMERCIAL_APPEAL"
     ],
@@ -50,8 +65,25 @@
       "utility_rule_digest",
       "maturation_rule"
     ],
+    "utility_rule_required_fields": [
+      "resolved_action_utility_mapping_or_cost_matrix",
+      "failure_floor_utility_microunits",
+      "utility_scale_bounds",
+      "outcome_authority_binding"
+    ],
     "case_order_policy": "TREATMENT_INDEPENDENT_HASH_ORDER",
     "same_case_seen_twice_by_participant": false
+  },
+  "participant_case_allocation_policy": {
+    "allocation_must_be_frozen_before_activation": true,
+    "allocation_must_be_arm_independent": true,
+    "treatment_label_may_enter_allocation": false,
+    "cases_per_participant": null,
+    "cases_per_participant_must_be_equal_across_arms": true,
+    "allocation_algorithm": "For each participant, order the exact frozen case set by SHA256 over participant_id_digest, case_id, case_set_digest, and a frozen allocation_policy_digest; assign the first K cases, where K is frozen before activation. Treatment assignment and packet variant are excluded from every allocation input.",
+    "exact_participant_to_case_mapping_digest_required_before_activation": true,
+    "post_assignment_case_substitution_allowed": false,
+    "allocation_failure": "PROTOCOL_FAILURE_NO_SUBSTITUTION"
   },
   "packet_policy": {
     "variants": [
@@ -77,18 +109,19 @@
   "primary_estimand_candidate": {
     "confirmatory_estimand_count": 1,
     "target_population_or_segment": "AI_SOFTWARE_RESEARCH_STRATEGY",
-    "eligible_domain_or_case_population": "Exact later-frozen set of matured previously shadowed Value Observatory cases that satisfy this cohort case policy.",
+    "eligible_domain_or_case_population": "The exhaustive exact later-frozen case set produced by case_policy.eligible_universe_rule; no outcome-conditioned sampling is allowed.",
     "analysis_unit": "PARTICIPANT",
-    "primary_outcome_or_utility_metric": "PARTICIPANT_LEVEL_MEAN_CASE_UTILITY_MICROUNITS",
+    "primary_outcome_or_utility_metric": "PARTICIPANT_LEVEL_MEAN_ASSIGNED_CASE_COMPOSITE_UTILITY_MICROUNITS",
     "treatment_contrast": "FRONTIER_PACKET_MINUS_BASELINE_PACKET",
     "direction_or_sidedness": "SUPERIORITY_ONE_SIDED",
-    "repeated_case_aggregation": "Arithmetic mean of resolved case utility_microunits per participant; unresolved and protocol-failure cases retained and reported under frozen failure semantics rather than silently dropped.",
-    "analysis_model_or_estimator": "Difference in randomized-arm participant-level mean utility with design-valid uncertainty; exact estimator and robust/small-sample method must be frozen before activation.",
-    "participant_clustering_treatment": "Participant is the analysis unit; repeated cases are aggregated before the primary arm contrast.",
+    "repeated_case_aggregation": "Arithmetic mean over every case assigned to the participant using a fixed assigned-case denominator. A valid resolved response contributes the case-specific frozen action utility. Missing response, packet-generation failure, wrong packet/assignment, or other participant-side protocol failure contributes that case's preregistered failure_floor_utility_microunits and is never removed from the denominator. A participant with zero valid responses therefore still has a defined primary utility. If an already-required matured canonical outcome authority becomes invalid or unavailable, the cohort primary confirmatory claim becomes PROTOCOL_FAILURE_NO_CONFIRMATORY_CLAIM rather than dropping or imputing that case.",
+    "missingness_strategy": "FIXED_DENOMINATOR_FAIL_CLOSED_COMPOSITE_UTILITY",
+    "analysis_model_or_estimator": "Difference in randomized-arm participant-level mean composite utility with design-valid uncertainty; exact estimator and robust/small-sample method must be frozen before activation.",
+    "participant_clustering_treatment": "Participant is the analysis unit; repeated assigned cases are aggregated before the primary arm contrast.",
     "material_effect_threshold": "PENDING_FROZEN_COST_MATRIX_AND_POWER_PRECISION_ANALYSIS",
     "uncertainty_method_and_nominal_error_level": "PENDING_POWER_PRECISION_ANALYSIS",
     "confirmatory_multiplicity_family": "ONE_PRIMARY_COHORT_LEVEL_UTILITY_CONTRAST_ONLY",
-    "multiplicity_adjustment_or_gatekeeping_policy": "No alternate domain, segment, pooled, direction, time-saved, or secondary metric may replace the primary contrast; all such analyses are exploratory unless separately frozen before activation."
+    "multiplicity_adjustment_or_gatekeeping_policy": "No alternate domain, segment, pooled, direction, time-saved, missingness strategy, or secondary metric may replace the primary contrast; all such analyses are exploratory unless separately frozen before activation."
   },
   "randomization_policy": {
     "assignment_unit": "PARTICIPANT",
@@ -101,13 +134,13 @@
     "treatment_allocation": "1:1 within the frozen block unless the later activation artifact documents a different preregistered allocation before enrollment."
   },
   "failure_semantics": {
-    "missing_response": "RETAIN_AND_REPORT_NONRESPONSE",
-    "unresolved_case_outcome": "UNRESOLVED_NO_UTILITY_IMPUTATION",
-    "protocol_failure": "RETAIN_AND_REPORT_PROTOCOL_FAILURE",
-    "packet_generation_failure": "CASE_RESPONSE_NOT_SUBSTITUTED_OR_BACKFILLED",
-    "wrong_packet_or_assignment": "PROTOCOL_FAILURE_NO_RELABELING",
-    "post_horizon_information_detected": "PROTOCOL_FAILURE",
-    "participant_exclusion_after_assignment": "ONLY_PREREGISTERED_PROTOCOL_FAILURE_AND_RETAIN_IN_FLOW_REPORTING",
+    "missing_response": "ASSIGNED_CASE_RETAINS_FIXED_DENOMINATOR_AND_USES_FROZEN_FAILURE_FLOOR_UTILITY",
+    "unresolved_case_outcome": "NOT_ELIGIBLE_AT_CASE_SET_FREEZE; IF_MATURED_OUTCOME_AUTHORITY_LATER_BECOMES_INVALID_THEN_PROTOCOL_FAILURE_NO_CONFIRMATORY_CLAIM",
+    "protocol_failure": "ASSIGNED_CASE_RETAINS_FIXED_DENOMINATOR_AND_USES_FROZEN_FAILURE_FLOOR_UTILITY_UNLESS_FAILURE_INVALIDATES_OUTCOME_AUTHORITY",
+    "packet_generation_failure": "FAILURE_FLOOR_UTILITY_NO_SUBSTITUTION_OR_BACKFILL",
+    "wrong_packet_or_assignment": "FAILURE_FLOOR_UTILITY_NO_RELABELING",
+    "post_horizon_information_detected": "PROTOCOL_FAILURE_NO_RELABELING; FAILURE_FLOOR_UTILITY_IF_OUTCOME_AUTHORITY_REMAINS_VALID",
+    "participant_exclusion_after_assignment": "NO_PRIMARY_ESTIMAND_EXCLUSION; PREREGISTERED_PROTOCOL_FAILURES_REMAIN_IN_INTENTION_TO_TREAT_FLOW",
     "failed_or_unresolved_cases_create_frontier_win": false
   },
   "stopping_and_power": {
@@ -119,8 +152,10 @@
     "power_precision_inputs_required": [
       "exact_case_set_or_case-level_variance_basis",
       "frozen_case_utility_scale_or_cost_matrix",
+      "frozen_failure_floor_utility_rules",
+      "frozen_cases_per_participant",
       "material_effect_threshold",
-      "participant-level utility variance_assumption_or_pilot-independent_basis",
+      "participant-level_composite_utility_variance_assumption_or_pilot-independent_basis",
       "nominal_error_level",
       "target_power_or_precision",
       "anticipated_preregistered_attrition_or_nonresponse_handling"
@@ -143,8 +178,10 @@
     "stated_wtp_counts_as_revealed_wtp": false
   },
   "activation_blockers": [
-    "EXACT_CASE_SET_NOT_YET_FROZEN",
-    "CASE_SPECIFIC_UTILITY_RULES_NOT_YET_FROZEN",
+    "EXACT_EXHAUSTIVE_CASE_SET_NOT_YET_FROZEN",
+    "CASE_SPECIFIC_UTILITY_AND_FAILURE_FLOOR_RULES_NOT_YET_FROZEN",
+    "CASES_PER_PARTICIPANT_NOT_YET_FROZEN",
+    "EXACT_PARTICIPANT_TO_CASE_ALLOCATION_NOT_YET_FROZEN",
     "MATERIAL_EFFECT_THRESHOLD_NOT_YET_FROZEN",
     "POWER_PRECISION_ANALYSIS_NOT_YET_FROZEN",
     "TARGET_SAMPLE_SIZE_NOT_YET_FROZEN",
@@ -154,8 +191,9 @@
     "DECISION_COHORT_ACTIVATION_ARTIFACT_NOT_CREATED"
   ],
   "next_authorized_work": [
-    "FREEZE_EXACT_MATURED_CASE_SET",
-    "FREEZE_CASE_SPECIFIC_UTILITY_RULES",
+    "FREEZE_EXACT_EXHAUSTIVE_MATURED_CASE_SET_FROM_OUTCOME_INDEPENDENT_ELIGIBILITY_RULE",
+    "FREEZE_CASE_SPECIFIC_UTILITY_AND_FAILURE_FLOOR_RULES",
+    "FREEZE_CASES_PER_PARTICIPANT_AND_ARM_INDEPENDENT_ALLOCATION_MAPPING",
     "RUN_PRE_OUTCOME_INDEPENDENT_POWER_PRECISION_ANALYSIS",
     "FREEZE_PARTICIPANT_ELIGIBILITY_AND_RECRUITMENT_RULES",
     "CREATE_DECISION_COHORT_ACTIVATION_ARTIFACT_ONLY_AFTER_ALL_BLOCKERS_CLOSE"
