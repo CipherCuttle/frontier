@@ -27,6 +27,12 @@ def _string_list(value: object) -> list[str]:
     return result
 
 
+def _int_value(value: object) -> int:
+    assert isinstance(value, int)
+    assert not isinstance(value, bool)
+    return value
+
+
 def test_decision_value_wtp_preregistration_preserves_scientific_authority() -> None:
     prereg = _prereg()
 
@@ -149,7 +155,7 @@ def test_revealed_wtp_binds_one_offer_and_full_price_schedule_contract() -> None
     assert market["revealed_wtp_requires_real_payment_commitment"] is True
     assert market["stated_wtp_is_diagnostic_only"] is True
     assert market["price_schedule_must_be_content_addressed_and_frozen_before_first_offer"] is True
-    assert market["price_schedule_minimum_nonzero_points_per_segment"] >= 3
+    assert _int_value(market["price_schedule_minimum_nonzero_points_per_segment"]) >= 3
     assert market["same_entitlement_and_terms_across_price_arms"] is True
     assert market["offers_per_participant_per_entitlement_per_schedule"] == 1
     assert market["repeat_or_negotiated_offer_before_primary_conversion_outcome"] is False
