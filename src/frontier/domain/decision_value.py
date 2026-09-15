@@ -1262,7 +1262,9 @@ def validate_commercial_reporting_manifest(
         source_event_inventory.complete_source_event_digests,
         field="complete_source_event_digests",
     ):
-        raise ValueError("commercial reporting omits or adds independently inventoried source events")
+        raise ValueError(
+            "commercial reporting omits or adds independently inventoried source events"
+        )
 
     validate_unique_primary_offers(offers)
     offer_by_digest = {offer.artifact_digest: offer for offer in offers}
