@@ -55,8 +55,7 @@ def test_decision_study_is_randomized_equal_horizon_and_intention_to_treat() -> 
         is True
     )
     assert (
-        decision["outcome_dependent_early_stopping_without_preregistered_sequential_rule"]
-        is False
+        decision["outcome_dependent_early_stopping_without_preregistered_sequential_rule"] is False
     )
 
 
