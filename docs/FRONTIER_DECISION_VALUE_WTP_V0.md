@@ -31,7 +31,10 @@ This protocol MUST NOT:
 - count a verbal statement of willingness to pay as revealed WTP;
 - personalize prices after observing an individual participant's decisions, wealth, employer, or expressed enthusiasm;
 - discard participants, losses, non-purchases, refunds, or failures because they make the product look weaker;
-- stop a confirmatory cohort early because interim outcomes look favorable or unfavorable unless a separately preregistered sequential rule explicitly authorizes that behavior;
+- expose one participant to both packet variants inside the same confirmatory cohort;
+- repeatedly inspect an ordinary fixed-sample interval or test and stop when it becomes favorable;
+- stop a confirmatory cohort early unless a separately frozen sequential rule provides valid repeated-look error control or anytime-valid uncertainty;
+- select a favorable domain, segment, pooled result, direction, or cohort after outcomes are observed and call it the primary confirmatory result;
 - claim product superiority from this V0 alone.
 
 This phase is diagnostic product research. It does not grant ranking promotion authority.
@@ -62,19 +65,19 @@ A scientific win with no decision impact is not automatically commercially valua
 
 ## 4. Unit of evaluation
 
-The decision-study unit is a `decision_case` with a unique stable ID and a packet generated from evidence whose knowledge horizon is fixed before the participant sees it.
+The decision-study observation is a `decision_case` with a unique stable ID and a packet generated from evidence whose knowledge horizon is fixed before the participant sees it. Treatment assignment is at the participant level for confirmatory V0 cohorts.
 
 Each case binds:
 
 - case ID;
 - domain;
 - exact knowledge horizon;
-- packet variant;
+- packet variant derived from the participant's frozen assignment;
 - packet schema/protocol digest;
 - evidence/benchmark artifact references needed to audit the packet;
 - one frozen decision question;
 - one frozen action set;
-- one frozen primary utility function or regret rule;
+- one frozen utility function or regret rule;
 - optional secondary time/confidence measurements;
 - maturation rule for the decision outcome.
 
@@ -115,24 +118,43 @@ The packet is a compression layer over evidence, not a new truth authority.
 
 ## 7. Decision-study design
 
-V0 uses randomized, blocked, case-level assignment.
+V0 confirmatory cohorts use randomized, blocked, **participant-level** assignment.
 
 Rules:
 
-- a participant sees each decision case only once;
-- assignment is blocked by preregistered domain and case class when those strata exist;
-- within a participant, distinct cases may be assigned across both packet variants so participant-specific skill can be modeled without showing the same case twice;
-- the participant is not told which packet is the experimental treatment;
+- each participant is assigned exactly one of `BASELINE_PACKET` or `FRONTIER_PACKET` for the entire confirmatory cohort;
+- a participant may not cross over to the other packet variant within that cohort;
+- a participant sees each decision case at most once;
+- assignment is blocked by participant strata frozen before enrollment, such as preregistered segment and expertise band where those strata are used;
+- the case set and case-allocation policy must be the same across treatment arms, except for preregistered protocol failures;
+- case order must be frozen or randomized by a treatment-independent preregistered mechanism;
+- the participant is not told which packet class is the experimental treatment;
 - cases used for confirmatory decision claims must be frozen before assignment;
-- case exclusion after assignment is allowed only for preregistered protocol failures and remains reported;
-- before enrollment, the cohort must freeze either a target sample size justified by power/precision analysis or an explicit sequential precision/stopping rule;
-- absent that separately frozen sequential rule, outcome-dependent early stopping is forbidden.
+- case or participant exclusion after assignment is allowed only for preregistered protocol failures and remains reported;
+- analyses with repeated cases per participant must account for participant-level clustering or use a preregistered participant-level aggregation;
+- before enrollment, the cohort must freeze either a fixed target sample size justified by power/precision analysis or an explicitly sequential design with valid repeated-look error control.
 
-The primary comparison is intention-to-treat by assigned packet variant.
+The primary comparison is intention-to-treat by participant assignment.
 
-## 8. Decision metrics
+This participant-level V0 design deliberately gives up some within-person efficiency to prevent FRONTIER exposure from teaching framing, provenance cues, or decision strategies that could contaminate later baseline responses.
 
-Every confirmatory decision cohort must freeze one primary utility/regret metric before enrollment.
+## 8. Decision estimand, metrics, multiplicity, and stopping
+
+Every confirmatory decision cohort must freeze exactly one primary estimand before enrollment. The cohort activation artifact must bind:
+
+- target participant population/segment;
+- eligible domain/case population;
+- unit of analysis;
+- primary outcome/utility or regret metric;
+- treatment contrast, normally `FRONTIER_PACKET - BASELINE_PACKET`;
+- direction/sidedness of the confirmatory claim;
+- aggregation across repeated cases, if any;
+- analysis model or estimator and participant-clustering treatment;
+- material-effect threshold used for the product decision;
+- uncertainty interval/test and nominal error level;
+- the confirmatory multiplicity family and adjustment/gatekeeping policy.
+
+Per-domain, per-segment, per-cohort, pooled, directional, and alternate-metric claims are secondary unless they are explicitly included in the frozen confirmatory family. Unadjusted secondary analyses must be labeled exploratory and may not be promoted into the primary claim after outcomes are known.
 
 Allowed outcome components include:
 
@@ -146,14 +168,30 @@ Allowed outcome components include:
 
 Time saved is product value only if the decision quality is not degraded beyond the preregistered tolerance.
 
+### 8.1 Stopping semantics
+
+The default confirmatory V0 design is fixed-sample.
+
+If a sequential design is used, its activation artifact must freeze before enrollment:
+
+- maximum sample size and permitted look schedule or anytime-valid monitoring rule;
+- target type-I/error budget and sidedness where a hypothesis claim is made;
+- an error-spending boundary, confidence sequence, or other method with documented repeated-look operating characteristics;
+- futility stopping, if any;
+- the exact software/method version used to compute boundaries or intervals;
+- offline validation or simulation demonstrating the claimed null error/coverage behavior for the planned design.
+
+Merely preregistering repeated use of an ordinary fixed-sample p-value or confidence interval is insufficient.
+
 The default reporting set is:
 
+- the frozen primary estimand and estimate;
 - primary utility/regret delta between packet variants;
 - decision-change rate;
 - median and distribution of time-to-decision;
 - false-action and missed-action burden;
 - abstention rate and abstention quality;
-- per-domain and pooled results;
+- per-domain and pooled results labeled according to their confirmatory/exploratory status;
 - all protocol failures and unresolved outcomes.
 
 No favorable average may replace the full distribution.
@@ -174,22 +212,34 @@ User behavior, purchases, internal sharing, or public discussion generated by th
 
 WTP is measured by real economic commitment, not stated preference alone.
 
-Before the first participant receives a price offer, a subordinate `PRICE_SCHEDULE_V0` artifact must freeze:
+Before the first participant receives a price offer, a subordinate content-addressed `PRICE_SCHEDULE_V0` artifact must freeze:
 
-- product entitlement being sold;
+- schedule ID and digest;
+- exact product entitlement being sold;
 - billing period or fixed pilot duration;
 - currency;
+- whether quoted price is tax-inclusive or tax-exclusive and the applicable tax treatment;
 - at least three non-zero price points for each tested segment, unless a documented feasibility constraint authorizes two;
 - assignment probabilities;
-- target offer count per segment/price or a preregistered precision/sequential stopping rule;
+- target offer count per segment/price or a valid sequential design under the rules below;
 - refund/cancellation terms;
-- whether tax is included;
-- renewal behavior;
-- exact definition of conversion.
+- renewal/continuation terms;
+- exact definition and observation window of primary conversion;
+- participant eligibility and segment assignment rules.
 
-Price assignment is randomized within a preregistered segment. One participant receives one offer for the same entitlement. There is no participant-level renegotiation before the primary conversion outcome is recorded.
+All price arms within one schedule test the same entitlement, duration, tax basis, refund/cancellation terms, renewal terms, and conversion definition. Only the randomized price may differ unless another factor is explicitly preregistered as a separate factorial experiment.
 
-Unless the frozen price schedule contains an explicit sequential rule, price-cell enrollment may not stop early in response to observed conversions or non-conversions.
+Each participant receives **at most one primary offer for a given entitlement under a given price schedule**. The `CommercialOfferReceiptV0` must bind participant pseudonymous ID, segment, assigned price, entitlement identity, price-schedule digest, offer time, and conversion observation window. A repeat or negotiated offer before the primary conversion outcome is recorded invalidates that participant for the primary revealed-WTP estimand but remains retained as a protocol deviation.
+
+Price assignment is randomized within a preregistered segment. Decision performance, enthusiasm, employer, wealth, or prior response may not personalize the assigned price.
+
+### 10.1 WTP stopping semantics
+
+The default V0 price experiment uses fixed target offer counts per segment/price cell.
+
+If sequential monitoring is used, the frozen price schedule must provide an anytime-valid confidence sequence, error-spending design, or other method with documented repeated-look operating characteristics for every confirmatory stopping/claim rule. It must also freeze maximum enrollment, look schedule or anytime-valid rule, error/coverage target, and offline operating-characteristic validation.
+
+Repeatedly checking ordinary fixed-sample conversion intervals and stopping a price cell when the result becomes attractive is forbidden even if the checking cadence was written down in advance.
 
 A participant counts as a purchase only after a real payment authorization or settled payment under the frozen offer. Coupons, founder favors, barter, internal team payments, test charges, and manually comped access do not count as revealed WTP.
 
@@ -207,20 +257,23 @@ These are hypotheses, not product commitments. Segment-specific results must be 
 
 Adding a materially different segment requires a new preregistered segment identifier and must not rewrite prior cohorts.
 
-## 12. WTP metrics
+## 12. WTP estimand, multiplicity, and metrics
+
+Before the first offer, each confirmatory WTP cohort must freeze one primary commercial estimand, its target segment/population, price-schedule cells included, observation window, direction if a hypothesis claim is used, and multiplicity family/policy for any confirmatory segment-, price-, pooled-, or cohort-level claims.
+
+The primary V0 commercial estimand should normally describe the demand curve or a prespecified function of that curve over the frozen price schedule. The highest anecdotal accepted price is not a primary estimand.
 
 Required reporting includes:
 
 - offer count by segment and price;
 - completed real-payment conversions by segment and price;
-- conversion probability with uncertainty;
+- conversion probability with uncertainty valid for the frozen design;
 - refunds/chargebacks;
 - post-purchase active usage under a frozen usage definition;
 - renewal or continuation when the cohort reaches the relevant boundary;
 - cancellation/non-renewal;
-- support/manual-intervention burden needed to obtain or retain the purchase.
-
-The primary V0 commercial metric is the observed demand curve over the frozen price schedule, not the highest anecdotal price accepted by one buyer.
+- support/manual-intervention burden needed to obtain or retain the purchase;
+- protocol deviations including repeat offers, negotiation, and failed payment attempts.
 
 Stated WTP may be collected diagnostically but is reported separately from revealed WTP.
 
@@ -237,7 +290,7 @@ Analysis may estimate relationships among:
 - usage;
 - renewal.
 
-These relationships are diagnostic in V0 unless separately preregistered as confirmatory hypotheses.
+These relationships are diagnostic in V0 unless separately preregistered inside the confirmatory estimand/multiplicity family.
 
 ## 14. Kill criteria and interpretation
 
@@ -259,6 +312,7 @@ No threshold for commercial viability is invented in this document because cost 
 
 Implementation following this governance phase should introduce immutable diagnostic artifacts equivalent to:
 
+- `DecisionCohortActivationV0`;
 - `DecisionCaseV0`;
 - `DecisionResponseReceiptV0`;
 - `DecisionOutcomeReceiptV0`;
@@ -266,7 +320,7 @@ Implementation following this governance phase should introduce immutable diagno
 - `CommercialOfferReceiptV0`;
 - `CommercialOutcomeReceiptV0`.
 
-Artifacts must be content-addressable/digest-bound, retain timestamps, preserve failures/nonresponse, and remain outside canonical ranking authority.
+Artifacts must be content-addressable/digest-bound, retain timestamps, preserve failures/nonresponse/protocol deviations, and remain outside canonical ranking authority.
 
 The implementation phase must reuse existing canonical JSON/digest conventions where practical rather than create a parallel serialization system.
 
@@ -277,13 +331,14 @@ No confirmatory decision/WTP cohort may start until:
 1. this protocol is merged and `FROZEN_V0`;
 2. packet schemas and receipts have an independently reviewed implementation;
 3. the exact case-set/case-generation protocol is frozen;
-4. the primary decision utility/regret metric is frozen;
-5. participant inclusion/exclusion rules are frozen;
-6. randomization and failure semantics are frozen;
-7. target sample size/precision and stopping semantics are frozen before enrollment or offers;
-8. for WTP, `PRICE_SCHEDULE_V0` is frozen before any offer;
-9. active scientific benchmark alerts remain protected from exposure contamination;
-10. one independent hostile review for the bounded implementation phase is complete.
+4. one primary estimand/contrast, population, direction, analysis unit, and materiality threshold are frozen;
+5. confirmatory multiplicity family and adjustment/gatekeeping policy are frozen;
+6. participant inclusion/exclusion rules and blocked participant-level assignment are frozen;
+7. case-order/allocation, clustering/aggregation, and failure semantics are frozen;
+8. fixed sample size/precision is frozen, or any sequential design has repeated-look-valid error/coverage semantics and offline operating-characteristic validation;
+9. for WTP, the content-addressed `PRICE_SCHEDULE_V0` freezes the exact entitlement, price cells, currency/tax basis, duration, renewal/refund terms, one-offer rule, conversion definition/window, and offer-count/stopping design before any offer;
+10. active scientific benchmark alerts remain protected from exposure contamination;
+11. one independent hostile review for the bounded implementation phase is complete.
 
 ## 17. What this phase does not prove
 
