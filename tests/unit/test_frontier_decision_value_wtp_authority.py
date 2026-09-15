@@ -35,6 +35,7 @@ def test_decision_value_wtp_preregistration_preserves_scientific_authority() -> 
         "BENCHMARK_CAPTURE_V0_MUTATION",
         "CANONICAL_PUBLIC_RANKING_CHANGE",
         "USER_REACTION_AS_SCIENTIFIC_OUTCOME_LABEL",
+        "OUTCOME_DEPENDENT_EARLY_STOPPING_WITHOUT_PREREGISTERED_SEQUENTIAL_RULE",
     } <= forbidden
 
 
@@ -49,6 +50,8 @@ def test_decision_study_is_randomized_equal_horizon_and_intention_to_treat() -> 
     assert decision["primary_analysis"] == "INTENTION_TO_TREAT"
     assert decision["packet_equal_knowledge_horizon_required"] is True
     assert decision["primary_utility_metric_must_be_frozen_before_enrollment"] is True
+    assert decision["sample_size_or_sequential_precision_rule_must_be_frozen_before_enrollment"] is True
+    assert decision["outcome_dependent_early_stopping_without_preregistered_sequential_rule"] is False
 
 
 def test_revealed_wtp_requires_real_payment_and_frozen_randomized_prices() -> None:
@@ -61,6 +64,8 @@ def test_revealed_wtp_requires_real_payment_and_frozen_randomized_prices() -> No
     assert market["price_schedule_must_be_frozen_before_first_offer"] is True
     assert market["price_schedule_minimum_nonzero_points_per_segment"] >= 3
     assert market["price_assignment"] == "RANDOMIZED_WITHIN_PREREGISTERED_SEGMENT"
+    assert market["target_offer_count_or_sequential_precision_rule_must_be_frozen_before_first_offer"] is True
+    assert market["outcome_dependent_price_cell_stopping_without_preregistered_sequential_rule"] is False
     assert market["participant_level_renegotiation_before_primary_conversion_outcome"] is False
     assert market["personalized_pricing_using_participant_attributes_or_prior_response"] is False
     assert market["refunds_and_chargebacks_must_remain_visible"] is True
