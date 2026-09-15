@@ -1,0 +1,210 @@
+{
+  "schema_version": "frontier-decision-cohort-design-v0",
+  "cohort_id": "decision-ai-software-strategy-v0",
+  "status": "CANDIDATE_DESIGN_PENDING_MERGE_AND_ACTIVATION_BLOCKERS",
+  "parent_phase": "FRONTIER_DECISION_VALUE_WTP_V0",
+  "parent_protocol_digest": "sha256:58887a83812b54248c5c7e7aa03684757719199804a2c08fefc1d830f56301c3",
+  "parent_main_sha": "53591df4dfc0cc12c47db2c45abae805bfcebe87",
+  "objective": "Test whether a FRONTIER decision packet improves decision utility for AI/software research and strategy decisions relative to the strongest cheap/simple baseline packet available at the identical knowledge horizon.",
+  "activation_authorized": false,
+  "enrollment_authorized": false,
+  "market_offer_authorized": false,
+  "target_segment": "AI_SOFTWARE_RESEARCH_STRATEGY",
+  "target_population": "Technical decision-makers responsible for AI/software research, technology strategy, technical diligence, or adjacent build-versus-watch decisions who satisfy a later frozen participant eligibility contract.",
+  "decision_job": {
+    "decision_question_template": "Given only evidence available at the frozen knowledge horizon, what should the team do next about this development?",
+    "action_set": [
+      "IGNORE",
+      "WATCH",
+      "INVESTIGATE",
+      "ACT",
+      "ABSTAIN"
+    ],
+    "action_semantics": {
+      "IGNORE": "No further work inside the frozen reassessment horizon.",
+      "WATCH": "Track for a later trigger without allocating active diligence now.",
+      "INVESTIGATE": "Allocate bounded analyst or engineering diligence now.",
+      "ACT": "Commit a material resource or operational response now under the case-specific frozen utility rule.",
+      "ABSTAIN": "Evidence is insufficient to choose a directional action under the frozen case contract."
+    }
+  },
+  "case_policy": {
+    "confirmatory_material": "MATURED_PREVIOUSLY_SHADOWED_OBSERVATORY_CASE",
+    "historical_reconstruction_confirmatory": false,
+    "active_scored_alert_exposure_allowed": false,
+    "knowledge_horizon_equal_across_packet_variants": true,
+    "exact_case_set_required_before_activation": true,
+    "eligible_universe_rule": "At case-set freeze include every canonical Value Observatory case registered prospectively under BENCHMARK_CAPTURE_V0 that was shadowed before maturation, has valid matured outcome authority, has every required case binding, and was not exposed as an active scored alert. Eligibility is determined only from preregistered identity/provenance/knowledge-horizon/shadow-state/coverage fields plus structural completeness; outcome label, outcome magnitude, arm result, rank, score, packet content, treatment contrast, or commercial appeal may not enter eligibility.",
+    "eligible_universe_source_ids": [
+      "arxiv.cs-ai",
+      "cisa.kev",
+      "gdelt.frontier",
+      "github.ml-repos",
+      "hf.models",
+      "hn.frontpage",
+      "pypi.updates"
+    ],
+    "case_set_sampling_rule": "EXHAUSTIVE_INCLUDE_ALL_ELIGIBLE_CASES_NO_OUTCOME_CONDITIONING",
+    "case_inclusion_must_not_condition_on": [
+      "OUTCOME_LABEL_OR_MAGNITUDE",
+      "BASELINE_DIFFICULTY_OR_BASELINE_OUTCOME",
+      "FRONTIER_PACKET_CONTENT",
+      "FRONTIER_PACKET_PERFORMANCE",
+      "FRONTIER_RANK_OR_SCORE_ADVANTAGE",
+      "ANY_ARM_OUTPUT_OR_ARM_DIFFERENCE",
+      "PARTICIPANT_RESPONSE",
+      "POST_HOC_COMMERCIAL_APPEAL"
+    ],
+    "case_required_bindings": [
+      "case_id",
+      "knowledge_horizon",
+      "eligible_matured_outcome_authority",
+      "baseline_packet_digest",
+      "frontier_packet_digest",
+      "evidence_digests",
+      "utility_rule_digest",
+      "maturation_rule"
+    ],
+    "utility_rule_required_fields": [
+      "resolved_action_utility_mapping_or_cost_matrix",
+      "failure_floor_utility_microunits",
+      "utility_scale_bounds",
+      "outcome_authority_binding"
+    ],
+    "case_order_policy": "TREATMENT_INDEPENDENT_HASH_ORDER",
+    "same_case_seen_twice_by_participant": false
+  },
+  "participant_case_allocation_policy": {
+    "allocation_must_be_frozen_before_activation": true,
+    "allocation_must_be_arm_independent": true,
+    "treatment_label_may_enter_allocation": false,
+    "cases_per_participant": null,
+    "cases_per_participant_must_be_equal_across_arms": true,
+    "allocation_algorithm": "For each participant, order the exact frozen case set by SHA256 over participant_id_digest, case_id, case_set_digest, and a frozen allocation_policy_digest; assign the first K cases, where K is frozen before activation. Treatment assignment and packet variant are excluded from every allocation input.",
+    "exact_participant_to_case_mapping_digest_required_before_activation": true,
+    "post_assignment_case_substitution_allowed": false,
+    "allocation_failure": "PROTOCOL_FAILURE_NO_SUBSTITUTION"
+  },
+  "packet_policy": {
+    "variants": [
+      "BASELINE_PACKET",
+      "FRONTIER_PACKET"
+    ],
+    "participant_blinded_to_treatment_label": true,
+    "equal_knowledge_horizon": true,
+    "frontier_required_fields": [
+      "what_changed",
+      "why_unusual",
+      "knowledge_horizon",
+      "independent_provenance_roots_or_role_transitions",
+      "counter_evidence_or_coverage_limits",
+      "uncertainty_state",
+      "decision_class_including_abstain",
+      "expiry_or_reassessment_horizon",
+      "falsifier_or_material_weakener",
+      "audit_references_or_digests"
+    ],
+    "baseline_rule": "Strongest cheap/simple comparator available under the identical case knowledge horizon; no hidden FRONTIER experimental features and no treatment-dependent information-budget expansion."
+  },
+  "primary_estimand_candidate": {
+    "confirmatory_estimand_count": 1,
+    "target_population_or_segment": "AI_SOFTWARE_RESEARCH_STRATEGY",
+    "eligible_domain_or_case_population": "The exhaustive exact later-frozen case set produced by case_policy.eligible_universe_rule; no outcome-conditioned sampling is allowed.",
+    "analysis_unit": "PARTICIPANT",
+    "primary_outcome_or_utility_metric": "PARTICIPANT_LEVEL_MEAN_ASSIGNED_CASE_COMPOSITE_UTILITY_MICROUNITS",
+    "treatment_contrast": "FRONTIER_PACKET_MINUS_BASELINE_PACKET",
+    "direction_or_sidedness": "SUPERIORITY_ONE_SIDED",
+    "repeated_case_aggregation": "Arithmetic mean over every case assigned to the participant using a fixed assigned-case denominator. A valid resolved response contributes the case-specific frozen action utility. Missing response, packet-generation failure, wrong packet/assignment, or other participant-side protocol failure contributes that case's preregistered failure_floor_utility_microunits and is never removed from the denominator. A participant with zero valid responses therefore still has a defined primary utility. If an already-required matured canonical outcome authority becomes invalid or unavailable, the cohort primary confirmatory claim becomes PROTOCOL_FAILURE_NO_CONFIRMATORY_CLAIM rather than dropping or imputing that case.",
+    "missingness_strategy": "FIXED_DENOMINATOR_FAIL_CLOSED_COMPOSITE_UTILITY",
+    "analysis_model_or_estimator": "Difference in randomized-arm participant-level mean composite utility with design-valid uncertainty; exact estimator and robust/small-sample method must be frozen before activation.",
+    "participant_clustering_treatment": "Participant is the analysis unit; repeated assigned cases are aggregated before the primary arm contrast.",
+    "material_effect_threshold": "PENDING_FROZEN_COST_MATRIX_AND_POWER_PRECISION_ANALYSIS",
+    "uncertainty_method_and_nominal_error_level": "PENDING_POWER_PRECISION_ANALYSIS",
+    "confirmatory_multiplicity_family": "ONE_PRIMARY_COHORT_LEVEL_UTILITY_CONTRAST_ONLY",
+    "multiplicity_adjustment_or_gatekeeping_policy": "No alternate domain, segment, pooled, direction, time-saved, missingness strategy, or secondary metric may replace the primary contrast; all such analyses are exploratory unless separately frozen before activation."
+  },
+  "randomization_policy": {
+    "assignment_unit": "PARTICIPANT",
+    "assignment": "RANDOMIZED_BLOCKED_PARTICIPANT_LEVEL",
+    "primary_analysis": "INTENTION_TO_TREAT_BY_PARTICIPANT_ASSIGNMENT",
+    "participant_exposure_to_both_variants": false,
+    "initial_blocking": "SINGLE_SEGMENT_BLOCK_ONLY",
+    "expertise_subblocks_authorized": false,
+    "exact_participant_to_block_mapping_required_before_activation": true,
+    "treatment_allocation": "1:1 within the frozen block unless the later activation artifact documents a different preregistered allocation before enrollment."
+  },
+  "failure_semantics": {
+    "missing_response": "ASSIGNED_CASE_RETAINS_FIXED_DENOMINATOR_AND_USES_FROZEN_FAILURE_FLOOR_UTILITY",
+    "unresolved_case_outcome": "NOT_ELIGIBLE_AT_CASE_SET_FREEZE; IF_MATURED_OUTCOME_AUTHORITY_LATER_BECOMES_INVALID_THEN_PROTOCOL_FAILURE_NO_CONFIRMATORY_CLAIM",
+    "protocol_failure": "ASSIGNED_CASE_RETAINS_FIXED_DENOMINATOR_AND_USES_FROZEN_FAILURE_FLOOR_UTILITY_UNLESS_FAILURE_INVALIDATES_OUTCOME_AUTHORITY",
+    "packet_generation_failure": "FAILURE_FLOOR_UTILITY_NO_SUBSTITUTION_OR_BACKFILL",
+    "wrong_packet_or_assignment": "FAILURE_FLOOR_UTILITY_NO_RELABELING",
+    "post_horizon_information_detected": "PROTOCOL_FAILURE_NO_RELABELING; FAILURE_FLOOR_UTILITY_IF_OUTCOME_AUTHORITY_REMAINS_VALID",
+    "participant_exclusion_after_assignment": "NO_PRIMARY_ESTIMAND_EXCLUSION; PREREGISTERED_PROTOCOL_FAILURES_REMAIN_IN_INTENTION_TO_TREAT_FLOW",
+    "failed_or_unresolved_cases_create_frontier_win": false
+  },
+  "stopping_and_power": {
+    "design_class": "FIXED_SAMPLE",
+    "sequential_monitoring": false,
+    "ordinary_repeated_peeking_allowed": false,
+    "target_sample_size": null,
+    "power_precision_analysis_required_before_activation": true,
+    "power_precision_inputs_required": [
+      "exact_case_set_or_case-level_variance_basis",
+      "frozen_case_utility_scale_or_cost_matrix",
+      "frozen_failure_floor_utility_rules",
+      "frozen_cases_per_participant",
+      "material_effect_threshold",
+      "participant-level_composite_utility_variance_assumption_or_pilot-independent_basis",
+      "nominal_error_level",
+      "target_power_or_precision",
+      "anticipated_preregistered_attrition_or_nonresponse_handling"
+    ],
+    "sample_size_may_not_be_selected_from_observed_treatment_results": true
+  },
+  "secondary_metrics_exploratory_unless_later_frozen": [
+    "DECISION_CHANGE_RATE",
+    "TIME_TO_DECISION",
+    "FALSE_ACTION_BURDEN",
+    "MISSED_ACTION_BURDEN",
+    "ABSTENTION_RATE",
+    "ABSTENTION_QUALITY",
+    "CONFIDENCE_CALIBRATION"
+  ],
+  "market_loop": {
+    "enabled_in_this_artifact": false,
+    "price_schedule_required_before_any_offer": true,
+    "decision_performance_may_personalize_price": false,
+    "stated_wtp_counts_as_revealed_wtp": false
+  },
+  "activation_blockers": [
+    "EXACT_EXHAUSTIVE_CASE_SET_NOT_YET_FROZEN",
+    "CASE_SPECIFIC_UTILITY_AND_FAILURE_FLOOR_RULES_NOT_YET_FROZEN",
+    "CASES_PER_PARTICIPANT_NOT_YET_FROZEN",
+    "EXACT_PARTICIPANT_TO_CASE_ALLOCATION_NOT_YET_FROZEN",
+    "MATERIAL_EFFECT_THRESHOLD_NOT_YET_FROZEN",
+    "POWER_PRECISION_ANALYSIS_NOT_YET_FROZEN",
+    "TARGET_SAMPLE_SIZE_NOT_YET_FROZEN",
+    "EXACT_PARTICIPANT_ELIGIBILITY_RULES_NOT_YET_FROZEN",
+    "EXACT_PARTICIPANT_TO_BLOCK_MAPPING_NOT_YET_FROZEN",
+    "FINAL_PRIMARY_ESTIMATOR_AND_UNCERTAINTY_METHOD_NOT_YET_FROZEN",
+    "DECISION_COHORT_ACTIVATION_ARTIFACT_NOT_CREATED"
+  ],
+  "next_authorized_work": [
+    "FREEZE_EXACT_EXHAUSTIVE_MATURED_CASE_SET_FROM_OUTCOME_INDEPENDENT_ELIGIBILITY_RULE",
+    "FREEZE_CASE_SPECIFIC_UTILITY_AND_FAILURE_FLOOR_RULES",
+    "FREEZE_CASES_PER_PARTICIPANT_AND_ARM_INDEPENDENT_ALLOCATION_MAPPING",
+    "RUN_PRE_OUTCOME_INDEPENDENT_POWER_PRECISION_ANALYSIS",
+    "FREEZE_PARTICIPANT_ELIGIBILITY_AND_RECRUITMENT_RULES",
+    "CREATE_DECISION_COHORT_ACTIVATION_ARTIFACT_ONLY_AFTER_ALL_BLOCKERS_CLOSE"
+  ],
+  "not_authorized": [
+    "ENROLL_PARTICIPANTS",
+    "SHOW_CONFIRMATORY_PACKETS_TO_PARTICIPANTS",
+    "CREATE_OR_SEND_PRICE_OFFERS",
+    "ACTIVATE_SEQUENTIAL_MONITORING",
+    "USE_ACTIVE_SCORED_BENCHMARK_ALERTS",
+    "MUTATE_SCIENTIFIC_BENCHMARK_OR_RANKING_AUTHORITY",
+    "CLAIM_DECISION_VALUE_OR_PRODUCT_SUPERIORITY"
+  ]
+}
