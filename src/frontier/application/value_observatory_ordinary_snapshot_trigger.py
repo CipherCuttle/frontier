@@ -11,9 +11,7 @@ from typing import cast
 
 REQUEST_SCHEMA_V0 = "frontier-ordinary-prehorizon-probe-request-v0"
 REQUEST_DIRECTORY_V0 = ".github/probe-requests/ordinary-prehorizon-v0"
-_REQUEST_PATH_RE = re.compile(
-    r"^\.github/probe-requests/ordinary-prehorizon-v0/[^/]+\.json$"
-)
+_REQUEST_PATH_RE = re.compile(r"^\.github/probe-requests/ordinary-prehorizon-v0/[^/]+\.json$")
 _SNAPSHOT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 _UTC_Z_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _ALLOWED_BOUNDARY_HOURS = frozenset({0, 6, 12, 18})
