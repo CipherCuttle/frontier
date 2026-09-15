@@ -614,7 +614,9 @@ class PriceScheduleV0:
                 raise ValueError(f"segment {segment_id} assignment weights must sum to 10000 bps")
         if self.sequential_monitoring:
             if self.sequential_validity_evidence is None:
-                raise ValueError("sequential price monitoring requires validated sequential evidence")
+                raise ValueError(
+                    "sequential price monitoring requires validated sequential evidence"
+                )
             if self.sequential_validity_evidence.frozen_at > self.frozen_at:
                 raise ValueError("sequential evidence must be frozen before price schedule")
             if self.target_offer_count_per_cell is not None:
@@ -1026,7 +1028,10 @@ def validate_commercial_outcome(
         raise ValueError("commercial outcome predates offer")
     if outcome.kind in _PRIMARY_WINDOW_KINDS and outcome.recorded_at > offer.conversion_deadline:
         raise ValueError("primary commercial outcome is outside frozen conversion window")
-    if outcome.kind is CommercialOutcomeKind.OFFER_EXPIRED and outcome.recorded_at < offer.conversion_deadline:
+    if (
+        outcome.kind is CommercialOutcomeKind.OFFER_EXPIRED
+        and outcome.recorded_at < offer.conversion_deadline
+    ):
         raise ValueError("offer cannot expire before frozen conversion deadline")
     if outcome.kind in _PAYMENT_AMOUNT_KINDS:
         if outcome.currency != offer.currency:
@@ -1151,7 +1156,10 @@ def validate_commercial_reporting_manifest(
         evidence_by_outcome[evidence.outcome_receipt_digest] = evidence
 
     for outcome in outcomes:
-        if outcome.kind in _REVEALED_WTP_OUTCOME_KINDS and outcome.artifact_digest not in evidence_by_outcome:
+        if (
+            outcome.kind in _REVEALED_WTP_OUTCOME_KINDS
+            and outcome.artifact_digest not in evidence_by_outcome
+        ):
             raise ValueError("payment outcome is missing processor evidence")
 
     for offer in offers:
