@@ -16,23 +16,28 @@ from frontier.domain.decision_value import (
     CommercialOutcomeKind,
     CommercialOutcomeManifestV0,
     CommercialOutcomeReceiptV0,
+    CommercialSourceEventInventoryV0,
     DecisionCaseV0,
     DecisionCohortActivationV0,
     DecisionOutcomeReceiptV0,
     DecisionOutcomeStatus,
     DecisionResponseReceiptV0,
     PacketVariant,
+    ParticipantBlockAssignmentV0,
     PaymentEvidenceKind,
     PaymentEvidenceV0,
     PriceCellV0,
     PriceScheduleV0,
     RandomizationBlockV0,
     RandomizationPlanV0,
+    SequentialFutilityPolicy,
     SequentialMethod,
+    SequentialSidedness,
     SequentialValidityEvidenceV0,
     commercial_offer_set_digest,
     commercial_outcome_set_digest,
     decision_case_set_digest,
+    expected_assignment_block,
     expected_packet_variant,
     payment_evidence_set_digest,
     qualifies_as_revealed_wtp,
@@ -70,12 +75,16 @@ def _sequential(**overrides: object) -> SequentialValidityEvidenceV0:
     values: dict[str, object] = {
         "evidence_id": "seq-001",
         "frozen_at": T0 - timedelta(hours=2),
+        "stopping_plan_digest": _digest("9"),
         "method": SequentialMethod.ERROR_SPENDING,
         "method_version": "lan-demets-v1",
         "max_sample_size": 100,
         "look_schedule": (25, 50, 75, 100),
         "error_target_ppm": 50_000,
+        "sidedness": SequentialSidedness.TWO_SIDED,
+        "boundary_specification_digest": _digest("0"),
         "operating_characteristic_validation_digest": _digest("1"),
+        "futility_policy": SequentialFutilityPolicy.NONE,
     }
     values.update(overrides)
     return SequentialValidityEvidenceV0(**values)  # type: ignore[arg-type]
@@ -86,6 +95,9 @@ def _plan(**overrides: object) -> RandomizationPlanV0:
         "plan_id": "randomization-001",
         "frozen_at": T0 - timedelta(hours=2),
         "blocks": (RandomizationBlockV0("default", 5000, 5000),),
+        "participant_block_assignments": (
+            ParticipantBlockAssignmentV0(_digest("f"), "default"),
+        ),
     }
     values.update(overrides)
     return RandomizationPlanV0(**values)  # type: ignore[arg-type]
@@ -137,11 +149,13 @@ def _response(
     activation = activation or _activation()
     case = case or _case()
     participant_id_digest = cast(Digest, overrides.pop("participant_id_digest", _digest("f")))
-    assignment_block_id = cast(str, overrides.pop("assignment_block_id", "default"))
+    assignment_block_id = expected_assignment_block(
+        activation.randomization_plan,
+        participant_id_digest=participant_id_digest,
+    )
     expected_variant = expected_packet_variant(
         activation.randomization_plan,
         participant_id_digest=participant_id_digest,
-        block_id=assignment_block_id,
     )
     packet_digest = (
         case.baseline_packet_digest
@@ -258,26 +272,56 @@ def _payment_evidence(
     return PaymentEvidenceV0(**values)  # type: ignore[arg-type]
 
 
+def _inventory(
+    schedule: PriceScheduleV0,
+    source_events: tuple[Digest, ...],
+    *,
+    cutoff: datetime | None = None,
+) -> CommercialSourceEventInventoryV0:
+    coverage_cutoff = cutoff or T0 + timedelta(days=3)
+    return CommercialSourceEventInventoryV0(
+        schedule_digest=schedule.artifact_digest,
+        coverage_cutoff_at=coverage_cutoff,
+        exported_at=coverage_cutoff + timedelta(minutes=5),
+        source_system="stripe-live-event-export",
+        source_export_digest=_digest("5"),
+        source_export_attestation_digest=_digest("6"),
+        complete_source_event_digests=source_events,
+    )
+
+
 def _manifest(
     schedule: PriceScheduleV0,
     offers: tuple[CommercialOfferReceiptV0, ...],
     outcomes: tuple[CommercialOutcomeReceiptV0, ...],
     evidence: tuple[PaymentEvidenceV0, ...],
-    *,
-    source_events: tuple[Digest, ...] | None = None,
-    cutoff: datetime | None = None,
+    inventory: CommercialSourceEventInventoryV0,
 ) -> CommercialOutcomeManifestV0:
     return CommercialOutcomeManifestV0(
         schedule_digest=schedule.artifact_digest,
-        reporting_cutoff_at=cutoff or T0 + timedelta(days=3),
+        reporting_cutoff_at=inventory.coverage_cutoff_at,
         offer_set_digest=commercial_offer_set_digest(offers),
         outcome_set_digest=commercial_outcome_set_digest(outcomes),
         payment_evidence_set_digest=payment_evidence_set_digest(evidence),
-        complete_source_event_digests=(
-            source_events
-            if source_events is not None
-            else tuple(outcome.source_event_digest for outcome in outcomes)
-        ),
+        source_event_inventory_digest=inventory.artifact_digest,
+    )
+
+
+def _validate_manifest(
+    manifest: CommercialOutcomeManifestV0,
+    inventory: CommercialSourceEventInventoryV0,
+    schedule: PriceScheduleV0,
+    offers: tuple[CommercialOfferReceiptV0, ...],
+    outcomes: tuple[CommercialOutcomeReceiptV0, ...],
+    evidence: tuple[PaymentEvidenceV0, ...],
+) -> None:
+    validate_commercial_reporting_manifest(
+        manifest,
+        source_event_inventory=inventory,
+        schedule=schedule,
+        offers=offers,
+        outcomes=outcomes,
+        payment_evidence=evidence,
     )
 
 
@@ -297,7 +341,7 @@ def test_activation_is_content_addressed_and_binds_frozen_protocol() -> None:
         _activation(protocol_digest=_digest("0"))
 
 
-def test_sequential_evidence_is_structured_and_required_before_activation() -> None:
+def test_sequential_evidence_is_structured_and_bound_to_exact_stopping_plan() -> None:
     with pytest.raises(ValueError, match="final sequential look"):
         _sequential(look_schedule=(25, 50, 75), max_sample_size=100)
 
@@ -309,7 +353,41 @@ def test_sequential_evidence_is_structured_and_required_before_activation() -> N
         sequential_validity_evidence=_sequential(),
     )
     assert activation.sequential_validity_evidence is not None
-    assert activation.sequential_validity_evidence.look_schedule[-1] == 100
+    assert activation.sequential_validity_evidence.sidedness is SequentialSidedness.TWO_SIDED
+
+    with pytest.raises(ValueError, match="activation stopping plan"):
+        _activation(
+            sequential_monitoring=True,
+            sequential_validity_evidence=_sequential(stopping_plan_digest=_digest("0")),
+        )
+
+    with pytest.raises(ValueError, match="price stopping plan"):
+        _schedule(
+            sequential_monitoring=True,
+            target_offer_count_per_cell=None,
+            sequential_validity_evidence=_sequential(stopping_plan_digest=_digest("9")),
+        )
+
+    sequential_schedule = _schedule(
+        sequential_monitoring=True,
+        target_offer_count_per_cell=None,
+        sequential_validity_evidence=_sequential(stopping_plan_digest=_digest("e")),
+    )
+    assert sequential_schedule.sequential_validity_evidence is not None
+
+
+def test_sequential_futility_semantics_are_explicit_and_consistent() -> None:
+    with pytest.raises(ValueError, match="no-futility"):
+        _sequential(futility_rule_digest=_digest("4"))
+
+    with pytest.raises(ValueError, match="requires futility_rule_digest"):
+        _sequential(futility_policy=SequentialFutilityPolicy.BOUND_RULE)
+
+    evidence = _sequential(
+        futility_policy=SequentialFutilityPolicy.BOUND_RULE,
+        futility_rule_digest=_digest("4"),
+    )
+    assert evidence.futility_rule_digest == _digest("4")
 
 
 def test_activation_case_set_digest_recomputes_exact_cases() -> None:
@@ -384,6 +462,37 @@ def test_decision_response_must_match_frozen_randomization_and_packet() -> None:
             case_set=(case,),
             activation=activation,
         )
+
+
+def test_randomization_block_is_derived_from_frozen_participant_mapping() -> None:
+    plan = _plan(
+        blocks=(
+            RandomizationBlockV0("default", 5000, 5000),
+            RandomizationBlockV0("alternate", 5000, 5000),
+        ),
+        participant_block_assignments=(
+            ParticipantBlockAssignmentV0(_digest("f"), "default"),
+            ParticipantBlockAssignmentV0(_digest("0"), "alternate"),
+        ),
+    )
+    case = _case()
+    activation = _activation(
+        randomization_plan=plan,
+        case_set_digest=decision_case_set_digest((case,)),
+    )
+    response = _response(activation=activation, case=case)
+    forged_block = replace(response, assignment_block_id="alternate")
+
+    with pytest.raises(ValueError, match="frozen participant assignment"):
+        validate_decision_response(
+            forged_block,
+            case=case,
+            case_set=(case,),
+            activation=activation,
+        )
+
+    with pytest.raises(ValueError, match="not in frozen randomization block assignments"):
+        expected_packet_variant(plan, participant_id_digest=_digest("1"))
 
 
 def test_confirmatory_response_set_rejects_crossover_block_change_and_duplicate_case() -> None:
@@ -484,21 +593,6 @@ def test_price_schedule_requires_three_prices_exact_mass_and_authorized_segment(
         PriceCellV0("POST_HOC_SEGMENT", 1000, 10_000)
 
 
-def test_price_sequential_monitoring_requires_validated_evidence() -> None:
-    with pytest.raises(ValueError, match="validated sequential evidence"):
-        _schedule(sequential_monitoring=True, target_offer_count_per_cell=None)
-
-    sequential = _schedule(
-        sequential_monitoring=True,
-        target_offer_count_per_cell=None,
-        sequential_validity_evidence=_sequential(),
-    )
-    assert sequential.sequential_validity_evidence is not None
-
-    with pytest.raises(ValueError, match="positive target_offer_count_per_cell"):
-        _schedule(target_offer_count_per_cell=None)
-
-
 def test_offer_must_bind_exact_frozen_schedule_terms() -> None:
     schedule = _schedule()
     offer = _offer(schedule)
@@ -509,14 +603,12 @@ def test_offer_must_bind_exact_frozen_schedule_terms() -> None:
 
     with pytest.raises(ValueError, match="entitlement"):
         validate_offer_against_schedule(
-            replace(offer, entitlement_digest=_digest("1")),
-            schedule=schedule,
+            replace(offer, entitlement_digest=_digest("1")), schedule=schedule
         )
 
     with pytest.raises(ValueError, match="conversion window"):
         validate_offer_against_schedule(
-            replace(offer, conversion_window_seconds=172_800),
-            schedule=schedule,
+            replace(offer, conversion_window_seconds=172_800), schedule=schedule
         )
 
 
@@ -533,10 +625,7 @@ def test_one_primary_offer_per_participant_entitlement_schedule() -> None:
 def test_primary_payment_outside_conversion_window_is_rejected() -> None:
     schedule = _schedule()
     offer = _offer(schedule)
-    late = _outcome(
-        offer,
-        recorded_at=offer.conversion_deadline + timedelta(seconds=1),
-    )
+    late = _outcome(offer, recorded_at=offer.conversion_deadline + timedelta(seconds=1))
     with pytest.raises(ValueError, match="outside frozen conversion window"):
         validate_commercial_outcome(late, offer=offer)
 
@@ -550,20 +639,35 @@ def test_revealed_wtp_requires_qualifying_processor_evidence() -> None:
     validate_payment_evidence(evidence, outcome=outcome, offer=offer)
     assert qualifies_as_revealed_wtp(outcome, offer=offer, evidence=evidence) is True
 
-    test_charge = replace(evidence, test_charge=True)
-    assert qualifies_as_revealed_wtp(outcome, offer=offer, evidence=test_charge) is False
+    for excluded in (
+        replace(evidence, test_charge=True),
+        replace(evidence, internal_team_payment=True),
+        replace(evidence, manual_comp=True),
+        replace(evidence, coupon_or_discount=True),
+        replace(evidence, live_mode=False),
+    ):
+        assert qualifies_as_revealed_wtp(outcome, offer=offer, evidence=excluded) is False
 
-    internal = replace(evidence, internal_team_payment=True)
-    assert qualifies_as_revealed_wtp(outcome, offer=offer, evidence=internal) is False
 
-    comped = replace(evidence, manual_comp=True)
-    assert qualifies_as_revealed_wtp(outcome, offer=offer, evidence=comped) is False
+def test_payment_evidence_must_be_observed_after_offer_and_before_outcome() -> None:
+    schedule = _schedule()
+    offer = _offer(schedule)
+    outcome = _outcome(offer)
+    evidence = _payment_evidence(offer, outcome)
 
-    discounted = replace(evidence, coupon_or_discount=True)
-    assert qualifies_as_revealed_wtp(outcome, offer=offer, evidence=discounted) is False
+    with pytest.raises(ValueError, match="predates commercial offer"):
+        validate_payment_evidence(
+            replace(evidence, observed_at=offer.offered_at - timedelta(seconds=1)),
+            outcome=outcome,
+            offer=offer,
+        )
 
-    test_mode = replace(evidence, live_mode=False)
-    assert qualifies_as_revealed_wtp(outcome, offer=offer, evidence=test_mode) is False
+    with pytest.raises(ValueError, match="after recorded payment outcome"):
+        validate_payment_evidence(
+            replace(evidence, observed_at=outcome.recorded_at + timedelta(seconds=1)),
+            outcome=outcome,
+            offer=offer,
+        )
 
 
 def test_payment_evidence_must_bind_exact_offer_outcome_amount_and_participant() -> None:
@@ -587,29 +691,29 @@ def test_payment_evidence_must_bind_exact_offer_outcome_amount_and_participant()
         )
 
 
+def test_source_inventory_is_content_addressed_and_bound_to_cutoff() -> None:
+    schedule = _schedule()
+    cutoff = T0 + timedelta(days=3)
+    inventory = _inventory(schedule, (_digest("1"),), cutoff=cutoff)
+    assert inventory.artifact_id.startswith("commercialsourceinventory_")
+    assert inventory.coverage_cutoff_at == cutoff
+
+    with pytest.raises(ValueError, match="exported before coverage cutoff"):
+        replace(inventory, exported_at=cutoff - timedelta(seconds=1))
+
+
 def test_reporting_manifest_requires_every_matured_offer_disposition() -> None:
     schedule = _schedule()
     offer = _offer(schedule)
-    manifest = _manifest(
-        schedule,
-        (offer,),
-        (),
-        (),
-        source_events=(),
-        cutoff=offer.conversion_deadline + timedelta(hours=1),
-    )
+    cutoff = offer.conversion_deadline + timedelta(hours=1)
+    inventory = _inventory(schedule, (), cutoff=cutoff)
+    manifest = _manifest(schedule, (offer,), (), (), inventory)
 
     with pytest.raises(ValueError, match="no primary disposition"):
-        validate_commercial_reporting_manifest(
-            manifest,
-            schedule=schedule,
-            offers=(offer,),
-            outcomes=(),
-            payment_evidence=(),
-        )
+        _validate_manifest(manifest, inventory, schedule, (offer,), (), ())
 
 
-def test_reporting_manifest_rejects_cherry_picked_negative_source_event() -> None:
+def test_reporting_manifest_rejects_event_omitted_from_outcomes_and_manifest() -> None:
     schedule = _schedule()
     offer = _offer(schedule)
     payment = _outcome(offer, source_char="1")
@@ -620,21 +724,59 @@ def test_reporting_manifest_rejects_cherry_picked_negative_source_event() -> Non
         source_char="4",
         recorded_at=offer.offered_at + timedelta(days=2),
     )
-    manifest = _manifest(
+    inventory = _inventory(
         schedule,
-        (offer,),
-        (payment,),
-        (evidence,),
-        source_events=(payment.source_event_digest, refund.source_event_digest),
+        (payment.source_event_digest, refund.source_event_digest),
     )
+    manifest = _manifest(schedule, (offer,), (payment,), (evidence,), inventory)
 
-    with pytest.raises(ValueError, match="omits or adds source events"):
-        validate_commercial_reporting_manifest(
+    with pytest.raises(ValueError, match="independently inventoried source events"):
+        _validate_manifest(
             manifest,
-            schedule=schedule,
-            offers=(offer,),
-            outcomes=(payment,),
-            payment_evidence=(evidence,),
+            inventory,
+            schedule,
+            (offer,),
+            (payment,),
+            (evidence,),
+        )
+
+
+def test_reporting_manifest_rejects_wrong_or_mismatched_source_inventory() -> None:
+    schedule = _schedule()
+    offer = _offer(schedule)
+    payment = _outcome(offer)
+    evidence = _payment_evidence(offer, payment)
+    inventory = _inventory(schedule, (payment.source_event_digest,))
+    manifest = _manifest(schedule, (offer,), (payment,), (evidence,), inventory)
+
+    wrong_inventory = replace(inventory, source_export_attestation_digest=_digest("0"))
+    with pytest.raises(ValueError, match="does not bind source event inventory"):
+        _validate_manifest(
+            manifest,
+            wrong_inventory,
+            schedule,
+            (offer,),
+            (payment,),
+            (evidence,),
+        )
+
+    wrong_cutoff = replace(
+        inventory,
+        coverage_cutoff_at=inventory.coverage_cutoff_at + timedelta(hours=1),
+        exported_at=inventory.exported_at + timedelta(hours=1),
+    )
+    rebound_manifest = replace(
+        manifest,
+        source_event_inventory_digest=wrong_cutoff.artifact_digest,
+    )
+    with pytest.raises(ValueError, match="cutoff does not match reporting cutoff"):
+        _validate_manifest(
+            rebound_manifest,
+            wrong_cutoff,
+            schedule,
+            (offer,),
+            (payment,),
+            (evidence,),
         )
 
 
@@ -642,16 +784,11 @@ def test_reporting_manifest_requires_processor_evidence_for_payment_outcome() ->
     schedule = _schedule()
     offer = _offer(schedule)
     payment = _outcome(offer)
-    manifest = _manifest(schedule, (offer,), (payment,), ())
+    inventory = _inventory(schedule, (payment.source_event_digest,))
+    manifest = _manifest(schedule, (offer,), (payment,), (), inventory)
 
     with pytest.raises(ValueError, match="missing processor evidence"):
-        validate_commercial_reporting_manifest(
-            manifest,
-            schedule=schedule,
-            offers=(offer,),
-            outcomes=(payment,),
-            payment_evidence=(),
-        )
+        _validate_manifest(manifest, inventory, schedule, (offer,), (payment,), ())
 
 
 def test_reporting_manifest_accepts_complete_payment_and_refund_history() -> None:
@@ -666,12 +803,17 @@ def test_reporting_manifest_accepts_complete_payment_and_refund_history() -> Non
         recorded_at=offer.offered_at + timedelta(days=2),
     )
     outcomes = (payment, refund)
-    manifest = _manifest(schedule, (offer,), outcomes, (evidence,))
+    inventory = _inventory(
+        schedule,
+        tuple(outcome.source_event_digest for outcome in outcomes),
+    )
+    manifest = _manifest(schedule, (offer,), outcomes, (evidence,), inventory)
 
-    validate_commercial_reporting_manifest(
+    _validate_manifest(
         manifest,
-        schedule=schedule,
-        offers=(offer,),
-        outcomes=outcomes,
-        payment_evidence=(evidence,),
+        inventory,
+        schedule,
+        (offer,),
+        outcomes,
+        (evidence,),
     )
