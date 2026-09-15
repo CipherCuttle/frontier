@@ -11,11 +11,6 @@ on:
         description: "Unique non-scored probe identifier"
         required: true
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/probe-requests/ordinary-prehorizon-v0/*.json"
 
 permissions:
   contents: read
@@ -29,79 +24,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 2
-      - name: Resolve non-scored probe request
-        id: request
-        shell: bash
-        env:
-          DISPATCH_KNOWLEDGE_HORIZON: ${{ inputs.knowledge_horizon }}
-          DISPATCH_SNAPSHOT_ID: ${{ inputs.snapshot_id }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if [[ -z "${DISPATCH_KNOWLEDGE_HORIZON}" || -z "${DISPATCH_SNAPSHOT_ID}" ]]; then
-              echo "workflow_dispatch requires knowledge_horizon and snapshot_id" >&2
-              exit 1
-            fi
-            echo "knowledge_horizon=${DISPATCH_KNOWLEDGE_HORIZON}" >> "$GITHUB_OUTPUT"
-            echo "snapshot_id=${DISPATCH_SNAPSHOT_ID}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ "${GITHUB_EVENT_NAME}" != "push" ]]; then
-            echo "unsupported trigger ${GITHUB_EVENT_NAME}" >&2
-            exit 1
-          fi
-
-          mapfile -t request_files < <(
-            git diff --name-only "$GITHUB_SHA^" "$GITHUB_SHA" \
-              | grep -E '^\.github/probe-requests/ordinary-prehorizon-v0/[^/]+\.json$' \
-              || true
-          )
-          if [[ "${#request_files[@]}" -ne 1 ]]; then
-            echo "repo-triggered probe requires exactly one changed request file" >&2
-            printf '%s\n' "${request_files[@]}" >&2
-            exit 1
-          fi
-
-          python - "${request_files[0]}" >> "$GITHUB_OUTPUT" <<'PY'
-          import datetime as dt
-          import json
-          import pathlib
-          import re
-          import sys
-
-          path = pathlib.Path(sys.argv[1])
-          raw = json.loads(path.read_text(encoding="utf-8"))
-          expected_keys = {
-              "schema_version",
-              "snapshot_id",
-              "knowledge_horizon",
-              "non_scored",
-          }
-          if set(raw) != expected_keys:
-              raise SystemExit("probe request must contain exactly the frozen V0 keys")
-          if raw["schema_version"] != "frontier-ordinary-prehorizon-probe-request-v0":
-              raise SystemExit("unsupported probe request schema")
-          if raw["non_scored"] is not True:
-              raise SystemExit("repo-triggered probe request must be explicitly non-scored")
-          snapshot_id = raw["snapshot_id"]
-          if not isinstance(snapshot_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", snapshot_id):
-              raise SystemExit("snapshot_id must be a lowercase stable identifier")
-          horizon_text = raw["knowledge_horizon"]
-          if not isinstance(horizon_text, str) or not horizon_text.endswith("Z"):
-              raise SystemExit("knowledge_horizon must be an explicit UTC Z timestamp")
-          horizon = dt.datetime.fromisoformat(horizon_text[:-1] + "+00:00")
-          if horizon.utcoffset() != dt.timedelta(0):
-              raise SystemExit("knowledge_horizon must be UTC")
-          if horizon.minute != 0 or horizon.second != 0 or horizon.microsecond != 0:
-              raise SystemExit("knowledge_horizon must be aligned to an exact hour")
-          if horizon.hour not in {0, 6, 12, 18}:
-              raise SystemExit("knowledge_horizon must use a frozen 00/06/12/18 UTC boundary")
-          print(f"knowledge_horizon={horizon_text}")
-          print(f"snapshot_id={snapshot_id}")
-          PY
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.14"
@@ -116,8 +38,8 @@ jobs:
         id: produce
         shell: bash
         env:
-          KNOWLEDGE_HORIZON: ${{ steps.request.outputs.knowledge_horizon }}
-          SNAPSHOT_ID: ${{ steps.request.outputs.snapshot_id }}
+          KNOWLEDGE_HORIZON: ${{ inputs.knowledge_horizon }}
+          SNAPSHOT_ID: ${{ inputs.snapshot_id }}
         run: |
           set +e
           uv run python scripts/run_ordinary_snapshot_probe_v0.py produce \
@@ -131,7 +53,7 @@ jobs:
         if: steps.produce.outputs.exit_code != '0'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ordinary-snapshot-probe-failure-${{ steps.request.outputs.snapshot_id }}
+          name: ordinary-snapshot-probe-failure-${{ inputs.snapshot_id }}
           path: probe-output/probe_report_v0.json
           if-no-files-found: error
           retention-days: 30
@@ -143,7 +65,7 @@ jobs:
         id: payload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ordinary-snapshot-payload-v0-${{ steps.request.outputs.snapshot_id }}
+          name: ordinary-snapshot-payload-v0-${{ inputs.snapshot_id }}
           path: probe-output/ordinary_snapshot_payload_v0.json
           if-no-files-found: error
           retention-days: 30
@@ -153,7 +75,7 @@ jobs:
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
-          subject-name: ordinary-snapshot-payload-v0-${{ steps.request.outputs.snapshot_id }}
+          subject-name: ordinary-snapshot-payload-v0-${{ inputs.snapshot_id }}
           subject-digest: sha256:${{ steps.payload.outputs.artifact-digest }}
       - name: Retrieve server artifact metadata
         if: steps.produce.outputs.exit_code == '0'
@@ -182,7 +104,7 @@ jobs:
         if: steps.produce.outputs.exit_code == '0'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ordinary-snapshot-probe-receipt-${{ steps.request.outputs.snapshot_id }}
+          name: ordinary-snapshot-probe-receipt-${{ inputs.snapshot_id }}
           path: |
             probe-output/ordinary_snapshot_receipt_v0.json
             probe-output/probe_report_v0.json
