@@ -31,6 +31,7 @@ This protocol MUST NOT:
 - count a verbal statement of willingness to pay as revealed WTP;
 - personalize prices after observing an individual participant's decisions, wealth, employer, or expressed enthusiasm;
 - discard participants, losses, non-purchases, refunds, or failures because they make the product look weaker;
+- stop a confirmatory cohort early because interim outcomes look favorable or unfavorable unless a separately preregistered sequential rule explicitly authorizes that behavior;
 - claim product superiority from this V0 alone.
 
 This phase is diagnostic product research. It does not grant ranking promotion authority.
@@ -123,7 +124,9 @@ Rules:
 - within a participant, distinct cases may be assigned across both packet variants so participant-specific skill can be modeled without showing the same case twice;
 - the participant is not told which packet is the experimental treatment;
 - cases used for confirmatory decision claims must be frozen before assignment;
-- case exclusion after assignment is allowed only for preregistered protocol failures and remains reported.
+- case exclusion after assignment is allowed only for preregistered protocol failures and remains reported;
+- before enrollment, the cohort must freeze either a target sample size justified by power/precision analysis or an explicit sequential precision/stopping rule;
+- absent that separately frozen sequential rule, outcome-dependent early stopping is forbidden.
 
 The primary comparison is intention-to-treat by assigned packet variant.
 
@@ -178,12 +181,15 @@ Before the first participant receives a price offer, a subordinate `PRICE_SCHEDU
 - currency;
 - at least three non-zero price points for each tested segment, unless a documented feasibility constraint authorizes two;
 - assignment probabilities;
+- target offer count per segment/price or a preregistered precision/sequential stopping rule;
 - refund/cancellation terms;
 - whether tax is included;
 - renewal behavior;
 - exact definition of conversion.
 
 Price assignment is randomized within a preregistered segment. One participant receives one offer for the same entitlement. There is no participant-level renegotiation before the primary conversion outcome is recorded.
+
+Unless the frozen price schedule contains an explicit sequential rule, price-cell enrollment may not stop early in response to observed conversions or non-conversions.
 
 A participant counts as a purchase only after a real payment authorization or settled payment under the frozen offer. Coupons, founder favors, barter, internal team payments, test charges, and manually comped access do not count as revealed WTP.
 
@@ -274,9 +280,10 @@ No confirmatory decision/WTP cohort may start until:
 4. the primary decision utility/regret metric is frozen;
 5. participant inclusion/exclusion rules are frozen;
 6. randomization and failure semantics are frozen;
-7. for WTP, `PRICE_SCHEDULE_V0` is frozen before any offer;
-8. active scientific benchmark alerts remain protected from exposure contamination;
-9. one independent hostile review for the bounded implementation phase is complete.
+7. target sample size/precision and stopping semantics are frozen before enrollment or offers;
+8. for WTP, `PRICE_SCHEDULE_V0` is frozen before any offer;
+9. active scientific benchmark alerts remain protected from exposure contamination;
+10. one independent hostile review for the bounded implementation phase is complete.
 
 ## 17. What this phase does not prove
 
