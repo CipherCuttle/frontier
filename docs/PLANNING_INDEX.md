@@ -46,6 +46,8 @@ Until the governance PR containing those files is merged, their state is `CANDID
 
 This authority is deliberately observational during the active PEF_V1 confirmatory window. It does not authorize a new ranking candidate, PEF_V1 mutation, source-registry mutation for PEF_V1, LLM truth authority, or public-ranking change.
 
+`docs/FRONTIER_DECISION_VALUE_WTP_V0.md` is the candidate subordinate authority for extending product-value measurement from prospective lead-time into randomized decision utility and revealed willingness to pay. Its machine-readable preregistration is `experiments/value_observatory_v0/decision_value_wtp_v0.json`. It remains diagnostically separate from scientific outcome labels, may not mutate the frozen benchmark or ranking authorities, and may not expose active scored benchmark alerts before their registered outcome horizons mature. Merge of its governance PR promotes only this subordinate protocol to `FROZEN_V0`; it does not establish decision value or commercial demand.
+
 ## Implementation governance
 
 `IMPLEMENT -> TEST -> ONE independent hostile review -> repair Critical/High -> ONE targeted re-review only if Critical/High fixes were required -> COMMIT/CLOSE -> MOVE FORWARD`
