@@ -22,6 +22,8 @@
     "same_case_seen_twice_by_participant": false,
     "primary_analysis": "INTENTION_TO_TREAT",
     "primary_utility_metric_must_be_frozen_before_enrollment": true,
+    "sample_size_or_sequential_precision_rule_must_be_frozen_before_enrollment": true,
+    "outcome_dependent_early_stopping_without_preregistered_sequential_rule": false,
     "packet_equal_knowledge_horizon_required": true,
     "participant_blinded_to_treatment_label": true,
     "required_reporting": [
@@ -65,6 +67,8 @@
     "price_schedule_minimum_nonzero_points_per_segment": 3,
     "two_price_feasibility_exception_requires_documented_authority": true,
     "price_assignment": "RANDOMIZED_WITHIN_PREREGISTERED_SEGMENT",
+    "target_offer_count_or_sequential_precision_rule_must_be_frozen_before_first_offer": true,
+    "outcome_dependent_price_cell_stopping_without_preregistered_sequential_rule": false,
     "participant_level_renegotiation_before_primary_conversion_outcome": false,
     "personalized_pricing_using_participant_attributes_or_prior_response": false,
     "refunds_and_chargebacks_must_remain_visible": true,
@@ -106,6 +110,7 @@
     "PRIMARY_DECISION_UTILITY_OR_REGRET_METRIC_FROZEN",
     "PARTICIPANT_RULES_FROZEN",
     "RANDOMIZATION_AND_FAILURE_SEMANTICS_FROZEN",
+    "SAMPLE_SIZE_PRECISION_AND_STOPPING_SEMANTICS_FROZEN",
     "PRICE_SCHEDULE_FROZEN_BEFORE_ANY_WTP_OFFER",
     "SCIENTIFIC_EXPOSURE_CONTAMINATION_PROTECTED",
     "BOUNDED_IMPLEMENTATION_HOSTILE_REVIEW_COMPLETE"
@@ -121,6 +126,7 @@
     "USER_REACTION_AS_SCIENTIFIC_OUTCOME_LABEL",
     "VERBAL_WTP_AS_REVEALED_WTP",
     "PARTICIPANT_LEVEL_PERSONALIZED_PRICING",
+    "OUTCOME_DEPENDENT_EARLY_STOPPING_WITHOUT_PREREGISTERED_SEQUENTIAL_RULE",
     "POST_HOC_EXCLUSION_OF_LOSSES_NONPURCHASES_REFUNDS_OR_FAILURES",
     "PRODUCT_SUPERIORITY_CLAIM_FROM_V0_ALONE"
   ],
