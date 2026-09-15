@@ -91,11 +91,9 @@ def _changed_request_rows(root: Path, head_sha: str) -> tuple[tuple[str, str], .
             "git",
             "diff",
             "--name-status",
-            "--no-renames",
+            "-M",
             f"{head_sha}^",
             head_sha,
-            "--",
-            REQUEST_DIRECTORY_V0,
         ],
         cwd=root,
         capture_output=True,
@@ -108,9 +106,13 @@ def _changed_request_rows(root: Path, head_sha: str) -> tuple[tuple[str, str], .
         if not line:
             continue
         fields = line.split("\t")
-        if len(fields) != 2:
+        status = fields[0]
+        paths = fields[1:]
+        if len(paths) not in {1, 2}:
             raise ValueError("unexpected git name-status row for probe request")
-        rows.append((fields[0], fields[1]))
+        for path in paths:
+            if _REQUEST_PATH_RE.fullmatch(path):
+                rows.append((status, path))
     return tuple(rows)
 
 
