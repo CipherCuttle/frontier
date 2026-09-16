@@ -1,0 +1,110 @@
+{
+  "schema_version": "frontier-ordinary-prehorizon-source-compatibility-r1",
+  "phase_id": "BENCHMARK_ORDINARY_PREHORIZON_SOURCE_COMPATIBILITY_R1",
+  "base_main_sha": "a279f8c29302f83de7ef8d83bd2163f33dbb8a87",
+  "parent_phases": [
+    "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_EVIDENCE_V0",
+    "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_V0",
+    "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_TRIGGER_V0"
+  ],
+  "runtime_evidence": [
+    {
+      "snapshot_id": "ordinary-prehorizon-probe-20260916t0000z-01",
+      "workflow_run_id": 35031433693,
+      "merge_sha": "9dbfe7ce7e1e467827e63a8f84ded42a9cff20a3",
+      "failure_artifact_digest": "sha256:96f01f45b6148ece26d5917f141c986825f693c6805bb89011a4e933f695d53b",
+      "complete_source_count": 5,
+      "failures": {
+        "gdelt.frontier": "CONNECT_FAILED",
+        "hf.models": "CONNECT_FAILED"
+      }
+    },
+    {
+      "snapshot_id": "ordinary-prehorizon-probe-20260916t0600z-01",
+      "workflow_run_id": 35041016248,
+      "merge_sha": "a279f8c29302f83de7ef8d83bd2163f33dbb8a87",
+      "failure_artifact_digest": "sha256:cadbb98e9ac8ad12e89df80c21f6ccf6a68feb6dab622c0ff2233bf1f5f6abc8",
+      "complete_source_count": 5,
+      "failures": {
+        "gdelt.frontier": "CONNECT_FAILED",
+        "hf.models": "HTTP_400"
+      }
+    }
+  ],
+  "hf_models": {
+    "repair_kind": "ENDPOINT_QUERY_COMPATIBILITY_ONLY",
+    "hypothesis": "DIRECTION_PARAMETER_STALE",
+    "authorized_removal": "direction=-1",
+    "preserve_query_components": [
+      "sort=lastModified",
+      "limit=100",
+      "expand=author,createdAt,lastModified,pipeline_tag,sha,tags"
+    ],
+    "preserve_source_id": "hf.models",
+    "preserve_all_other_contract_fields": true,
+    "source_registry_digest_recompute_required": true,
+    "runtime_success_claimed": false
+  },
+  "gdelt_frontier": {
+    "repair_authorized": false,
+    "diagnostics_only": true,
+    "diagnostic_schema": "frontier-ordinary-snapshot-probe-transport-diagnostics-v0",
+    "allowed_fields": [
+      "source_id",
+      "failure_code",
+      "safe_message"
+    ],
+    "safe_message_source": "FetchFailure.safe_message",
+    "failure_artifact_only": true,
+    "forbidden_diagnostic_material": [
+      "raw_response_body",
+      "response_excerpt",
+      "secret",
+      "authorization_material",
+      "resolved_ip_address",
+      "dns_answer",
+      "tls_certificate",
+      "request_headers",
+      "response_headers",
+      "stack_trace",
+      "unrestricted_exception_text"
+    ]
+  },
+  "preserved_invariants": {
+    "required_source_count": 7,
+    "source_set_changed": false,
+    "benchmark_protocol_changed": false,
+    "normalization_changed": false,
+    "one_primary_request_per_source": true,
+    "requests_concurrent": true,
+    "automatic_retry": false,
+    "fallback_mirror_use": false,
+    "frontier_private_state_access": false,
+    "raw_response_body_persisted": false,
+    "fail_closed_no_seven_source_payload": true,
+    "scored_execution": false,
+    "scheduler_present": false
+  },
+  "explicit_supersession": {
+    "parent_rule": "source_registry_mutated:false",
+    "scope": "REMOVE_DIRECTION_PARAMETER_FROM_HF_MODELS_ENDPOINT_AND_RECOMPUTE_REGISTRY_DIGEST_ONLY"
+  },
+  "implementation_rule": "COMPATIBILITY_IMPLEMENTATION_MUST_OCCUR_IN_A_LATER_BOUNDED_PR_AFTER_THIS_AUTHORITY_MERGES",
+  "next_runtime_rule": "ONLY_A_LATER_DISTINCT_ALIGNED_MANUAL_NON_SCORED_PROBE_MAY_TEST_THE_REPAIRED_IMPLEMENTATION",
+  "future_scored_activation_rule": "EXACT_SCORING_SOURCE_REGISTRY_IDENTITY_MUST_BE_FROZEN_UNDER_APPLICABLE_ACTIVATION_AUTHORITY",
+  "authority": {
+    "gdelt_endpoint_change_authorized": false,
+    "dns_or_address_selection_change_authorized": false,
+    "retry_or_fallback_authorized": false,
+    "normalizer_change_authorized": false,
+    "source_set_change_authorized": false,
+    "scored_execution_authorized": false,
+    "ordinary_executor_authorized": false,
+    "value_observatory_activation_authorized": false,
+    "scheduler_authorized": false,
+    "horizon_safety_granted": false,
+    "feasibility_granted": false
+  },
+  "promotion_rule": "MERGE_PROMOTES_ONLY_THIS_COMPATIBILITY_AUTHORITY_TO_FROZEN_R1",
+  "governance_merge_must_not_trigger_probe": true
+}
