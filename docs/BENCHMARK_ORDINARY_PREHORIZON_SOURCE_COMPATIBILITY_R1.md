@@ -78,13 +78,16 @@ This is a compatibility repair hypothesis, not a claim that HF feasibility is es
 
 ## GDELT diagnostic authority
 
-`gdelt.frontier` produced `CONNECT_FAILED` at two distinct aligned boundaries. The existing fetch layer already reduces connection exceptions to a safe exception-class string in `FetchFailure.safe_message`, but the ordinary probe report currently retains only `failure_code`.
+`gdelt.frontier` produced `CONNECT_FAILED` at two distinct aligned boundaries. The existing fetch layer reduces connection exceptions on that exact failure path to an exception-class string in `FetchFailure.safe_message`, while other fetch-failure paths may use different safe-message material.
 
-Implementation is authorized to emit a separate failure-only diagnostic sidecar with schema `frontier-ordinary-snapshot-probe-transport-diagnostics-v0` containing only, per failed source:
+Implementation is authorized to emit a separate failure-only diagnostic sidecar with schema `frontier-ordinary-snapshot-probe-transport-diagnostics-v0` **only** when all of the following hold:
 
-- `source_id`;
-- `failure_code`;
-- `safe_message` copied verbatim from the existing `FetchFailure.safe_message` field.
+- `source_id == "gdelt.frontier"`;
+- `failure_code == "CONNECT_FAILED"`;
+- the row contains exactly `source_id`, `failure_code`, and `safe_message`;
+- `safe_message` is copied verbatim from the existing `FetchFailure.safe_message` produced by that `CONNECT_FAILED` path.
+
+No row may be emitted for any other source or any other failure code. The implementation must fail closed or omit the sidecar row if those predicates are not satisfied.
 
 The sidecar may be retained only with the existing failed-probe diagnostics artifact. It is noncanonical operational evidence and must not enter a successful snapshot payload, ranking, benchmark score, normalized collection, or source-health authority.
 
@@ -126,8 +129,8 @@ That implementation PR must:
 
 1. verify the frozen predecessor registry and named source-contract digests before applying changes;
 2. make only the authorized HF endpoint query change plus exact registry-digest update;
-3. add the bounded failure-only transport diagnostic sidecar;
-4. add focused tests proving the HF contract delta is exactly the authorized delta and diagnostics expose only the existing safe exception-class field;
+3. add the GDELT-only `CONNECT_FAILED` transport diagnostic sidecar under the exact predicates above;
+4. add focused tests proving the HF contract delta is exactly the authorized delta and diagnostics cannot emit for another source or another failure code;
 5. pass exact-head CI;
 6. receive one independent hostile review focused on authority drift, diagnostic leakage, source identity, and fail-closed behavior;
 7. fix Critical/High findings only, with one targeted re-review if such fixes are required.
@@ -142,6 +145,7 @@ This phase does **not** authorize:
 - changing DNS/address-selection logic;
 - adding retries, fallback hosts, mirrors, proxies, or browser automation;
 - weakening SSRF/TLS/HTTPS policy;
+- emitting transport `safe_message` diagnostics for any source other than `gdelt.frontier` with `CONNECT_FAILED`;
 - changing any source other than the exact HF endpoint parameter removal;
 - changing normalizers;
 - changing the seven-source set;
