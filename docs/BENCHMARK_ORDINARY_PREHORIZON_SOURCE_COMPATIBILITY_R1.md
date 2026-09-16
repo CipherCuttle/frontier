@@ -10,6 +10,14 @@ Parent authorities:
 
 Base main SHA: `a279f8c29302f83de7ef8d83bd2163f33dbb8a87`.
 
+Frozen predecessor identities:
+
+- source registry: `sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee`
+- `hf.models` source contract: `sha256:162b504717e640017a8b17de67dd37e6426265e9aebc734013fffe00a8c750bb`
+- `gdelt.frontier` source contract: `sha256:e43f006820dd85d369fe64b48329785684acbf1c2e28d12afd05fed7b35b20af`
+
+Implementation must fail closed if its predecessor registry or either named source contract does not match these identities before applying the authorized delta.
+
 ## Objective
 
 Repair only the compatibility defects proven by two distinct manual, non-scored ordinary pre-horizon probe boundaries without weakening the frozen seven-source evidence semantics.
@@ -59,6 +67,7 @@ The bounded compatibility hypothesis is therefore:
 
 Implementation is authorized to:
 
+- start only from the frozen predecessor registry and source-contract identities listed above;
 - remove only `direction=-1` from the `hf.models` endpoint URL;
 - preserve source id `hf.models`;
 - preserve acquisition class, signal roles, transport, policy profile, authentication, cadence, finite-window declaration, accepted content types, limit, sort, expand fields, normalizer, and all other source-contract fields;
@@ -115,12 +124,13 @@ The compatibility implementation must occur in a later PR after this authority m
 
 That implementation PR must:
 
-1. make only the authorized HF endpoint query change plus exact registry-digest update;
-2. add the bounded failure-only transport diagnostic sidecar;
-3. add focused tests proving the HF contract delta is exactly the authorized delta and diagnostics expose only the existing safe exception-class field;
-4. pass exact-head CI;
-5. receive one independent hostile review focused on authority drift, diagnostic leakage, source identity, and fail-closed behavior;
-6. fix Critical/High findings only, with one targeted re-review if such fixes are required.
+1. verify the frozen predecessor registry and named source-contract digests before applying changes;
+2. make only the authorized HF endpoint query change plus exact registry-digest update;
+3. add the bounded failure-only transport diagnostic sidecar;
+4. add focused tests proving the HF contract delta is exactly the authorized delta and diagnostics expose only the existing safe exception-class field;
+5. pass exact-head CI;
+6. receive one independent hostile review focused on authority drift, diagnostic leakage, source identity, and fail-closed behavior;
+7. fix Critical/High findings only, with one targeted re-review if such fixes are required.
 
 A later distinct aligned non-scored probe may be requested only after that implementation merges.
 
