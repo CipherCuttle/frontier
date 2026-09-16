@@ -55,6 +55,10 @@
     "repair_authorized": false,
     "diagnostics_only": true,
     "diagnostic_schema": "frontier-ordinary-snapshot-probe-transport-diagnostics-v0",
+    "emit_only_if_source_id": "gdelt.frontier",
+    "emit_only_if_failure_code": "CONNECT_FAILED",
+    "other_sources_authorized": false,
+    "other_failure_codes_authorized": false,
     "allowed_fields": [
       "source_id",
       "failure_code",
