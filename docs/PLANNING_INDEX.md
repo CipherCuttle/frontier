@@ -50,6 +50,8 @@ This authority is deliberately observational during the active PEF_V1 confirmato
 
 `docs/BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_TRIGGER_V0.md` is a narrowly scoped subordinate authority for the existing manual, non-scored ordinary pre-horizon snapshot probe. It supersedes only the parent's `workflow_dispatch`-only transport restriction by allowing a second explicit manual transport, `REPOSITORY_REQUEST_FILE`, under the machine-readable contract `experiments/value_observatory_v0/ordinary_prehorizon_snapshot_probe_trigger_v0.json`. It does not authorize schedules, recurring/scored execution, ordinary-executor implementation, Value Observatory activation, or any horizon-safety claim. Merge freezes only this trigger transport authority; implementation must occur in a later bounded PR.
 
+`docs/BENCHMARK_ORDINARY_PREHORIZON_SOURCE_COMPATIBILITY_R1.md` is the candidate subordinate repair authority created from two failed-close live probe boundaries. It authorizes exactly one `hf.models` endpoint-query compatibility hypothesis (`direction=-1` removal plus source-registry digest recomputation) and a failure-only safe transport diagnostic sidecar for `gdelt.frontier`. It does not authorize a GDELT endpoint/transport repair, retries, fallbacks, normalizer changes, source-set changes, scored execution, scheduling, or any feasibility/horizon-safety claim. Its machine-readable contract is `experiments/value_observatory_v0/ordinary_prehorizon_source_compatibility_r1.json`; implementation must occur only after this governance authority is merged.
+
 ## Implementation governance
 
 `IMPLEMENT -> TEST -> ONE independent hostile review -> repair Critical/High -> ONE targeted re-review only if Critical/High fixes were required -> COMMIT/CLOSE -> MOVE FORWARD`
