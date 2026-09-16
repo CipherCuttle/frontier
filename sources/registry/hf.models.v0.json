@@ -9,7 +9,7 @@
   ],
   "transport": "REST",
   "endpoint": {
-    "url": "https://huggingface.co/api/models?sort=lastModified&direction=-1&limit=100&expand=author,createdAt,lastModified,pipeline_tag,sha,tags",
+    "url": "https://huggingface.co/api/models?sort=lastModified&limit=100&expand=author,createdAt,lastModified,pipeline_tag,sha,tags",
     "method": "GET",
     "accepted_content_types": [
       "application/json"
