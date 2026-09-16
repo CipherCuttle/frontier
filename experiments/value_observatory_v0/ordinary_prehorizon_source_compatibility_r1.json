@@ -2,6 +2,12 @@
   "schema_version": "frontier-ordinary-prehorizon-source-compatibility-r1",
   "phase_id": "BENCHMARK_ORDINARY_PREHORIZON_SOURCE_COMPATIBILITY_R1",
   "base_main_sha": "a279f8c29302f83de7ef8d83bd2163f33dbb8a87",
+  "predecessor_identity": {
+    "source_registry_version": "sha256:c95b29078eb002145b75538b947cfb651cc1d5d7f2921b2347cf68b6065115ee",
+    "hf_models_source_contract_digest": "sha256:162b504717e640017a8b17de67dd37e6426265e9aebc734013fffe00a8c750bb",
+    "gdelt_frontier_source_contract_digest": "sha256:e43f006820dd85d369fe64b48329785684acbf1c2e28d12afd05fed7b35b20af",
+    "implementation_must_match_before_change": true
+  },
   "parent_phases": [
     "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_EVIDENCE_V0",
     "BENCHMARK_ORDINARY_PREHORIZON_SNAPSHOT_PROBE_V0",
@@ -89,7 +95,7 @@
     "parent_rule": "source_registry_mutated:false",
     "scope": "REMOVE_DIRECTION_PARAMETER_FROM_HF_MODELS_ENDPOINT_AND_RECOMPUTE_REGISTRY_DIGEST_ONLY"
   },
-  "implementation_rule": "COMPATIBILITY_IMPLEMENTATION_MUST_OCCUR_IN_A_LATER_BOUNDED_PR_AFTER_THIS_AUTHORITY_MERGES",
+  "implementation_rule": "COMPATIBILITY_IMPLEMENTATION_MUST_OCCUR_IN_A_LATER_BOUNDED_PR_AFTER_THIS_AUTHORITY_MERGES_AND_MUST_FAIL_CLOSED_IF_PREDECESSOR_IDENTITIES_DRIFT",
   "next_runtime_rule": "ONLY_A_LATER_DISTINCT_ALIGNED_MANUAL_NON_SCORED_PROBE_MAY_TEST_THE_REPAIRED_IMPLEMENTATION",
   "future_scored_activation_rule": "EXACT_SCORING_SOURCE_REGISTRY_IDENTITY_MUST_BE_FROZEN_UNDER_APPLICABLE_ACTIVATION_AUTHORITY",
   "authority": {
